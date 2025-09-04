@@ -63,6 +63,14 @@
     border-width: 1px;
     aspect-ratio: 1 / 1;
   }
+  .cell::after {
+    width: 70%;
+    height: 70%;
+  }
+  .piece {
+    width: 70%;
+    height: 70%;
+  }
 }
 
 @media (max-width: 360px) {
@@ -72,5 +80,13 @@
     padding: 1px;
     border-width: 1px;
     aspect-ratio: 1 / 1;
+  }
+  .cell::after {
+    width: 70%;
+    height: 70%;
+  }
+  .piece {
+    width: 70%;
+    height: 70%;
   }
 }
