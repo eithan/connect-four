@@ -57,18 +57,20 @@
 /* Responsive sizing for smaller screens */
 @media (max-width: 480px) {
   .cell {
-    width: calc((100vw - 24px) / 7);
-    height: calc((100vw - 24px) / 7);
-    padding: 3px;
+    width: calc(100vw / 7 - 4px);
+    height: calc(100vw / 7 - 4px);
+    padding: 2px;
+    border-width: 1px;
     aspect-ratio: 1 / 1;
   }
 }
 
 @media (max-width: 360px) {
   .cell {
-    width: calc((100vw - 16px) / 7);
-    height: calc((100vw - 16px) / 7);
+    width: calc(100vw / 7 - 3px);
+    height: calc(100vw / 7 - 3px);
     padding: 2px;
+    border-width: 1px;
     aspect-ratio: 1 / 1;
   }
 }

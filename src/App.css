@@ -57,10 +57,10 @@ h1 {
 /* Responsive app spacing */
 @media (max-width: 480px) {
   #root {
-    padding: 1rem;
+    padding: 0;
   }
   .app {
-    padding: 12px;
+    padding: 12px 0;
   }
   h1 {
     font-size: 22px;

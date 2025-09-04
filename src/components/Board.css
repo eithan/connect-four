@@ -47,11 +47,11 @@
 /* Responsive layout */
 @media (max-width: 480px) {
   .game-container {
-    padding: 12px;
+    padding: 12px 0;
     gap: 12px;
   }
   .board {
-    padding: 6px;
+    padding: 0;
     max-width: 100vw;
     overflow: hidden;
     box-sizing: border-box;
@@ -67,11 +67,11 @@
 
 @media (max-width: 360px) {
   .game-container {
-    padding: 8px;
+    padding: 8px 0;
     gap: 10px;
   }
   .board {
-    padding: 4px;
+    padding: 0;
     max-width: 100vw;
     overflow: hidden;
     box-sizing: border-box;
