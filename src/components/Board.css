@@ -51,16 +51,19 @@
     gap: 8px;
   }
   .board {
-    padding: 4px;
+    padding: 8px;
     width: calc(100vw - 16px);
     max-width: calc(100vw - 16px);
     overflow: hidden;
     box-sizing: border-box;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    gap: 4px;
+    aspect-ratio: 7 / 6;
   }
   .board-row {
-    display: flex;
-    gap: 2px;
-    margin-bottom: 2px;
+    display: contents;
   }
   .status {
     font-size: 18px;
@@ -77,16 +80,19 @@
     gap: 6px;
   }
   .board {
-    padding: 3px;
+    padding: 6px;
     width: calc(100vw - 12px);
     max-width: calc(100vw - 12px);
     overflow: hidden;
     box-sizing: border-box;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    gap: 3px;
+    aspect-ratio: 7 / 6;
   }
   .board-row {
-    display: flex;
-    gap: 1px;
-    margin-bottom: 1px;
+    display: contents;
   }
   .status {
     font-size: 16px;
