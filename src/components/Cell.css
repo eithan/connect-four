@@ -55,7 +55,7 @@
 } 
 
 /* Responsive sizing for smaller screens */
-@media (max-width: 481px) {
+@media (max-width: 480px) {
   .cell {
     width: 100%;
     height: 100%;

@@ -45,7 +45,7 @@
 } 
 
 /* Responsive layout */
-@media (max-width: 481px) {
+@media (max-width: 480px) {
   .game-container {
     padding: 8px;
     gap: 8px;
