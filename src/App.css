@@ -54,8 +54,8 @@ h1 {
   margin-bottom: 20px;
 }
 
-/* Responsive app spacing */
-@media (max-width: 480px) {
+/* Responsive app spacing 
+media (max-width: 480px) {
   #root {
     padding: 0;
   }
@@ -79,7 +79,7 @@ h1 {
     font-size: 20px;
     margin-bottom: 10px;
   }
-}
+}*/
 
 .game-container {
   display: flex;

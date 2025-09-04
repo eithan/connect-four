@@ -54,7 +54,7 @@
   }
 } 
 
-/* Responsive sizing for smaller screens */
+/* Responsive sizing for smaller screens 
 @media (max-width: 480px) {
   .cell {
     width: 100%;
@@ -91,4 +91,4 @@
     width: 80%;
     height: 80%;
   }
-}
+} */
