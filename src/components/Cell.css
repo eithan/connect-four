@@ -57,9 +57,9 @@
 /* Responsive sizing for smaller screens */
 @media (max-width: 480px) {
   .cell {
-    width: calc((100vw - 32px) / 7);
-    height: calc((100vw - 32px) / 7);
-    padding: 2px;
+    width: calc((100vw - 40px) / 7);
+    height: calc((100vw - 40px) / 7);
+    padding: 1px;
     border-width: 1px;
     aspect-ratio: 1 / 1;
     flex-shrink: 0;
@@ -76,9 +76,9 @@
 
 @media (max-width: 360px) {
   .cell {
-    width: calc((100vw - 24px) / 7);
-    height: calc((100vw - 24px) / 7);
-    padding: 2px;
+    width: calc((100vw - 28px) / 7);
+    height: calc((100vw - 28px) / 7);
+    padding: 1px;
     border-width: 1px;
     aspect-ratio: 1 / 1;
     flex-shrink: 0;

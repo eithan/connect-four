@@ -51,9 +51,9 @@
     gap: 12px;
   }
   .board {
-    padding: 8px;
-    width: calc(100vw - 16px);
-    max-width: calc(100vw - 16px);
+    padding: 4px;
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
     overflow: hidden;
     box-sizing: border-box;
   }
@@ -78,9 +78,9 @@
     gap: 10px;
   }
   .board {
-    padding: 6px;
-    width: calc(100vw - 12px);
-    max-width: calc(100vw - 12px);
+    padding: 3px;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
     overflow: hidden;
     box-sizing: border-box;
   }
