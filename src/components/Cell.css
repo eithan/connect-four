@@ -9,6 +9,8 @@
   cursor: pointer;
   position: relative;
   padding: 5px;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .cell::after {
@@ -53,16 +55,16 @@
 /* Responsive sizing for smaller screens */
 @media (max-width: 480px) {
   .cell {
-    width: 42px;
-    height: 42px;
+    width: calc((100vw - 24px) / 7);
+    height: calc((100vw - 24px) / 7);
     padding: 3px;
   }
 }
 
 @media (max-width: 360px) {
   .cell {
-    width: 36px;
-    height: 36px;
+    width: calc((100vw - 16px) / 7);
+    height: calc((100vw - 16px) / 7);
     padding: 2px;
   }
 }

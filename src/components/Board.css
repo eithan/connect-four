@@ -51,6 +51,8 @@
   }
   .board {
     padding: 6px;
+    max-width: 100vw;
+    overflow: hidden;
   }
   .status {
     font-size: 18px;
@@ -68,6 +70,8 @@
   }
   .board {
     padding: 4px;
+    max-width: 100vw;
+    overflow: hidden;
   }
   .status {
     font-size: 16px;
