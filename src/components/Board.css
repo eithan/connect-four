@@ -60,7 +60,7 @@
   .board-row {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 0;
+    gap: 2px;
   }
   .status {
     font-size: 18px;
@@ -86,7 +86,7 @@
   .board-row {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 0;
+    gap: 2px;
   }
   .status {
     font-size: 16px;
