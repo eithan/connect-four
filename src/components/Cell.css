@@ -55,10 +55,10 @@
 } 
 
 /* Responsive sizing for smaller screens */
-@media (max-width: 480px) {
+@media (max-width: 481px) {
   .cell {
-    width: calc((100vw - 60px) / 7);
-    height: calc((100vw - 60px) / 7);
+    width: calc((100vw - 24px) / 7);
+    height: calc((100vw - 24px) / 7);
     padding: 1px;
     border-width: 1px;
     aspect-ratio: 1 / 1;
@@ -76,8 +76,8 @@
 
 @media (max-width: 360px) {
   .cell {
-    width: calc((100vw - 48px) / 7);
-    height: calc((100vw - 48px) / 7);
+    width: calc((100vw - 20px) / 7);
+    height: calc((100vw - 20px) / 7);
     padding: 1px;
     border-width: 1px;
     aspect-ratio: 1 / 1;

@@ -45,23 +45,22 @@
 } 
 
 /* Responsive layout */
-@media (max-width: 480px) {
+@media (max-width: 481px) {
   .game-container {
-    padding: 12px 0;
-    gap: 12px;
+    padding: 8px;
+    gap: 8px;
   }
   .board {
-    padding: 2px;
-    width: calc(100vw - 40px);
-    max-width: calc(100vw - 40px);
+    padding: 4px;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
     overflow: hidden;
     box-sizing: border-box;
   }
   .board-row {
     display: flex;
-    justify-content: space-between;
-    gap: 4px;
-    margin-bottom: 4px;
+    gap: 2px;
+    margin-bottom: 2px;
   }
   .status {
     font-size: 18px;
@@ -74,21 +73,20 @@
 
 @media (max-width: 360px) {
   .game-container {
-    padding: 8px 0;
-    gap: 10px;
+    padding: 6px;
+    gap: 6px;
   }
   .board {
-    padding: 1px;
-    width: calc(100vw - 32px);
-    max-width: calc(100vw - 32px);
+    padding: 3px;
+    width: calc(100vw - 12px);
+    max-width: calc(100vw - 12px);
     overflow: hidden;
     box-sizing: border-box;
   }
   .board-row {
     display: flex;
-    justify-content: space-between;
-    gap: 3px;
-    margin-bottom: 3px;
+    gap: 1px;
+    margin-bottom: 1px;
   }
   .status {
     font-size: 16px;
