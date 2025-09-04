@@ -11,6 +11,7 @@
   padding: 5px;
   margin: 0;
   box-sizing: border-box;
+  aspect-ratio: 1 / 1;
 }
 
 .cell::after {
@@ -29,6 +30,7 @@
   position: absolute;
   z-index: 1;
   transition: all 0.3s ease;
+  aspect-ratio: 1 / 1;
 }
 
 .player1 {
@@ -58,6 +60,7 @@
     width: calc((100vw - 24px) / 7);
     height: calc((100vw - 24px) / 7);
     padding: 3px;
+    aspect-ratio: 1 / 1;
   }
 }
 
@@ -66,5 +69,6 @@
     width: calc((100vw - 16px) / 7);
     height: calc((100vw - 16px) / 7);
     padding: 2px;
+    aspect-ratio: 1 / 1;
   }
 }
