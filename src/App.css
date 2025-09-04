@@ -53,6 +53,33 @@ h1 {
   margin-bottom: 20px;
 }
 
+/* Responsive app spacing */
+@media (max-width: 480px) {
+  #root {
+    padding: 1rem;
+  }
+  .app {
+    padding: 12px;
+  }
+  h1 {
+    font-size: 22px;
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  #root {
+    padding: 0.75rem;
+  }
+  .app {
+    padding: 10px;
+  }
+  h1 {
+    font-size: 20px;
+    margin-bottom: 10px;
+  }
+}
+
 .game-container {
   display: flex;
   flex-direction: column;

@@ -42,3 +42,38 @@
 .controls button:hover {
   background-color: #45a049;
 } 
+
+/* Responsive layout */
+@media (max-width: 480px) {
+  .game-container {
+    padding: 12px;
+    gap: 12px;
+  }
+  .board {
+    padding: 6px;
+  }
+  .status {
+    font-size: 18px;
+  }
+  .controls button {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .game-container {
+    padding: 8px;
+    gap: 10px;
+  }
+  .board {
+    padding: 4px;
+  }
+  .status {
+    font-size: 16px;
+  }
+  .controls button {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}

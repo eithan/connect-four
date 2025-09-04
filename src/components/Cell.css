@@ -49,3 +49,20 @@
     transform: translateY(0);
   }
 } 
+
+/* Responsive sizing for smaller screens */
+@media (max-width: 480px) {
+  .cell {
+    width: 42px;
+    height: 42px;
+    padding: 3px;
+  }
+}
+
+@media (max-width: 360px) {
+  .cell {
+    width: 36px;
+    height: 36px;
+    padding: 2px;
+  }
+}
