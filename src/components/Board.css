@@ -52,7 +52,7 @@
   }
   .board {
     padding: 0;
-    width: calc(100vw - 6px);
+    width: calc(100vw - 10px);
     max-width: 100vw;
     overflow: hidden;
     box-sizing: border-box;
@@ -78,7 +78,7 @@
   }
   .board {
     padding: 0;
-    width: calc(100vw - 6px);
+    width: calc(100vw - 10px);
     max-width: 100vw;
     overflow: hidden;
     box-sizing: border-box;
