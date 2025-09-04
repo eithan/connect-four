@@ -1,0 +1,51 @@
+.cell {
+  width: 60px;
+  height: 60px;
+  background-color: #0066cc;
+  border: 2px solid #004d99;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  padding: 5px;
+}
+
+.cell::after {
+  content: '';
+  background-color: white;
+  border-radius: 50%;
+  width: 80%;
+  height: 80%;
+  position: absolute;
+}
+
+.piece {
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  position: absolute;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.player1 {
+  background-color: #ff4444;
+}
+
+.player2 {
+  background-color: #ffeb3b;
+}
+
+.piece.dropping {
+  animation: drop 0.5s ease-in;
+}
+
+@keyframes drop {
+  0% {
+    transform: translateY(-300px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+} 
