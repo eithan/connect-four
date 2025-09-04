@@ -57,7 +57,7 @@
 /* Responsive sizing for smaller screens */
 @media (max-width: 480px) {
   .cell {
-    width: 100%;
+    width: calc(100% - 2px);
     height: auto;
     padding: 2px;
     border-width: 1px;
@@ -67,7 +67,7 @@
 
 @media (max-width: 360px) {
   .cell {
-    width: 100%;
+    width: calc(100% - 2px);
     height: auto;
     padding: 2px;
     border-width: 1px;
