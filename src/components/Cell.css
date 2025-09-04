@@ -57,38 +57,38 @@
 /* Responsive sizing for smaller screens */
 @media (max-width: 480px) {
   .cell {
-    width: calc(100% - 4px);
-    height: auto;
+    width: calc((100vw - 32px) / 7);
+    height: calc((100vw - 32px) / 7);
     padding: 2px;
     border-width: 1px;
     aspect-ratio: 1 / 1;
-    margin: 0 auto;
+    flex-shrink: 0;
   }
   .cell::after {
-    width: 80%;
-    height: 80%;
+    width: 75%;
+    height: 75%;
   }
   .piece {
-    width: 80%;
-    height: 80%;
+    width: 75%;
+    height: 75%;
   }
 }
 
 @media (max-width: 360px) {
   .cell {
-    width: calc(100% - 4px);
-    height: auto;
+    width: calc((100vw - 24px) / 7);
+    height: calc((100vw - 24px) / 7);
     padding: 2px;
     border-width: 1px;
     aspect-ratio: 1 / 1;
-    margin: 0 auto;
+    flex-shrink: 0;
   }
   .cell::after {
-    width: 80%;
-    height: 80%;
+    width: 75%;
+    height: 75%;
   }
   .piece {
-    width: 80%;
-    height: 80%;
+    width: 75%;
+    height: 75%;
   }
 }
