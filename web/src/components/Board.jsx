@@ -81,7 +81,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
 
   const renderStatus = () => {
     if (!gameStarted) {
-      return "Select players and click 'Start Game'!";
+      return "Select players and start!";
     }
     if (winner) {
       return `${winner === 1 ? 'Red' : 'Yellow'} wins!`;
