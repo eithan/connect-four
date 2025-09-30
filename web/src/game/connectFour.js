@@ -41,6 +41,17 @@ export class ConnectFourGame {
     return -1;
   }
 
+  // Make this method accessible for checking available moves
+  getAvailableColumns() {
+    const availableColumns = [];
+    for (let col = 0; col < 7; col++) {
+      if (this.findLowestEmptyRow(col) !== -1) {
+        availableColumns.push(col);
+      }
+    }
+    return availableColumns;
+  }
+
   checkWin(row, column) {
     const directions = [
       [0, 1],   // horizontal

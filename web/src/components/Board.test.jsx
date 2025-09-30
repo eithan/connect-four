@@ -10,35 +10,23 @@ describe('Board Component', () => {
   });
 
   test('renders empty board initially', () => {
-    const startButton = component.getByText('Start Game');
-    fireEvent.click(startButton);
-    
     const cells = component.container.querySelectorAll('.cell');
     expect(cells.length).toBe(42); // 7x6 board
     expect(component.container.querySelectorAll('.piece').length).toBe(0);
   });
 
   test('shows current player status', () => {
-    const startButton = component.getByText('Start Game');
-    fireEvent.click(startButton);
-    
     const status = component.getByTestId('game-status');
     expect(status.textContent).toContain("Red's turn");
   });
 
   test('adds piece when cell is clicked', () => {
-    const startButton = component.getByText('Start Game');
-    fireEvent.click(startButton);
-    
     const cells = component.container.querySelectorAll('.cell');
     fireEvent.click(cells[35]); // Bottom row, first column
     expect(component.container.querySelectorAll('.piece').length).toBe(1);
   });
 
   test('alternates between players', () => {
-    const startButton = component.getByText('Start Game');
-    fireEvent.click(startButton);
-    
     const cells = component.container.querySelectorAll('.cell');
     const status = component.getByTestId('game-status');
     
@@ -50,9 +38,6 @@ describe('Board Component', () => {
   });
 
   test('resets game when reset button is clicked', () => {
-    const startButton = component.getByText('Start Game');
-    fireEvent.click(startButton);
-    
     const cells = component.container.querySelectorAll('.cell');
     fireEvent.click(cells[35]);
     expect(component.container.querySelectorAll('.piece').length).toBe(1);

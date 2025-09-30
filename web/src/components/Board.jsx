@@ -1,20 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Cell from './Cell';
 import { ConnectFourGame } from '../game/connectFour.js';
 import './Board.css';
 
-function Board() {
+function Board({ playerTypes = { red: 'human', yellow: 'human' }, onGameReset = () => {} }) {
   const [game] = useState(new ConnectFourGame());
   const [board, setBoard] = useState(Array(6).fill().map(() => Array(7).fill(null)));
   const [currentPlayer, setCurrentPlayer] = useState(1);
-  const [gameStarted, setGameStarted] = useState(false);
   const [winner, setWinner] = useState(null);
   const [lastMove, setLastMove] = useState(null);
 
-  const handleClick = (row, col) => {
-    if (!gameStarted || winner) return;
+  const getRandomMove = () => {
+    const availableColumns = game.getAvailableColumns();
+    if (availableColumns.length === 0) return null;
+    return availableColumns[Math.floor(Math.random() * availableColumns.length)];
+  };
 
-    const move = game.makeMove(col);
+  const makeMove = (column) => {
+    const move = game.makeMove(column);
     if (move) {
       const newBoard = board.map(row => [...row]);
       newBoard[move.row][move.column] = currentPlayer;
@@ -26,30 +29,54 @@ function Board() {
       } else {
         setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
       }
+      return true;
     }
+    return false;
   };
 
-  const startGame = () => {
-    setGameStarted(true);
+  const handleClick = (row, col) => {
+    if (winner) return;
+    
+    const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
+    if (currentPlayerType !== 'human') return;
+
+    makeMove(col);
   };
+
+  // Handle Minimax player moves
+  useEffect(() => {
+    if (winner) return;
+    
+    const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
+    if (currentPlayerType === 'minimax') {
+      const timer = setTimeout(() => {
+        const randomColumn = getRandomMove();
+        if (randomColumn !== null) {
+          makeMove(randomColumn);
+        }
+      }, 500); // Small delay to make it feel more natural
+      
+      return () => clearTimeout(timer);
+    }
+  }, [currentPlayer, winner, playerTypes]);
 
   const resetGame = () => {
     game.reset();
     setBoard(Array(6).fill().map(() => Array(7).fill(null)));
     setCurrentPlayer(1);
     setWinner(null);
-    setGameStarted(false);
     setLastMove(null);
+    onGameReset();
   };
 
   const renderStatus = () => {
-    if (!gameStarted) {
-      return "Click 'Start Game' to begin!";
-    }
     if (winner) {
       return `${winner === 1 ? 'Red' : 'Yellow'} wins!`;
     }
-    return `${currentPlayer === 1 ? "Red's" : "Yellow's"} turn`;
+    const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
+    const playerName = currentPlayer === 1 ? 'Red' : 'Yellow';
+    const typeText = currentPlayerType === 'minimax' ? ' (Minimax)' : '';
+    return `${playerName}${typeText}'s turn`;
   };
 
   return (
@@ -72,11 +99,7 @@ function Board() {
         ))}
       </div>
       <div className="controls">
-        {!gameStarted ? (
-          <button onClick={startGame}>Start Game</button>
-        ) : (
-          <button onClick={resetGame}>Reset Game</button>
-        )}
+        <button onClick={resetGame}>Reset Game</button>
       </div>
     </div>
   );

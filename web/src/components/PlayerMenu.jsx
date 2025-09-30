@@ -16,7 +16,7 @@ const PlayerMenu = ({ onPlayersSelected }) => {
           <span className="player-label red">Red Player</span>
           <select value={redType} onChange={(e) => setRedType(e.target.value)}>
             <option value="human">Human</option>
-            <option value="computer">Computer</option>
+            <option value="minimax">Minimax</option>
           </select>
         </label>
       </div>
@@ -25,7 +25,7 @@ const PlayerMenu = ({ onPlayersSelected }) => {
           <span className="player-label yellow">Yellow Player</span>
           <select value={yellowType} onChange={(e) => setYellowType(e.target.value)}>
             <option value="human">Human</option>
-            <option value="computer">Computer</option>
+            <option value="minimax">Minimax</option>
           </select>
         </label>
       </div>
