@@ -1,0 +1,40 @@
+{
+    "folders": [
+        {
+            "name": "Connect Four (Root)",
+            "path": "."
+        },
+        {
+            "name": "Web App",
+            "path": "./web"
+        },
+        {
+            "name": "AI Library",
+            "path": "./ai"
+        }
+    ],
+    "settings": {
+        "python.defaultInterpreterPath": "/Users/eithan/.pyenv/versions/3.12.5/bin/python",
+        "python.terminal.activateEnvironment": false,
+        "terminal.integrated.env.osx": {
+            "PYENV_VERSION": "3.12.5",
+            "PATH": "${env:PATH}:/Users/eithan/.local/bin"
+        },
+        "files.associations": {
+            "*.jsx": "javascriptreact",
+            "*.js": "javascript"
+        },
+        "emmet.includeLanguages": {
+            "javascript": "javascriptreact"
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-python.python",
+            "ms-python.flake8",
+            "ms-python.black-formatter",
+            "bradlc.vscode-tailwindcss",
+            "esbenp.prettier-vscode"
+        ]
+    }
+}

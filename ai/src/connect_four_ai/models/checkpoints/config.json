@@ -1,0 +1,31 @@
+{
+  "actors": 4,
+  "checkpoint_freq": 25,
+  "eval_levels": 7,
+  "evaluation_window": 50,
+  "evaluators": 4,
+  "game": "tic_tac_toe",
+  "learning_rate": 0.01,
+  "max_simulations": 20,
+  "max_steps": 25,
+  "nn_depth": 2,
+  "nn_model": "resnet",
+  "nn_width": 128,
+  "observation_shape": [
+    3,
+    3,
+    3
+  ],
+  "output_size": 9,
+  "path": "./models/checkpoints",
+  "policy_alpha": 0.25,
+  "policy_epsilon": 1,
+  "quiet": true,
+  "replay_buffer_reuse": 4,
+  "replay_buffer_size": 16384,
+  "temperature": 1,
+  "temperature_drop": 4,
+  "train_batch_size": 128,
+  "uct_c": 1,
+  "weight_decay": 0.0001
+}
