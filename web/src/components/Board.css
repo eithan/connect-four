@@ -2,13 +2,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px;
-  gap: 20px;
+  padding: 0px;
+  gap: 0px;
 }
 
 .board {
   background-color: #0066cc;
-  padding: 10px;
+  padding: 0px;
   border-radius: 10px;
   display: inline-block;
   box-sizing: border-box;
@@ -21,16 +21,18 @@
 .status {
   font-size: 24px;
   font-weight: bold;
-  margin-bottom: 10px;
+  margin-bottom: 0px;
   color: #333;
 }
 
 .controls {
-  margin-top: 15px;
+  margin-top: 5px;
+  display: flex;
+  justify-content: center;
 }
 
 .controls button {
-  padding: 10px 20px;
+  padding: 10px 12px;
   font-size: 16px;
   border: none;
   border-radius: 5px;
@@ -38,6 +40,7 @@
   color: white;
   cursor: pointer;
   transition: background-color 0.3s;
+  min-width: 300px;
 }
 
 .controls button:hover {
@@ -49,7 +52,7 @@
   gap: 20px;
   justify-content: center;
   align-items: center;
-  margin: 20px 0;
+  margin: 0px 0;
 }
 
 .player-select {
@@ -74,7 +77,7 @@
   font-size: 14px;
   color: white;
   text-align: center;
-  min-width: 80px;
+  min-width: 140px;
 }
 
 .player-label.red {
@@ -95,7 +98,7 @@
   font-size: 14px;
   cursor: pointer;
   transition: background-color 0.3s;
-  min-width: 120px;
+  min-width: 140px;
 }
 
 .player-select select:focus {
