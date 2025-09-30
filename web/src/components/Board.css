@@ -42,6 +42,69 @@
 
 .controls button:hover {
   background-color: #45a049;
+}
+
+.player-selection {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  align-items: center;
+  margin: 20px 0;
+}
+
+.player-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-select label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.player-label {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 14px;
+  color: white;
+  text-align: center;
+  min-width: 80px;
+}
+
+.player-label.red {
+  background-color: #e74c3c;
+}
+
+.player-label.yellow {
+  background-color: #f1c40f;
+  color: #333;
+}
+
+.player-select select {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background-color: #333;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  min-width: 120px;
+}
+
+.player-select select:focus {
+  outline: none;
+  background-color: #444;
+}
+
+.player-select select:hover {
+  background-color: #444;
 } 
 
 /* Responsive layout 
