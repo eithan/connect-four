@@ -54,7 +54,20 @@
   }
 } 
 
-/* Responsive sizing for smaller screens 
+/* Responsive sizing for smaller screens */
+@media (max-width: 768px) {
+  .cell {
+    width: 100%;
+    height: 100%;
+    padding: 3px;
+    border-width: 1px;
+    aspect-ratio: 1 / 1;
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 @media (max-width: 480px) {
   .cell {
     width: 100%;
@@ -63,14 +76,8 @@
     border-width: 1px;
     aspect-ratio: 1 / 1;
     box-sizing: border-box;
-  }
-  .cell::after {
-    width: 80%;
-    height: 80%;
-  }
-  .piece {
-    width: 80%;
-    height: 80%;
+    flex: 1;
+    min-width: 0;
   }
 }
 
@@ -78,17 +85,24 @@
   .cell {
     width: 100%;
     height: 100%;
-    padding: 2px;
+    padding: 1px;
     border-width: 1px;
     aspect-ratio: 1 / 1;
     box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
   }
-  .cell::after {
-    width: 80%;
-    height: 80%;
+}
+
+@media (max-width: 320px) {
+  .cell {
+    width: 100%;
+    height: 100%;
+    padding: 1px;
+    border-width: 1px;
+    aspect-ratio: 1 / 1;
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
   }
-  .piece {
-    width: 80%;
-    height: 80%;
-  }
-} */
+}
