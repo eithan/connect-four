@@ -98,18 +98,16 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
         {renderStatus()}
       </div>
       <div className="board">
-        {board.map((row, rowIndex) => (
-          <div key={rowIndex} className="board-row">
-            {row.map((cell, colIndex) => (
-              <Cell
-                key={colIndex}
-                value={cell}
-                onClick={() => handleClick(rowIndex, colIndex)}
-                animate={!!lastMove && rowIndex === lastMove.row && colIndex === lastMove.column}
-              />
-            ))}
-          </div>
-        ))}
+        {board.flatMap((row, rowIndex) => 
+          row.map((cell, colIndex) => (
+            <Cell
+              key={`${rowIndex}-${colIndex}`}
+              value={cell}
+              onClick={() => handleClick(rowIndex, colIndex)}
+              animate={!!lastMove && rowIndex === lastMove.row && colIndex === lastMove.column}
+            />
+          ))
+        )}
       </div>
       <div className="player-selection">
         <div className="player-select">

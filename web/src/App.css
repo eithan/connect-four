@@ -1,8 +1,10 @@
 #root {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: clamp(1rem, 3vw, 2rem);
   text-align: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .logo {
@@ -43,43 +45,47 @@
 
 .app {
   text-align: center;
-  padding: 20px;
+  padding: clamp(10px, 2vw, 20px);
   background-color: #f0f0f0;
   min-height: 100vh;
   overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 h1 {
   color: #333;
-  margin-bottom: 20px;
+  margin-bottom: clamp(10px, 2vw, 20px);
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
 }
 
-/* Responsive app spacing 
-media (max-width: 480px) {
+/* Responsive app spacing */
+@media (max-width: 768px) {
   #root {
-    padding: 0;
+    padding: 1rem;
   }
   .app {
-    padding: 12px 0;
+    padding: 15px;
   }
-  h1 {
-    font-size: 20px;
-    margin-bottom: 12px;
+}
+
+@media (max-width: 480px) {
+  #root {
+    padding: 0.5rem;
+  }
+  .app {
+    padding: 10px;
   }
 }
 
 @media (max-width: 360px) {
   #root {
-    padding: 0.75rem;
+    padding: 0.25rem;
   }
   .app {
-    padding: 10px;
+    padding: 8px;
   }
-  h1 {
-    font-size: 20px;
-    margin-bottom: 10px;
-  }
-}*/
+}
 
 .game-container {
   display: flex;
@@ -90,9 +96,10 @@ media (max-width: 480px) {
 
 .board {
   background-color: #0066cc;
-  padding: 10px;
+  padding: 12px;
   border-radius: 10px;
-  display: inline-block;
+  display: grid;
+  gap: 5px;
 }
 
 .row {
@@ -100,21 +107,18 @@ media (max-width: 480px) {
 }
 
 .cell {
-  width: 60px;
-  height: 60px;
   background-color: white;
   border: 2px solid #004999;
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 2px;
   cursor: pointer;
 }
 
 .piece {
-  width: 50px;
-  height: 50px;
+  width: 85%;
+  height: 85%;
   border-radius: 50%;
 }
 

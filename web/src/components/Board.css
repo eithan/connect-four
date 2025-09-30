@@ -2,45 +2,53 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0px;
-  gap: 0px;
-}
-
-.board {
-  background-color: #0066cc;
-  padding: 0px;
-  border-radius: 10px;
-  display: inline-block;
+  padding: 20px;
+  gap: 20px;
+  width: 90%;
+  max-width: 600px;
+  min-width: 300px;
+  margin: 0 auto;
   box-sizing: border-box;
 }
 
-.board-row {
-  display: flex;
+.board {
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 7 / 6;
 }
 
+
 .status {
-  font-size: 24px;
+  font-size: clamp(16px, 4vw, 24px);
   font-weight: bold;
   margin-bottom: 0px;
   color: #333;
+  text-align: center;
+  width: 100%;
 }
 
 .controls {
   margin-top: 5px;
   display: flex;
   justify-content: center;
+  width: 100%;
 }
 
 .controls button {
-  padding: 10px 12px;
-  font-size: 16px;
+  padding: 12px 20px;
+  font-size: clamp(14px, 3vw, 16px);
   border: none;
   border-radius: 5px;
   background-color: #4CAF50;
   color: white;
   cursor: pointer;
   transition: background-color 0.3s;
-  min-width: 300px;
+  min-width: 200px;
+  max-width: 300px;
+  width: 100%;
 }
 
 .controls button:hover {
@@ -49,10 +57,12 @@
 
 .player-selection {
   display: flex;
-  gap: 20px;
+  gap: clamp(10px, 3vw, 20px);
   justify-content: center;
   align-items: center;
   margin: 0px 0;
+  width: 100%;
+  flex-wrap: wrap;
 }
 
 .player-select {
@@ -74,10 +84,12 @@
   padding: 8px 16px;
   border-radius: 20px;
   font-weight: bold;
-  font-size: 14px;
+  font-size: clamp(12px, 2.5vw, 14px);
   color: white;
   text-align: center;
-  min-width: 140px;
+  min-width: 120px;
+  max-width: 160px;
+  width: 100%;
 }
 
 .player-label.red {
@@ -95,10 +107,12 @@
   border-radius: 8px;
   background-color: #333;
   color: white;
-  font-size: 14px;
+  font-size: clamp(12px, 2.5vw, 14px);
   cursor: pointer;
   transition: background-color 0.3s;
-  min-width: 140px;
+  min-width: 120px;
+  max-width: 160px;
+  width: 100%;
 }
 
 .player-select select:focus {
@@ -110,61 +124,69 @@
   background-color: #444;
 } 
 
-/* Responsive layout 
+/* Responsive layout */
+@media (max-width: 768px) {
+  .game-container {
+    width: 95%;
+    padding: 15px;
+    gap: 15px;
+  }
+  
+  .player-selection {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .player-select {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
 @media (max-width: 480px) {
   .game-container {
-    padding: 8px;
-    gap: 8px;
+    width: 98%;
+    padding: 10px;
+    gap: 10px;
+    min-width: 280px;
   }
+  
   .board {
     padding: 8px;
-    width: calc(100vw - 16px);
-    max-width: calc(100vw - 16px);
-    overflow: hidden;
-    box-sizing: border-box;
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    grid-template-rows: repeat(6, 1fr);
-    gap: 4px;
-    aspect-ratio: 7 / 6;
   }
-  .board-row {
-    display: contents;
+  
+  .player-selection {
+    gap: 10px;
   }
-  .status {
-    font-size: 18px;
+  
+  .player-select {
+    max-width: 150px;
   }
+  
   .controls button {
-    padding: 8px 14px;
-    font-size: 14px;
+    min-width: 150px;
+    padding: 10px 15px;
   }
 }
 
 @media (max-width: 360px) {
   .game-container {
-    padding: 6px;
-    gap: 6px;
+    width: 100%;
+    padding: 8px;
+    gap: 8px;
+    min-width: 260px;
   }
+  
   .board {
     padding: 6px;
-    width: calc(100vw - 12px);
-    max-width: calc(100vw - 12px);
-    overflow: hidden;
-    box-sizing: border-box;
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    grid-template-rows: repeat(6, 1fr);
-    gap: 3px;
-    aspect-ratio: 7 / 6;
   }
-  .board-row {
-    display: contents;
+  
+  .player-select {
+    max-width: 120px;
   }
-  .status {
-    font-size: 16px;
-  }
+  
   .controls button {
+    min-width: 120px;
     padding: 8px 12px;
-    font-size: 13px;
   }
-}*/
+}
