@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Cell from './Cell';
 import { ConnectFourGame } from '../game/connectFour.js';
-import ConnectFourAI from './AI.jsx';
 import './Board.css';
 
-function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChanged = () => {} }) {
+function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChanged = () => {}, ai = null }) {
   const [game] = useState(new ConnectFourGame());
   const [board, setBoard] = useState(Array(6).fill().map(() => Array(7).fill(null)));
   const [currentPlayer, setCurrentPlayer] = useState(1);
@@ -12,10 +11,24 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
   const [lastMove, setLastMove] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
 
-  const getRandomMove = () => {
-    const availableColumns = game.getAvailableColumns();
-    if (availableColumns.length === 0) return null;
-    return availableColumns[Math.floor(Math.random() * availableColumns.length)];
+  const getRandomMove = async () => {
+    if (!ai) {
+      console.warn("AI not initialized, falling back to random move");
+      const availableColumns = game.getAvailableColumns();
+      if (availableColumns.length === 0) return null;
+      return availableColumns[Math.floor(Math.random() * availableColumns.length)];
+    }
+    
+    try {
+      const aiMove = await ai.getMove(board);
+      console.log("*** AI move:", aiMove);
+      return aiMove;
+    } catch (error) {
+      console.error("AI move failed, falling back to random move:", error);
+      const availableColumns = game.getAvailableColumns();
+      if (availableColumns.length === 0) return null;
+      return availableColumns[Math.floor(Math.random() * availableColumns.length)];
+    }
   };
 
   const makeMove = (column) => {
@@ -45,14 +58,14 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     makeMove(col);
   };
 
-  // Handle Minimax player moves
+  // Handle AI-AlphaZero player moves
   useEffect(() => {
     if (!gameStarted || winner) return;
     
     const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
-    if (currentPlayerType === 'minimax') {
-      const timer = setTimeout(() => {
-        const randomColumn = getRandomMove();
+    if (currentPlayerType === 'ai-alphazero') {
+      const timer = setTimeout(async () => {
+        const randomColumn = await getRandomMove();
         if (randomColumn !== null) {
           makeMove(randomColumn);
         }
@@ -118,12 +131,9 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
 
   const startGame = () => {
     setGameStarted(true);
-    
-    // AI testing code
-    testAIWithBoards();
   };
 
-  const resetGame = () => {
+  const resetGame = async () => {
     game.reset();
     setBoard(Array(6).fill().map(() => Array(7).fill(null)));
     setCurrentPlayer(1);
@@ -131,7 +141,16 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     setLastMove(null);
     setGameStarted(false);
     
-    testAIWithBoards();
+    // Reset AI synchronously if it exists
+    if (ai) {
+      try {
+        // Reinitialize the AI to reset its state
+        await ai.init();
+        console.log('AI reset successfully');
+      } catch (error) {
+        console.error('Failed to reset AI:', error);
+      }
+    }
   };
 
   const handlePlayerTypeChange = (player, type) => {
@@ -148,7 +167,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     }
     const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
     const playerName = currentPlayer === 1 ? 'Red' : 'Yellow';
-    const typeText = currentPlayerType === 'minimax' ? ' (Minimax)' : '';
+    const typeText = currentPlayerType === 'ai-alphazero' ? ' (AI-AlphaZero)' : '';
     return `${playerName}${typeText}'s turn`;
   };
 
@@ -173,12 +192,12 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
         <div className="player-select">
           <label>
             <span className="player-label red">Red Player</span>
-            <select 
+            <select id="red-player-select"
               value={playerTypes.red} 
               onChange={(e) => handlePlayerTypeChange('red', e.target.value)}
             >
               <option value="human">Human</option>
-              <option value="minimax">Minimax</option>
+              <option value="ai-alphazero">AI-AlphaZero</option>
             </select>
           </label>
         </div>
@@ -190,13 +209,13 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
               onChange={(e) => handlePlayerTypeChange('yellow', e.target.value)}
             >
               <option value="human">Human</option>
-              <option value="minimax">Minimax</option>
+              <option value="ai-alphazero">AI-AlphaZero</option>
             </select>
           </label>
         </div>
       </div>
       <div className="controls">
-        <button onClick={gameStarted ? resetGame : startGame}>
+        <button onClick={gameStarted ? () => resetGame() : startGame}>
           {gameStarted ? 'Reset Game' : 'Start Game'}
         </button>
       </div>
