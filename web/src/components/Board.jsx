@@ -50,10 +50,15 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
   };
 
   const handleClick = (row, col) => {
-    if (!gameStarted || winner) return;
+    if (winner) return;
     
     const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
     if (currentPlayerType !== 'human') return;
+
+    // Start the game if it hasn't started yet
+    if (!gameStarted) {
+      setGameStarted(true);
+    }
 
     makeMove(col);
   };
@@ -151,6 +156,9 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
         console.error('Failed to reset AI:', error);
       }
     }
+    
+    // Automatically start the game after reset
+    setGameStarted(true);
   };
 
   const handlePlayerTypeChange = (player, type) => {

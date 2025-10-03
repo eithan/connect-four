@@ -45,7 +45,7 @@
 
 .app {
   text-align: center;
-  padding: clamp(10px, 2vw, 20px);
+  padding: clamp(20px, 4vw, 40px) clamp(10px, 2vw, 20px);
   background-color: #f0f0f0;
   min-height: 100vh;
   overflow-x: hidden;
@@ -54,9 +54,13 @@
 }
 
 h1 {
-  color: #333;
-  margin-bottom: clamp(10px, 2vw, 20px);
-  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  color: #2c3e50;
+  margin-bottom: clamp(30px, 4vw, 50px);
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  letter-spacing: 1px;
+  font-family: 'Orbitron', 'Courier New', monospace;
 }
 
 /* Responsive app spacing */
@@ -65,7 +69,7 @@ h1 {
     padding: 1rem;
   }
   .app {
-    padding: 15px;
+    padding: 25px 15px;
   }
 }
 
@@ -74,7 +78,7 @@ h1 {
     padding: 0.5rem;
   }
   .app {
-    padding: 10px;
+    padding: 20px 10px;
   }
 }
 
@@ -83,7 +87,7 @@ h1 {
     padding: 0.25rem;
   }
   .app {
-    padding: 8px;
+    padding: 15px 8px;
   }
 }
 
@@ -130,12 +134,6 @@ h1 {
   background-color: #ffeb3b;
 }
 
-.status {
-  font-size: 24px;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 10px;
-}
 
 .reset-button {
   padding: 10px 20px;
