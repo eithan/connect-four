@@ -16,18 +16,44 @@ class ConnectFourAI {
       console.log('Initializing AI with model URL:', this.modelUrl);
       
       // Configure onnxruntime-web to use CDN for WASM files
-      //ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/';
+      // Try without specifying wasmPaths first - let it use bundled files
+      // ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/';
       
       // Load the ONNX model in browser
       console.log('Creating inference session...');
-      const externalDataUrl = `${this.modelUrl}.data`;
-      this.session = await ort.InferenceSession.create(this.modelUrl, {
-        externalData: [{
-          path: 'alphazero-network-model-onnx.onnx.data', // This is the internal name from the error message.
-          data: externalDataUrl
-        }]
-      });
-      //this.session = await ort.InferenceSession.create(this.modelUrl);
+      
+      // First, verify the model file is accessible
+      try {
+        const response = await fetch(this.modelUrl);
+        if (!response.ok) {
+          throw new Error(`Model file not accessible: ${response.status} ${response.statusText}`);
+        }
+        console.log('Model file is accessible, size:', response.headers.get('content-length'), 'bytes');
+      } catch (fetchError) {
+        console.error('Failed to fetch model file:', fetchError);
+        throw new Error(`Cannot access model file: ${fetchError.message}`);
+      }
+      
+      // Try to load the model with explicit external data configuration
+      try {
+        const externalDataUrl = `${this.modelUrl}.data`;
+        console.log('Trying with external data:', externalDataUrl);
+        
+        this.session = await ort.InferenceSession.create(this.modelUrl, {
+          executionProviders: ['wasm'],
+          externalData: [{
+            path: 'alphazero-network-model-onnx.onnx.data',
+            data: externalDataUrl
+          }]
+        });
+      } catch (externalDataError) {
+        console.log('External data approach failed, trying without:', externalDataError.message);
+        
+        // Fallback: try without external data
+        this.session = await ort.InferenceSession.create(this.modelUrl, {
+          executionProviders: ['wasm']
+        });
+      }
       
       console.log('Model loaded successfully!');
       console.log('Input names:', this.session.inputNames);
@@ -46,7 +72,6 @@ class ConnectFourAI {
   /**
    * Convert your 6x7 board to the 3-channel format the model expects
    * board: 2D array 6 rows x 7 columns
-   * currentPlayer: 1 or 2
    */
   encodeBoard(board) {
     const channels = 3; // player1, empty, player2 (matching Python order)
@@ -145,35 +170,34 @@ class ConnectFourAI {
         const policyOutput = results['207']; //results.linear_1;
         const valueOutput = results.output; 
 
-        // Validate the policy output's shape before proceeding.
-        // For a 7-column board, the policy should be a 1D tensor of size 7.
-        if (!policyOutput || policyOutput.dims[1] !== 7) {
-          throw new Error(`Policy output not found or has wrong shape. Found shape: ${policyOutput.dims}`);
-        }
-
-        const policyData = policyOutput.data;
-        const bestMove = this.getBestMoveFromPolicy(policyData);
-
-        return bestMove;
-      } catch (e) {
-        console.error('Failed to inference ONNX model:', e);
-        throw e;
+      // Validate the policy output's shape before proceeding.
+      // For a 7-column board, the policy should be a 1D tensor of size 7.
+      if (!policyOutput || policyOutput.dims[1] !== 7) {
+        throw new Error(`Policy output not found or has wrong shape. Found shape: ${policyOutput.dims}`);
       }
-    }
 
-    getBestMoveFromPolicy(policyData) {
-      let bestMove = -1;
-      let maxProb = -1;
-  
-      for (let i = 0; i < policyData.length; i++) {
-        if (policyData[i] > maxProb) {
-          maxProb = policyData[i];
-          bestMove = i;
-        }
-      }
+      const policyData = policyOutput.data;
+      const bestMove = this.getBestMoveFromPolicy(policyData);
+
       return bestMove;
+    } catch (e) {
+      console.error('Failed to inference ONNX model:', e);
+      throw e;
     }
+  }
 
+  getBestMoveFromPolicy(policyData) {
+    let bestMove = -1;
+    let maxProb = -1;
+
+    for (let i = 0; i < policyData.length; i++) {
+      if (policyData[i] > maxProb) {
+        maxProb = policyData[i];
+        bestMove = i;
+      }
+    }
+    return bestMove;
+  }
 }
 
 export default ConnectFourAI;
