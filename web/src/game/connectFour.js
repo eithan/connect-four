@@ -7,13 +7,15 @@ export class ConnectFourGame {
     this.board = Array(6).fill().map(() => Array(7).fill(null));
     this.currentPlayer = 'red';
     this.winner = null;
+    this.winningCells = [];
   }
 
   getState() {
     return {
       board: this.board,
       currentPlayer: this.currentPlayer,
-      winner: this.winner
+      winner: this.winner,
+      winningCells: this.winningCells
     };
   }
 
@@ -62,9 +64,22 @@ export class ConnectFourGame {
 
     for (const [dr, dc] of directions) {
       let count = 1;
-      count += this.countDirection(row, column, dr, dc);
-      count += this.countDirection(row, column, -dr, -dc);
-      if (count >= 4) return true;
+      const cells = [{row, column}];
+      
+      // Count in positive direction
+      const positiveCells = this.countDirectionWithCells(row, column, dr, dc);
+      count += positiveCells.count;
+      cells.push(...positiveCells.cells);
+      
+      // Count in negative direction
+      const negativeCells = this.countDirectionWithCells(row, column, -dr, -dc);
+      count += negativeCells.count;
+      cells.push(...negativeCells.cells);
+      
+      if (count >= 4) {
+        this.winningCells = cells;
+        return true;
+      }
     }
     return false;
   }
@@ -85,5 +100,25 @@ export class ConnectFourGame {
       c += dc;
     }
     return count;
+  }
+
+  countDirectionWithCells(row, column, dr, dc) {
+    const player = this.board[row][column];
+    let count = 0;
+    const cells = [];
+    let r = row + dr;
+    let c = column + dc;
+
+    while (
+      r >= 0 && r < 6 && 
+      c >= 0 && c < 7 && 
+      this.board[r][c] === player
+    ) {
+      count++;
+      cells.push({row: r, column: c});
+      r += dr;
+      c += dc;
+    }
+    return { count, cells };
   }
 } 

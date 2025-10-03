@@ -3,6 +3,106 @@ import Cell from './Cell';
 import { ConnectFourGame } from '../game/connectFour.js';
 import './Board.css';
 
+// WinningLine component to draw a continuous line through winning cells
+const WinningLine = ({ cells }) => {
+  if (cells.length < 2) return null;
+
+  // Sort cells to determine line direction
+  const sortedCells = [...cells].sort((a, b) => {
+    if (a.row !== b.row) return a.row - b.row;
+    return a.column - b.column;
+  });
+
+  const firstCell = sortedCells[0];
+  const lastCell = sortedCells[sortedCells.length - 1];
+
+  // Determine if it's horizontal, vertical, or diagonal
+  const isHorizontal = firstCell.row === lastCell.row;
+  const isVertical = firstCell.column === lastCell.column;
+  const isDiagonal = !isHorizontal && !isVertical;
+
+  // Calculate positions as percentages of the board
+  const cellWidth = 100 / 7; // 7 columns
+  const cellHeight = 100 / 6; // 6 rows
+  // Board has aspect-ratio 7/6 → height = width * (6/7)
+  // Use this to convert height-percentage into width-percentage units for diagonal math
+  const heightToWidthRatio = 6 / 7;
+
+  let lineStyle = {};
+
+  if (isHorizontal) {
+    const startX = firstCell.column * cellWidth + cellWidth / 2;
+    const endX = lastCell.column * cellWidth + cellWidth / 2;
+    const y = firstCell.row * cellHeight + cellHeight / 2;
+
+    lineStyle = {
+      position: 'absolute',
+      left: `${startX}%`,
+      top: `${y}%`,
+      width: `${endX - startX}%`,
+      height: '6px',
+      transform: 'translateY(-50%)',
+      zIndex: 10,
+    };
+
+    return (
+      <div className="winning-line" style={lineStyle}>
+        <div className="winning-line-inner grow-x" />
+      </div>
+    );
+  } else if (isVertical) {
+    const x = firstCell.column * cellWidth + cellWidth / 2;
+    const startY = firstCell.row * cellHeight + cellHeight / 2;
+    const endY = lastCell.row * cellHeight + cellHeight / 2;
+
+    lineStyle = {
+      position: 'absolute',
+      left: `${x}%`,
+      top: `${startY}%`,
+      width: '6px',
+      height: `${endY - startY}%`,
+      transform: 'translateX(-50%)',
+      zIndex: 10,
+    };
+
+    return (
+      <div className="winning-line" style={lineStyle}>
+        <div className="winning-line-inner grow-y" />
+      </div>
+    );
+  } else {
+    // Diagonal: compute angle using width units for both axes to respect aspect ratio
+    const startX = firstCell.column * cellWidth + cellWidth / 2;
+    const endX = lastCell.column * cellWidth + cellWidth / 2;
+    const startY = firstCell.row * cellHeight + cellHeight / 2;
+    const endY = lastCell.row * cellHeight + cellHeight / 2;
+
+    const deltaX = endX - startX; // percent of board width
+    const deltaYHeightPct = endY - startY; // percent of board height
+    const deltaYWidthPct = deltaYHeightPct * heightToWidthRatio; // convert to width-relative percent
+
+    const lengthWidthPct = Math.sqrt(deltaX * deltaX + deltaYWidthPct * deltaYWidthPct);
+    const angle = Math.atan2(deltaYWidthPct, deltaX) * (180 / Math.PI);
+
+    lineStyle = {
+      position: 'absolute',
+      left: `${startX}%`,
+      top: `${startY}%`,
+      width: `${lengthWidthPct}%`,
+      height: '6px',
+      transform: `translateY(-50%) rotate(${angle}deg)` ,
+      transformOrigin: '0 50%',
+      zIndex: 10,
+    };
+
+    return (
+      <div className="winning-line" style={lineStyle}>
+        <div className="winning-line-inner grow-x" />
+      </div>
+    );
+  }
+};
+
 function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChanged = () => {}, ai = null }) {
   const [game] = useState(new ConnectFourGame());
   const [board, setBoard] = useState(Array(6).fill().map(() => Array(7).fill(null)));
@@ -10,6 +110,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
   const [winner, setWinner] = useState(null);
   const [lastMove, setLastMove] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
+  const [winningCells, setWinningCells] = useState([]);
 
   const getRandomMove = async () => {
     if (!ai) {
@@ -41,6 +142,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
       
       if (game.checkWin(move.row, move.column)) {
         setWinner(currentPlayer);
+        setWinningCells(game.winningCells);
       } else {
         setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
       }
@@ -145,6 +247,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     setWinner(null);
     setLastMove(null);
     setGameStarted(false);
+    setWinningCells([]);
     
     // Reset AI synchronously if it exists
     if (ai) {
@@ -192,8 +295,12 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
               value={cell}
               onClick={() => handleClick(rowIndex, colIndex)}
               animate={!!lastMove && rowIndex === lastMove.row && colIndex === lastMove.column}
+              isWinning={winningCells.some(cell => cell.row === rowIndex && cell.column === colIndex)}
             />
           ))
+        )}
+        {winningCells.length > 0 && (
+          <WinningLine cells={winningCells} />
         )}
       </div>
       <div className="player-selection">

@@ -1,7 +1,7 @@
 import React from 'react';
 import './Cell.css';
 
-const Cell = ({ value, onClick, animate }) => {
+const Cell = ({ value, onClick, animate, isWinning }) => {
   return (
     <div className="cell" onClick={onClick}>
       {value !== null && (

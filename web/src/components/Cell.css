@@ -51,7 +51,8 @@
   100% {
     transform: translateY(0);
   }
-} 
+}
+
 
 /* Responsive sizing for smaller screens */
 @media (max-width: 480px) {
