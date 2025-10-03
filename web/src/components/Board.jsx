@@ -181,7 +181,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
 
   return (
     <div className="game-container">
-      <div data-testid="game-status" className="status">
+      <div data-testid="game-status" className={`status ${winner ? `winner-${winner === 1 ? 'red' : 'yellow'}` : ''}`}>
         {renderStatus()}
       </div>
       <div className="board">

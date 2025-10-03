@@ -41,6 +41,18 @@
   min-height: 14px;
 }
 
+.status.winner-red {
+  background: #ff4444;
+  color: #000000;
+  border: 1px solid #cc0000;
+}
+
+.status.winner-yellow {
+  background: #ffeb3b;
+  color: #000000;
+  border: 1px solid #ccaa00;
+}
+
 .controls {
   margin-top: 5px;
   display: flex;
