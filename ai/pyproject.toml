@@ -17,6 +17,9 @@ scipy = ">=1.10.1"
 open-spiel = "1.6.1"
 # PyTorch and deep learning
 torch = "^2.0.0"
+onnx = "^1.15.0"
+onnxruntime = "^1.16.0"
+onnxscript = ">=0.1.0"
 # Visualization and plotting
 matplotlib = "^3.7.0"
 # Jupyter/IPython support

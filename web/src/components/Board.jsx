@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Cell from './Cell';
 import { ConnectFourGame } from '../game/connectFour.js';
+import ConnectFourAI from './AI.jsx';
 import './Board.css';
 
 function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChanged = () => {} }) {
@@ -61,8 +62,65 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     }
   }, [gameStarted, currentPlayer, winner, playerTypes]);
 
+  // AI testing code moved to reusable function
+  const testAIWithBoards = async () => {
+    try {
+      const ai = new ConnectFourAI("/connect-four/alphazero-network-model-onnx.onnx");
+      await ai.init();
+
+      // Test with different board states
+      const emptyBoard = [
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0]
+      ];
+      
+        const testBoard1 = [
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,0,1,0,0,0]
+        ];
+        
+        const testBoard2 = [
+          [0,0,0,0,0,0,0],
+          [0,0,0,0,0,0,0],
+          [0,0,-1,0,0,0,0],
+          [0,0,-1,0,0,0,0],
+          [0,1,-1,0,0,0,0],
+          [0,1,1,0,0,0,1]
+        ];
+        
+        console.log("Empty board:", emptyBoard);
+        console.log("Test board 1:", testBoard1);
+        console.log("Test board 2:", testBoard2);
+      
+      console.log("Testing empty board:");
+      const move1 = await ai.getMove(emptyBoard);
+      console.log("*********** Empty board move:", move1);
+      
+      console.log("Testing board with piece in column 0:");
+      const move2 = await ai.getMove(testBoard1);
+      console.log("*********** Board1 move:", move2);
+      
+      console.log("Testing board with piece in column 1:");
+      const move3 = await ai.getMove(testBoard2);
+      console.log("*********** Board2 move:", move3);
+    } catch (error) {
+      console.error("AI testing error:", error);
+    }
+  };
+
   const startGame = () => {
     setGameStarted(true);
+    
+    // AI testing code
+    testAIWithBoards();
   };
 
   const resetGame = () => {
@@ -72,6 +130,8 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     setWinner(null);
     setLastMove(null);
     setGameStarted(false);
+    
+    testAIWithBoards();
   };
 
   const handlePlayerTypeChange = (player, type) => {
