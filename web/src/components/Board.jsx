@@ -185,7 +185,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
   // AI testing code moved to reusable function
   const testAIWithBoards = async () => {
     try {
-      const ai = new ConnectFourAI("/connect-four/alphazero-network-model-onnx.onnx");
+      const ai = new ConnectFourAI("/connect-four/alphazero-network-model.onnx");
       await ai.init();
 
       // Test with different board states
@@ -198,27 +198,27 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
         [0,0,0,0,0,0,0]
       ];
       
-        const testBoard1 = [
-          [0,0,0,0,0,0,0],
-          [0,0,0,0,0,0,0],
-          [0,0,0,0,0,0,0],
-          [0,0,0,0,0,0,0],
-          [0,0,0,0,0,0,0],
-          [0,0,0,1,0,0,0]
-        ];
-        
-        const testBoard2 = [
-          [0,0,0,0,0,0,0],
-          [0,0,0,0,0,0,0],
-          [0,0,-1,0,0,0,0],
-          [0,0,-1,0,0,0,0],
-          [0,1,-1,0,0,0,0],
-          [0,1,1,0,0,0,1]
-        ];
-        
-        console.log("Empty board:", emptyBoard);
-        console.log("Test board 1:", testBoard1);
-        console.log("Test board 2:", testBoard2);
+      const testBoard1 = [
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,0,1,0,0,0]
+      ];
+      
+      const testBoard2 = [
+        [0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0],
+        [0,0,-1,0,0,0,0],
+        [0,0,-1,0,0,0,0],
+        [0,1,-1,0,0,0,0],
+        [0,1,1,0,0,0,1]
+      ];
+      
+      console.log("Empty board:", emptyBoard);
+      console.log("Test board 1:", testBoard1);
+      console.log("Test board 2:", testBoard2);
       
       console.log("Testing empty board:");
       const move1 = await ai.getMove(emptyBoard);

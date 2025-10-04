@@ -10,7 +10,7 @@ function App() {
   useEffect(() => {
     const initializeAI = async () => {
       try {
-        const aiInstance = new ConnectFourAI("/connect-four/alphazero-network-model-onnx.onnx");
+        const aiInstance = new ConnectFourAI("/connect-four/alphazero-network-model.onnx");
         await aiInstance.init();
         setAi(aiInstance);
         console.log('AI initialized successfully');
