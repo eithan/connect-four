@@ -2,6 +2,8 @@
 Refactored train_new.py using modular AlphaZero implementation.
 """
 
+import argparse
+import os
 import torch
 from connect_four_ai.alphazero import Config, config_dict, Connect4, AlphaZeroTrainer, AlphaZeroAgent, Evaluator, ONNXAlphaZeroNetwork
 
@@ -10,6 +12,19 @@ import onnxruntime as ort
 import numpy as np
 
 config = Config(config_dict)
+
+def get_model_path(mode):
+    """Get the correct model file path based on mode."""
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    models_dir = os.path.join(script_dir, 'models')
+    
+    model_files = {
+        'weights': os.path.join(models_dir, 'alphazero-network-weights.pth'),
+        'torchscript': os.path.join(models_dir, 'alphazero-network-model-ts.pt'),
+        'onnx': os.path.join(models_dir, 'alphazero-network-model-onnx.onnx')
+    }
+    return model_files.get(mode, model_files['weights'])
 
 def train(alphazero):
     evaluator = Evaluator(alphazero)
@@ -25,50 +40,73 @@ def train(alphazero):
     #     evaluator.evaluate()
 
     # Save trained weights
-    torch.save(alphazero.network.state_dict(), 'alphazero-network-weights.pth')
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    models_dir = os.path.join(script_dir, 'models')
+    os.makedirs(models_dir, exist_ok=True)
+    
+    weights_path = os.path.join(models_dir, 'alphazero-network-weights.pth')
+    torch.save(alphazero.network.state_dict(), weights_path)
 
     # for Cloud deployment we have to use CPU!
     alphazero.network.to("cpu")
     alphazero.network.eval()
-    torch.jit.script(alphazero.network).save("alphazero-network-model-ts.pt")
+    ts_path = os.path.join(models_dir, 'alphazero-network-model-ts.pt')
+    torch.jit.script(alphazero.network).save(ts_path)
     
 def convert_weights_to_ts_model(alphazero):
-    file_path = "./alphazero-network-weights.pth"
-    pre_trained_weights = torch.load(file_path, map_location=config.device)
+    weights_path = get_model_path('weights')
+    pre_trained_weights = torch.load(weights_path, map_location=config.device)
     alphazero.network.load_state_dict(pre_trained_weights)
 
     # for Cloud deployment we have to use CPU!
     alphazero.network.to("cpu")
     alphazero.network.eval()
-    torch.jit.script(alphazero.network).save("alphazero-network-model-ts.pt")
+    ts_path = get_model_path('torchscript')
+    torch.jit.script(alphazero.network).save(ts_path)
 
 def convert_weights_to_onnx_model(alphazero):
-    file_path = "./alphazero-network-weights.pth"
-    pre_trained_weights = torch.load(file_path, map_location=config.device)
+    weights_path = get_model_path('weights')
+    pre_trained_weights = torch.load(weights_path, map_location=config.device)
     alphazero.network.load_state_dict(pre_trained_weights)
     alphazero.network.to("cpu")
     alphazero.network.eval()
+    
+    onnx_path = get_model_path('onnx')
     dummy_input = torch.zeros(1, 3, 6, 7, dtype=torch.float32)  # match conv input
     torch.onnx.export(
         alphazero.network,
         dummy_input,
-        "alphazero-network-model-onnx.onnx",
+        onnx_path,
         #dynamo=True,
         input_names=["input"],
         output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}})
 
 def load_weights_to_alphazero(alphazero):
-    file_path = "./alphazero-network-weights.pth"
+    file_path = get_model_path('weights')
     pre_trained_weights = torch.load(file_path, map_location=config.device)
     print(f"Loaded weights from {file_path}")
     alphazero.network.load_state_dict(pre_trained_weights)
 
 def load_ts_model_to_alphazero(alphazero):
-    file_path = "./alphazero-network-model-ts.pt"
+    file_path = get_model_path('torchscript')
     ts_model = torch.jit.load(file_path, map_location=config.device)
     print(f"Loaded TorchScript model from {file_path}")
     alphazero.network = ts_model
+
+def load_model_by_mode(alphazero, mode):
+    """Load the appropriate model based on mode."""
+    if mode == 'weights':
+        load_weights_to_alphazero(alphazero)
+    elif mode == 'torchscript':
+        load_ts_model_to_alphazero(alphazero)
+    elif mode == 'onnx':
+        onnx_path = get_model_path(mode)
+        alphazero.network = ONNXAlphaZeroNetwork(onnx_path)
+        alphazero.mcts.network = alphazero.network
+        print(f"Loaded ONNX model from {onnx_path}")
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
 
 def play_human_vs_alphazero(alphazero):
     agent = AlphaZeroAgent(alphazero)
@@ -112,34 +150,55 @@ def predict(session, state):
     move = int(output[0].argmax())
     return move
 
-if __name__ == "__main__":
-    game = Connect4()
-    # Doubled our training last time! Took 23 hours (83000 seconds) (1:11pm --> 12:29pm the next day)
-    #config.training_epochs = config.training_epochs * 2
-    #config.games_per_epoch = config.games_per_epoch * 2
-    alphazero = AlphaZeroTrainer(game, config)
-
-    # --- Training ---
-    #train(alphazero)
-    #exit()
-
-    # convert_weights_to_ts_model(alphazero)
-    # convert_weights_to_onnx_model(alphazero)
-    # exit()
-
-    # play_with_weights = True
-
-    # if play_with_weights:
-    #     # --- Playing (without TorchScript)---
-    #     load_weights_to_alphazero(alphazero)
-    # else:
-    #     # --- Playing (with TorchScript)---
-    #     load_ts_model_to_alphazero(alphazero)
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='AlphaZero Connect Four Training and Playing')
     
-    # Update MCTS to use the new ONNX network
-    alphazero.network = ONNXAlphaZeroNetwork("./models/alphazero-network-model-onnx.onnx")
-    alphazero.mcts.network = alphazero.network
+    parser.add_argument('--mode', choices=['weights', 'torchscript', 'onnx'], 
+                       default='weights', 
+                       help='Model format to use (default: weights)')
+    
+    parser.add_argument('--action', choices=['train', 'play'], 
+                       required=True,
+                       help='Action to perform: train or play')
+    
+    return parser.parse_args()
 
-    print(f"Updated MCTS to use network type: {type(alphazero.mcts.network)}")
-
-    play_human_vs_alphazero(alphazero)
+if __name__ == "__main__":
+    args = parse_arguments()
+    
+    game = Connect4()
+    alphazero = AlphaZeroTrainer(game, config)
+    
+    if args.action == 'train':
+        print(f"Starting training with mode: {args.mode}")
+        
+        # Train the model
+        train(alphazero)
+        
+        # Convert to the specified format if needed
+        if args.mode == 'torchscript':
+            print("Converting weights to TorchScript model...")
+            convert_weights_to_ts_model(alphazero)
+        elif args.mode == 'onnx':
+            print("Converting weights to ONNX model...")
+            convert_weights_to_onnx_model(alphazero)
+            
+        print(f"Training completed! Model saved in {args.mode} format.")
+        
+    elif args.action == 'play':
+        model_path = get_model_path(args.mode)
+        
+        # Check if model file exists
+        if not os.path.exists(model_path):
+            print(f"Error: Model file {model_path} not found!")
+            print("Available options:")
+            print("1. Train first with: python train.py --action train --mode <mode>")
+            print("2. Use a different mode if the model exists in another format")
+            exit(1)
+        
+        print(f"Loading model from {model_path} for playing...")
+        load_model_by_mode(alphazero, args.mode)
+        
+        print(f"Starting game with {args.mode} model...")
+        play_human_vs_alphazero(alphazero)
