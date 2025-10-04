@@ -103,7 +103,7 @@ const WinningLine = ({ cells }) => {
   }
 };
 
-function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChanged = () => {}, ai = null }) {
+function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChanged = () => {}, ai = null, aiLoading = false, aiError = null, aiInitialized = false }) {
   const [game] = useState(new ConnectFourGame());
   const [board, setBoard] = useState(Array(6).fill().map(() => Array(7).fill(null)));
   const [currentPlayer, setCurrentPlayer] = useState(1);
@@ -113,6 +113,19 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
   const [winningCells, setWinningCells] = useState([]);
 
   const getRandomMove = async () => {
+    // Check if AI is loading or has error
+    if (aiLoading) {
+      console.warn("AI is still loading, waiting...");
+      return null; // Return null to indicate we should wait
+    }
+    
+    if (aiError) {
+      console.warn("AI has error, falling back to random move");
+      const availableColumns = game.getAvailableColumns();
+      if (availableColumns.length === 0) return null;
+      return availableColumns[Math.floor(Math.random() * availableColumns.length)];
+    }
+    
     if (!ai) {
       console.warn("AI not initialized, falling back to random move");
       const availableColumns = game.getAvailableColumns();
@@ -154,6 +167,9 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
   const handleClick = (row, col) => {
     if (winner) return;
     
+    // Block interactions while AI is loading
+    if (aiLoading) return;
+    
     const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
     if (currentPlayerType !== 'human') return;
 
@@ -171,6 +187,11 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     
     const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
     if (currentPlayerType === 'ai-alphazero') {
+      // Only proceed if AI is initialized and not loading
+      if (!aiInitialized || aiLoading) {
+        return;
+      }
+      
       const timer = setTimeout(async () => {
         const randomColumn = await getRandomMove();
         if (randomColumn !== null) {
@@ -180,7 +201,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
       
       return () => clearTimeout(timer);
     }
-  }, [gameStarted, currentPlayer, winner, playerTypes]);
+  }, [gameStarted, currentPlayer, winner, playerTypes, aiLoading, aiError, ai, aiInitialized]);
 
   // AI testing code moved to reusable function
   const testAIWithBoards = async () => {
@@ -278,8 +299,21 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     }
     const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
     const playerName = currentPlayer === 1 ? 'Red' : 'Yellow';
-    const typeText = currentPlayerType === 'ai-alphazero' ? ' (AI-AlphaZero)' : '';
-    return `${playerName}${typeText}'s turn`;
+    
+    if (currentPlayerType === 'ai-alphazero') {
+      if (aiLoading) {
+        return `${playerName} (AI-AlphaZero) is loading...`;
+      }
+      if (aiError) {
+        return `${playerName} (AI-AlphaZero) - Error: Using random moves`;
+      }
+      if (!aiInitialized) {
+        return `${playerName} (AI-AlphaZero) - Initializing...`;
+      }
+      return `${playerName} (AI-AlphaZero)'s turn`;
+    }
+    
+    return `${playerName}'s turn`;
   };
 
   return (

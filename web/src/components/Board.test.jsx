@@ -58,4 +58,97 @@ describe('Board Component', () => {
     fireEvent.click(resetButton);
     expect(component.container.querySelectorAll('.piece').length).toBe(0);
   });
+
+  test('shows AI loading status when AI is loading', () => {
+    const playerTypes = { red: 'ai-alphazero', yellow: 'human' };
+    const aiLoading = true;
+    const aiError = null;
+    const aiInitialized = false;
+    
+    component.rerender(
+      <Board 
+        playerTypes={playerTypes} 
+        ai={null} 
+        aiLoading={aiLoading} 
+        aiError={aiError}
+        aiInitialized={aiInitialized}
+      />
+    );
+    
+    const startButton = component.getByText('Start Game');
+    fireEvent.click(startButton);
+    
+    const status = component.getByTestId('game-status');
+    expect(status.textContent).toContain('Red (AI-AlphaZero) is loading...');
+  });
+
+  test('shows AI error status when AI has error', () => {
+    const playerTypes = { red: 'ai-alphazero', yellow: 'human' };
+    const aiLoading = false;
+    const aiError = 'Failed to load model';
+    const aiInitialized = false;
+    
+    component.rerender(
+      <Board 
+        playerTypes={playerTypes} 
+        ai={null} 
+        aiLoading={aiLoading} 
+        aiError={aiError}
+        aiInitialized={aiInitialized}
+      />
+    );
+    
+    const startButton = component.getByText('Start Game');
+    fireEvent.click(startButton);
+    
+    const status = component.getByTestId('game-status');
+    expect(status.textContent).toContain('Red (AI-AlphaZero) - Error: Using random moves');
+  });
+
+  test('shows normal AI status when AI is loaded', () => {
+    const playerTypes = { red: 'ai-alphazero', yellow: 'human' };
+    const aiLoading = false;
+    const aiError = null;
+    const aiInitialized = true;
+    const mockAI = { getMove: () => Promise.resolve(0) };
+    
+    component.rerender(
+      <Board 
+        playerTypes={playerTypes} 
+        ai={mockAI} 
+        aiLoading={aiLoading} 
+        aiError={aiError}
+        aiInitialized={aiInitialized}
+      />
+    );
+    
+    const startButton = component.getByText('Start Game');
+    fireEvent.click(startButton);
+    
+    const status = component.getByTestId('game-status');
+    expect(status.textContent).toContain("Red (AI-AlphaZero)'s turn");
+  });
+
+  test('shows initializing status when AI is not initialized', () => {
+    const playerTypes = { red: 'ai-alphazero', yellow: 'human' };
+    const aiLoading = false;
+    const aiError = null;
+    const aiInitialized = false;
+    
+    component.rerender(
+      <Board 
+        playerTypes={playerTypes} 
+        ai={null} 
+        aiLoading={aiLoading} 
+        aiError={aiError}
+        aiInitialized={aiInitialized}
+      />
+    );
+    
+    const startButton = component.getByText('Start Game');
+    fireEvent.click(startButton);
+    
+    const status = component.getByTestId('game-status');
+    expect(status.textContent).toContain('Red (AI-AlphaZero) - Initializing...');
+  });
 }); 
