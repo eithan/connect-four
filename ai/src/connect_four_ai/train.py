@@ -91,6 +91,7 @@ def convert_weights_to_onnx_model(alphazero, reload=False):
         output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}})
     print(f"Export completed! ONNX Model saved at {onnx_path}.")
+    print(f"DON'T FORGET TO COPY THE ONNX FILE TO THE WEB APP /public DIRECTORY!")
 
 def load_weights_to_alphazero(alphazero):
     file_path = get_model_path('weights')
@@ -168,14 +169,18 @@ def parse_arguments():
                        default='weights', 
                        help='Model format to use (default: weights)')
     
-    parser.add_argument('--action', choices=['train', 'play'], 
+    parser.add_argument('--action', choices=['train', 'play', 'export'], 
                        required=True,
-                       help='Action to perform: train or play')
+                       help='Action to perform: train or play or export')
 
     parser.add_argument('--alphazero_first', choices=['true', 'false'],
                        default='false',
                        help='Play with AlphaZero first (default: false)')
-    
+
+    parser.add_argument('--export_mode', choices=['torchscript', 'onnx'], 
+                       default='onnx', 
+                       help='Model format to use (default: onnx)')
+
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -187,7 +192,17 @@ if __name__ == "__main__":
     if args.action == 'train':
         # Train the model
         train(alphazero)
-        
+    elif args.action == 'export':
+        if args.export_mode == 'torchscript':
+            convert_weights_to_ts_model(alphazero)
+        elif args.export_mode == 'onnx':
+            convert_weights_to_onnx_model(alphazero)
+        else:
+            print(f"Unknown export mode: {args.export_mode}")
+            print("Available options:")
+            print("1. Export to TorchScript with: python train.py --action export --export_mode torchscript")
+            print("2. Export to ONNX with: python train.py --action export --export_mode onnx")
+            exit(1)
     elif args.action == 'play':
         model_path = get_model_path(args.play_mode)
         
