@@ -23,7 +23,7 @@ class ONNXAlphaZeroNetwork:
     # PyTorch-compatible forward method
     def forward(self, state_tensor):
         """Forward pass that returns (value, policy_logits) like PyTorch network."""
-        print(f"ONNXAlphaZeroNetwork.forward() called with state shape: {state_tensor.shape if hasattr(state_tensor, 'shape') else type(state_tensor)}")
+        #print(f"ONNXAlphaZeroNetwork.forward() called with state shape: {state_tensor.shape if hasattr(state_tensor, 'shape') else type(state_tensor)}")
         
         if isinstance(state_tensor, torch.Tensor):
             state = state_tensor.detach().cpu().numpy()
@@ -34,18 +34,18 @@ class ONNXAlphaZeroNetwork:
         if state.ndim == 3:
             state = np.expand_dims(state, axis=0)
         
-        print(f"ONNX input shape: {state.shape}")
+        #print(f"ONNX input shape: {state.shape}")
         
         inputs = {self.input_name: state.astype(np.float32)}
         outputs = self.session.run(self.output_names, inputs)
         
-        print(f"ONNX outputs: {[output.shape for output in outputs]}")
+        #print(f"ONNX outputs: {[output.shape for output in outputs]}")
         
         # Assuming outputs are [value, policy_logits]
         if len(outputs) == 2:
             value = torch.tensor(outputs[0], dtype=torch.float32)
             policy_logits = torch.tensor(outputs[1], dtype=torch.float32)
-            print(f"Returning value shape: {value.shape}, policy_logits shape: {policy_logits.shape}")
+            #print(f"Returning value shape: {value.shape}, policy_logits shape: {policy_logits.shape}")
             return value, policy_logits
         else:
             # Fallback if only one output
@@ -53,7 +53,7 @@ class ONNXAlphaZeroNetwork:
             # Split into value and policy (assuming first element is value, rest is policy)
             value = output[:, :1]  # First element as value
             policy_logits = output[:, 1:]  # Rest as policy
-            print(f"Fallback - value shape: {value.shape}, policy_logits shape: {policy_logits.shape}")
+            #print(f"Fallback - value shape: {value.shape}, policy_logits shape: {policy_logits.shape}")
             return value, policy_logits
 
     # Callable interface (makes it work like PyTorch module)

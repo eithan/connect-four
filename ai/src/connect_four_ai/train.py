@@ -1,71 +1,145 @@
-# Copyright 2019 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Simple AlphaZero tic tac toe example.
-
-Take a look at the log-learner.txt in the output directory.
-
-If you want more control, check out `alpha_zero.py`.
+"""
+Refactored train_new.py using modular AlphaZero implementation.
 """
 
-from absl import app
-from absl import flags
+import torch
+from connect_four_ai.alphazero import Config, config_dict, Connect4, AlphaZeroTrainer, AlphaZeroAgent, Evaluator, ONNXAlphaZeroNetwork
 
-from open_spiel.python.algorithms.alpha_zero import alpha_zero
-from open_spiel.python.utils import spawn
+# for ONNX model
+import onnxruntime as ort
+import numpy as np
 
-flags.DEFINE_string("path", "./models/checkpoints", "Where to save checkpoints.")
-FLAGS = flags.FLAGS
+config = Config(config_dict)
 
+def train(alphazero):
+    evaluator = Evaluator(alphazero)
 
-def main(unused_argv):
-    config = alpha_zero.Config(
-        game="tic_tac_toe",
-        path=FLAGS.path,
-        learning_rate=0.01,
-        weight_decay=1e-4,
-        train_batch_size=128,
-        replay_buffer_size=2 ** 14,
-        replay_buffer_reuse=4,
-        max_steps=25,
-        checkpoint_freq=25,
+    # Evaluate pre training
+    evaluator.evaluate()
 
-        actors=4,
-        evaluators=4,
-        uct_c=1,
-        max_simulations=20,
-        policy_alpha=0.25,
-        policy_epsilon=1,
-        temperature=1,
-        temperature_drop=4,
-        evaluation_window=50,
-        eval_levels=7,
+    # Main training/eval loop
+    alphazero.train(config.training_epochs)
+    evaluator.evaluate()
+    # for _ in range(config.training_epochs):
+    #     alphazero.train(1)
+    #     evaluator.evaluate()
 
-        nn_model="resnet",
-        nn_width=128,
-        nn_depth=2,
-        observation_shape=None,
-        output_size=None,
+    # Save trained weights
+    torch.save(alphazero.network.state_dict(), 'alphazero-network-weights.pth')
 
-        quiet=True,
-    )
-    alpha_zero.alpha_zero(config)
+    # for Cloud deployment we have to use CPU!
+    alphazero.network.to("cpu")
+    alphazero.network.eval()
+    torch.jit.script(alphazero.network).save("alphazero-network-model-ts.pt")
+    
+def convert_weights_to_ts_model(alphazero):
+    file_path = "./alphazero-network-weights.pth"
+    pre_trained_weights = torch.load(file_path, map_location=config.device)
+    alphazero.network.load_state_dict(pre_trained_weights)
 
+    # for Cloud deployment we have to use CPU!
+    alphazero.network.to("cpu")
+    alphazero.network.eval()
+    torch.jit.script(alphazero.network).save("alphazero-network-model-ts.pt")
+
+def convert_weights_to_onnx_model(alphazero):
+    file_path = "./alphazero-network-weights.pth"
+    pre_trained_weights = torch.load(file_path, map_location=config.device)
+    alphazero.network.load_state_dict(pre_trained_weights)
+    alphazero.network.to("cpu")
+    alphazero.network.eval()
+    dummy_input = torch.zeros(1, 3, 6, 7, dtype=torch.float32)  # match conv input
+    torch.onnx.export(
+        alphazero.network,
+        dummy_input,
+        "alphazero-network-model-onnx.onnx",
+        #dynamo=True,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}})
+
+def load_weights_to_alphazero(alphazero):
+    file_path = "./alphazero-network-weights.pth"
+    pre_trained_weights = torch.load(file_path, map_location=config.device)
+    print(f"Loaded weights from {file_path}")
+    alphazero.network.load_state_dict(pre_trained_weights)
+
+def load_ts_model_to_alphazero(alphazero):
+    file_path = "./alphazero-network-model-ts.pt"
+    ts_model = torch.jit.load(file_path, map_location=config.device)
+    print(f"Loaded TorchScript model from {file_path}")
+    alphazero.network = ts_model
+
+def play_human_vs_alphazero(alphazero):
+    agent = AlphaZeroAgent(alphazero)
+
+    # Set to 1 for AlphaZero to play first
+    turn = 1
+
+    # Reset the game
+    state = Connect4().reset()
+    done = False
+
+    # Play loop
+    while not done:
+        print("Current Board:")
+        print(state)
+
+        if turn == 0:
+            print("Human to move.")
+            action = int(input("Enter a move:"))
+        else:
+            print("AlphaZero is thinking...")
+            action = agent.select_action(state, 200)
+
+        next_state, reward, done = Connect4().step(state, action)
+
+        print("Board After Move:")
+        print(next_state)
+
+        if done == True:
+            print("Game over")
+        else:
+            state = -next_state
+            turn = 1 - turn
+
+def load_model(path):
+    return ort.InferenceSession(path)
+
+def predict(session, state):
+    x = np.array([state], dtype=np.float32)
+    output = session.run(None, {"input": x})
+    move = int(output[0].argmax())
+    return move
 
 if __name__ == "__main__":
-    # EZ NOTE: Running this will train Alpha Zero to play tic-tac-toe.
-    # We need to store the checkpoint--1.* files in our models/checkpoints folder.
-    # EZ NOTE: import pyspiel and print(pyspiel.registered_names()) to see a list of supported games.
-    with spawn.main_handler():
-        app.run(main)
+    game = Connect4()
+    # Doubled our training last time! Took 23 hours (83000 seconds) (1:11pm --> 12:29pm the next day)
+    #config.training_epochs = config.training_epochs * 2
+    #config.games_per_epoch = config.games_per_epoch * 2
+    alphazero = AlphaZeroTrainer(game, config)
+
+    # --- Training ---
+    #train(alphazero)
+    #exit()
+
+    # convert_weights_to_ts_model(alphazero)
+    # convert_weights_to_onnx_model(alphazero)
+    # exit()
+
+    # play_with_weights = True
+
+    # if play_with_weights:
+    #     # --- Playing (without TorchScript)---
+    #     load_weights_to_alphazero(alphazero)
+    # else:
+    #     # --- Playing (with TorchScript)---
+    #     load_ts_model_to_alphazero(alphazero)
+    
+    # Update MCTS to use the new ONNX network
+    alphazero.network = ONNXAlphaZeroNetwork("./models/alphazero-network-model-onnx.onnx")
+    alphazero.mcts.network = alphazero.network
+
+    print(f"Updated MCTS to use network type: {type(alphazero.mcts.network)}")
+
+    play_human_vs_alphazero(alphazero)

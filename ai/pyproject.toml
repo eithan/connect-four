@@ -8,24 +8,14 @@ packages = [{include = "connect_four_ai", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.12.5"
-# OpenSpiel core dependencies
-absl-py = ">=0.10.0"
-attrs = ">=19.3.0"
-ml-collections = ">=0.1.1"
+# Core numerical and scientific computing
 numpy = ">=1.21.5"
 scipy = ">=1.10.1"
-open-spiel = "1.6.1"
 # PyTorch and deep learning
 torch = "^2.0.0"
+# ONNX support for model inference
 onnx = "^1.15.0"
 onnxruntime = "^1.16.0"
-onnxscript = ">=0.1.0"
-# Visualization and plotting
-matplotlib = "^3.7.0"
-# Jupyter/IPython support
-ipython = "^8.0.0"
-# Additional utilities
-codetiming = "1.4.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
@@ -38,8 +28,6 @@ mypy = "^1.0.0"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry.scripts]
-connect-four-ai = "connect_four_ai.cli:main"
 
 [tool.black]
 line-length = 88
