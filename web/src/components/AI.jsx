@@ -43,7 +43,7 @@ class ConnectFourAI {
         this.session = await ort.InferenceSession.create(this.modelUrl, {
           executionProviders: ['wasm'],
           externalData: [{
-            path: 'alphazero-network-model-onnx.onnx.data',
+            path: 'alphazero-network-model.onnx.data',
             data: externalDataUrl
           }]
         });

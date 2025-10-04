@@ -72,6 +72,10 @@ def convert_weights_to_ts_model(alphazero, reload=False):
     print(f"Export completed! Torchscript Model saved at {ts_path}.")
 
 def convert_weights_to_onnx_model(alphazero, reload=False):
+    # for dynamo mode we can ignore this warning because we don't use torchvision capabilities
+    import warnings
+    warnings.filterwarnings("ignore", message=".*torchvision is not installed.*")
+
     print("Converting weights to ONNX model...")
     if reload:
         weights_path = get_model_path('weights')
@@ -86,12 +90,12 @@ def convert_weights_to_onnx_model(alphazero, reload=False):
         alphazero.network,
         dummy_input,
         onnx_path,
-        #dynamo=True,
+        dynamo=True,
         input_names=["input"],
         output_names=["output"],
-        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}})
+        dynamic_shapes=[{0: "batch_size"}])
     print(f"Export completed! ONNX Model saved at {onnx_path}.")
-    print(f"DON'T FORGET TO COPY THE ONNX FILE TO THE WEB APP /public DIRECTORY!")
+    print(f"DON'T FORGET TO COPY THE ONNX FILES TO THE WEB APP PUBLIC DIRECTORY!")
 
 def load_weights_to_alphazero(alphazero):
     file_path = get_model_path('weights')

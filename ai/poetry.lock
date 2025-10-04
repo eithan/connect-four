@@ -1178,6 +1178,24 @@ typing_extensions = ">=4.7.1"
 reference = ["Pillow"]
 
 [[package]]
+name = "onnx-ir"
+version = "0.1.10"
+description = "Efficient in-memory representation for ONNX"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "onnx_ir-0.1.10-py3-none-any.whl", hash = "sha256:55b6a1bd05e1448e2f8385875f1739f8d2e0dc7936ee25f0f5d2f6f7e2619144"},
+    {file = "onnx_ir-0.1.10.tar.gz", hash = "sha256:513cda24f9710aa1160ec54bf7530ac0ffc3d4ca9e34ac2fb1e2448815bdf2a0"},
+]
+
+[package.dependencies]
+ml_dtypes = ">=0.5.0"
+numpy = "*"
+onnx = ">=1.16"
+typing_extensions = ">=4.10"
+
+[[package]]
 name = "onnxruntime"
 version = "1.23.0"
 description = "ONNX Runtime is a runtime accelerator for Machine Learning models"
@@ -1216,6 +1234,26 @@ numpy = ">=1.21.6"
 packaging = "*"
 protobuf = "*"
 sympy = "*"
+
+[[package]]
+name = "onnxscript"
+version = "0.5.3"
+description = "Naturally author ONNX functions and models using a subset of Python"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "onnxscript-0.5.3-py3-none-any.whl", hash = "sha256:f4ac2887a5bebb276643a5fb046898d8b8041ab365efd5e0bb9e5c5efdbf84c1"},
+    {file = "onnxscript-0.5.3.tar.gz", hash = "sha256:74a9c0aa52e1afd4e14a90349763de3670b4d22442f348a0bbd8a503ded2f431"},
+]
+
+[package.dependencies]
+ml_dtypes = "*"
+numpy = "*"
+onnx = ">=1.16"
+onnx_ir = ">=0.1.10,<2"
+packaging = "*"
+typing_extensions = ">=4.10"
 
 [[package]]
 name = "packaging"
@@ -1683,4 +1721,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12.5"
-content-hash = "ebe6dc2ecd75d8339c386c535032cc6c1c81f236c94c8263f9b8e336d532dcbc"
+content-hash = "ebf98b2ed3676e03ff104958546215409a2be6741d4e510734011618ff21edf1"
