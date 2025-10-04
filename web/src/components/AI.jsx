@@ -11,7 +11,6 @@ class ConnectFourAI {
     this.outputName = null;
   }
 
-  
   async init() {
     try {
       console.log('Initializing AI with model URL:', this.modelUrl);
@@ -103,13 +102,8 @@ class ConnectFourAI {
     return tensorData;
   }
 
-  /**
-   * Given a 2D board, compute the AI move
-   */
-  /*async getMove(board) {
+  async getMove(board) {
     try {
-      if (!this.session) throw new Error("Model not initialized");
-
       // The inputData should be a Flat32Array or similar typed array
       const inputData = this.encodeBoard(board);
 
@@ -123,53 +117,14 @@ class ConnectFourAI {
       // The key (inputName) must match the input name defined in your ONNX model
       const feeds = { [this.inputName]: inputTensor };
   
-      // 4. Run the inference session
       const results = await this.session.run(feeds);
+
+      console.log('*********** Results:', results); // Log the actual results
   
-       // 5. Extract the policy logits and select the best move
-       console.log("*********** Results:", results);
-       
-       // Use the 'linear_1' output which contains the policy logits (7 values for 7 columns)
-       const policyTensor = results['linear_1'];
-       if (policyTensor && policyTensor.data.length === 7) {
-         const policyLogits = Array.from(policyTensor.data);
-         console.log("Policy logits:", policyLogits);
-         
-         // Find the column with the highest policy value
-         const maxIndex = policyLogits.indexOf(Math.max(...policyLogits));
-         console.log("Selected move:", maxIndex);
-         return maxIndex; // should be a number between 0 and 6
-       } else {
-         throw new Error("Policy output not found or has wrong shape.");
-       }
-    } catch (e) {
-      console.error(`Failed to inference ONNX model: ${e}`);
-      throw e;
-    }*/
-    
-    async getMove(board) {
-      try {
-        // The inputData should be a Flat32Array or similar typed array
-        const inputData = this.encodeBoard(board);
-
-        // inputShape should be an array representing the dimensions of the input
-        const inputShape = [1, 3, 6, 7];
-
-        // 2. Prepare the input tensor
-        const inputTensor = new ort.Tensor('float32', new Float32Array(inputData), inputShape);
-    
-        // 3. Create the feeds object
-        // The key (inputName) must match the input name defined in your ONNX model
-        const feeds = { [this.inputName]: inputTensor };
-    
-        const results = await this.session.run(feeds);
-
-        console.log('*********** Results:', results); // Log the actual results
-    
-        // Assume 'linear_1' (valueOutput) is the policy head because it has the correct shape.
-        // And 'output' (policyOutput) is the value head.
-        const policyOutput = results['207']; //results.linear_1;
-        const valueOutput = results.output; 
+      // Assume 'linear_1' (valueOutput) is the policy head because it has the correct shape.
+      // And 'output' (policyOutput) is the value head.
+      const policyOutput = results['207']; //results.linear_1;
+      const valueOutput = results.output; 
 
       // Validate the policy output's shape before proceeding.
       // For a 7-column board, the policy should be a 1D tensor of size 7.
