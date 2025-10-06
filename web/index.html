@@ -2,9 +2,48 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/connect-four/onnect-four-icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Connect Four</title>
+    
+    <!-- Primary SEO Meta Tags -->
+    <title>Connect Four Game with AI-AlphaZero | Free Online Connect4</title>
+    <meta name="title" content="Connect Four Game with AI-AlphaZero | Free Online Connect4">
+    <meta name="description" content="Play Connect Four online for free! Challenge our advanced AI-AlphaZero opponent powered by ONNX. Client-side Connect4 game with JavaScript. No downloads required.">
+    <meta name="keywords" content="connect four, connect4, game, javascript, ai, alphazero, client-side, client-side alphazero, onnx, web, client, free, online game, strategy game, board game, artificial intelligence, machine learning, neural network, deep learning, reinforcement learning">
+    <meta name="author" content="Connect Four AI Game">
+    <meta name="robots" content="index, follow">
+    <meta name="language" content="English">
+    <meta name="revisit-after" content="7 days">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://connect-four-ai-game.com/">
+    <meta property="og:title" content="Connect Four Game with AI-AlphaZero | Free Online Connect4">
+    <meta property="og:description" content="Play Connect Four online for free! Challenge our advanced AI-AlphaZero opponent powered by ONNX. Client-side Connect4 game with JavaScript.">
+    <meta property="og:image" content="https://connect-four-ai-game.com/og-image.png">
+    <meta property="og:site_name" content="Connect Four AI Game">
+    <meta property="og:locale" content="en_US">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://connect-four-ai-game.com/">
+    <meta property="twitter:title" content="Connect Four Game with AI-AlphaZero | Free Online Connect4">
+    <meta property="twitter:description" content="Play Connect Four online for free! Challenge our advanced AI-AlphaZero opponent powered by ONNX. Client-side Connect4 game with JavaScript.">
+    <meta property="twitter:image" content="https://connect-four-ai-game.com/og-image.png">
+    
+    <!-- Additional SEO Meta Tags -->
+    <meta name="theme-color" content="#0066cc">
+    <meta name="msapplication-TileColor" content="#0066cc">
+    <meta name="application-name" content="Connect Four AI Game">
+    <meta name="apple-mobile-web-app-title" content="Connect Four AI">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://connect-four-ai-game.com/">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
     
     <!-- Load Orbitron font for game title -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,6 +52,53 @@
 
     <!-- Load ONNX Runtime Web from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    
+    <!-- Structured Data for Game -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "name": "Connect Four AI Game",
+      "description": "A free online Connect Four game featuring an advanced AI-AlphaZero opponent powered by ONNX and machine learning.",
+      "url": "https://connect-four-ai-game.com/",
+      "genre": "Strategy Game",
+      "gamePlatform": "Web Browser",
+      "operatingSystem": "Any",
+      "applicationCategory": "Game",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "Connect Four AI Game"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Connect Four AI Game"
+      },
+      "datePublished": "2024-01-01",
+      "inLanguage": "en",
+      "isAccessibleForFree": true,
+      "gameItem": [
+        {
+          "@type": "Thing",
+          "name": "Connect Four Board",
+          "description": "6x7 grid game board"
+        },
+        {
+          "@type": "Thing",
+          "name": "AI-AlphaZero Opponent",
+          "description": "Advanced artificial intelligence opponent"
+        }
+      ],
+      "gameLocation": {
+        "@type": "VirtualLocation",
+        "name": "Web Browser"
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

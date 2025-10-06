@@ -60,19 +60,25 @@ function App() {
 
   return (
     <div className="app">
-      <h1>Connect Four</h1>
+      <header>
+        <h1>Connect Four</h1>
+        <p className="game-description" hidden={true} display="none">
+          Play the classic Connect Four strategy game against our advanced AI-AlphaZero opponent. 
+          Powered by ONNX and machine learning, this client-side game runs entirely in your browser.
+        </p>
+      </header>
       
       {/* AI Loading/Error Status */}
       {aiLoading && (
-        <div className="ai-status loading">
-          <div className="loading-spinner"></div>
+        <div className="ai-status loading" role="status" aria-live="polite">
+          <div className="loading-spinner" aria-hidden="true"></div>
           <span>Loading AI model... {aiRetryCount > 0 && `(Attempt ${aiRetryCount + 1})`}</span>
         </div>
       )}
       
       {aiError && !aiLoading && (
-        <div className="ai-status error">
-          <div className="error-icon">⚠️</div>
+        <div className="ai-status error" role="alert" aria-live="assertive">
+          <div className="error-icon" aria-hidden="true">⚠️</div>
           <div className="error-content">
             <p><strong>AI Loading Failed:</strong> {aiError}</p>
             <button onClick={retryAI} className="retry-button">
@@ -83,8 +89,8 @@ function App() {
       )}
       
       {needsAI && (
-        <div className="ai-status warning">
-          <div className="warning-icon">⚠️</div>
+        <div className="ai-status warning" role="status" aria-live="polite">
+          <div className="warning-icon" aria-hidden="true">⚠️</div>
           <div className="warning-content">
             <p><strong>AI Required:</strong> Please wait for AI to load or select human players.</p>
             <button onClick={retryAI} className="retry-button">
@@ -94,8 +100,8 @@ function App() {
         </div>
       )}
       
-      {/* Block interface while AI is loading */}
-      <div className={aiLoading ? 'interface-blocked' : ''}>
+      {/* Main Game Area */}
+      <main className={aiLoading ? 'interface-blocked' : ''}>
         <Board 
           playerTypes={playerTypes} 
           onPlayersChanged={handlePlayersChanged}
@@ -104,7 +110,17 @@ function App() {
           aiError={aiError}
           aiInitialized={aiInitialized}
         />
-      </div>
+      </main>
+      
+      <footer>
+        <p>
+          <strong>Connect Four AI Game</strong> - Free online strategy game with artificial intelligence. 
+          Built with JavaScript, ONNX, and AlphaZero machine learning algorithms.
+        </p>
+        <p display="none" hidden={true}>
+          Keywords: Connect Four, Connect4, AI game, AlphaZero, ONNX, JavaScript, client-side, free online game
+        </p>
+      </footer>
     </div>
   );
 }

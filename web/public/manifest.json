@@ -1,0 +1,34 @@
+{
+  "name": "Connect Four AI Game",
+  "short_name": "Connect4 AI",
+  "description": "Play Connect Four online for free! Challenge our advanced AI-AlphaZero opponent powered by ONNX. Client-side Connect4 game with JavaScript.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f0f0f0",
+  "theme_color": "#0066cc",
+  "orientation": "portrait-primary",
+  "categories": ["games", "entertainment", "strategy"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/connect-four/connect-four-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/screenshot2.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}

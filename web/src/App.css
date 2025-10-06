@@ -55,12 +55,48 @@
 
 h1 {
   color: #2c3e50;
-  margin-bottom: clamp(30px, 4vw, 50px);
+  margin-bottom: clamp(20px, 3vw, 30px);
   font-size: clamp(2rem, 5vw, 3rem);
   font-weight: 700;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
   letter-spacing: 1px;
   font-family: 'Orbitron', 'Courier New', monospace;
+}
+
+.game-description {
+  color: #555;
+  font-size: clamp(14px, 2.5vw, 18px);
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-weight: 400;
+  line-height: 1.6;
+  margin-bottom: clamp(20px, 4vw, 40px);
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+footer {
+  margin-top: clamp(30px, 5vw, 50px);
+  padding: clamp(20px, 3vw, 30px);
+  background-color: #f8f9fa;
+  border-radius: 10px;
+  text-align: center;
+}
+
+footer p {
+  color: #666;
+  font-size: clamp(12px, 2vw, 14px);
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-weight: 400;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+footer p:last-child {
+  margin-bottom: 0;
+  font-size: clamp(10px, 1.8vw, 12px);
+  color: #888;
 }
 
 /* Responsive app spacing */
