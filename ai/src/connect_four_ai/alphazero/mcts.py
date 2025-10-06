@@ -34,7 +34,7 @@ class MCTS:
             #print(f"MCTS got value shape: {value.shape}, logits shape: {logits.shape}")
 
         # Compute policy over all actions, then mix Dirichlet noise only on valid actions
-        logits_flat = logits.view(-1)
+        logits_flat = logits.reshape(-1)
         policy_probs = F.softmax(logits_flat, dim=0).detach().cpu().numpy()
         priors = np.zeros(self.game.cols, dtype=np.float32)
         priors[:] = policy_probs
@@ -85,7 +85,7 @@ class MCTS:
 
                 # Mask invalid actions for this node, then set child priors
                 node_valid_actions = self.game.get_valid_actions(current_node.state)
-                logits_flat = logits.view(-1)
+                logits_flat = logits.reshape(-1)
                 masked_logits = logits_flat.clone()
                 # set invalid actions to -inf so they get zero probability after softmax
                 invalid_mask = torch.ones(self.game.cols, dtype=torch.bool, device=masked_logits.device)

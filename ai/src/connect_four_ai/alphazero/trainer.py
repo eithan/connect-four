@@ -6,14 +6,12 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-import logging
+import math
 
 from .network import ResNet
 from .mcts import MCTS
 
 import time
-
-logger = logging.getLogger(__name__)
 
 class AlphaZeroTrainer:
     """AlphaZero training implementation with self-play and neural network updates."""
@@ -49,9 +47,11 @@ class AlphaZeroTrainer:
         """Train the AlphaZero agent for a specified number of training epochs."""
         # For each training epoch
         time_start = time.time()
+        epoch_start = time.time()
+        epoch_durations = []
         for epoch in range(int(training_epochs)):
             if self.verbose:
-                logger.info(f"[{time.time() - time_start:.2f}s] Training epoch {epoch}/{training_epochs} ({self.config.games_per_epoch} games per epoch)")
+                print(f"[{time.time() - time_start:.2f}s] Training epoch {epoch + 1}/{training_epochs} ({self.config.games_per_epoch} games per epoch)")
 
             # Play specified number of games
             for _ in range(int(self.config.games_per_epoch)):
@@ -60,12 +60,19 @@ class AlphaZeroTrainer:
             # At the end of each epoch, increase the number of MCTS search iterations
             self.search_iterations = min(self.config.mcts_max_search_iter, self.search_iterations + self.config.mcts_search_increment)
 
-            elapsed_time = time.time() - time_start
-            time_per_epoch = elapsed_time / (epoch + 1)
-            estimated_time_remaining = time_per_epoch * (training_epochs - epoch - 1)
+            # Track epoch duration
+            epoch_time = time.time() - epoch_start
+            epoch_durations.append(epoch_time)
+            epoch_start = time.time()
+            
             if self.verbose:
-                logger.info(f"Estimated time remaining: {estimated_time_remaining:.2f}s ({estimated_time_remaining / 60:.2f}m) ({estimated_time_remaining / 3600:.2f}h)")
-
+                # Estimate remaining time using a simple linear trend of epoch durations
+                # Fit y = a + b*x over observed epochs (x = 1..n)
+                estimated_time_remaining = self.estimated_time_remaining_analytic(epoch_durations, training_epochs)
+                print(
+                    f"Estimated time remaining: {estimated_time_remaining:.2f}s "
+                    f"({estimated_time_remaining / 60:.2f}m) ({estimated_time_remaining / 3600:.2f}h)"
+                )
 
     def self_play(self):
         """Perform one episode of self-play."""
@@ -103,7 +110,7 @@ class AlphaZeroTrainer:
 
         # Logging if verbose
         if self.verbose and self.total_games % 100 == 0:
-            logger.info(f"\nTotal Games: {self.total_games}, Items in Memory: {self.current_memory_index}, Search Iterations: {self.search_iterations}\n")
+            print(f"\nTotal Games: {self.total_games}, Items in Memory: {self.current_memory_index}, Search Iterations: {self.search_iterations}\n")
 
     def append_to_memory(self, state, value, visits):
         """
@@ -175,3 +182,54 @@ class AlphaZeroTrainer:
 
         self.memory_full = False
         self.network.eval()
+
+    def estimated_time_remaining_analytic(self, epoch_durations, training_epochs):
+        n_obs = len(epoch_durations)
+        training_epochs = int(training_epochs)
+
+        if n_obs >= 2:
+            x = np.arange(1, n_obs + 1)
+            y = np.array(epoch_durations, dtype=float)
+            a, b = np.polyfit(x, y, 1)   # slope (a), intercept (b)
+
+            start = n_obs + 1
+            end = training_epochs
+            if start > end:
+                return 0.0
+
+            n_total = end - start + 1
+
+            # Case: flat line
+            if abs(a) < 1e-15:
+                # all predictions = b
+                return float(max(0.0, b) * n_total)
+
+            # threshold root where a*x + b = 0
+            root = -b / a
+
+            # find integer range [pos_start, pos_end] inside [start,end] where pred(x) > 0
+            if a > 0:
+                # pred(x) > 0  <=>  x > root
+                pos_start = max(start, math.ceil(root + 1e-12))
+                pos_end = end
+            else:  # a < 0
+                # pred(x) > 0  <=>  x < root
+                pos_start = start
+                pos_end = min(end, math.floor(root - 1e-12))
+
+            if pos_start > pos_end:
+                return 0.0
+
+            n_pos = pos_end - pos_start + 1
+            # sum of integers from pos_start to pos_end
+            sum_x = (pos_start + pos_end) * n_pos / 2.0
+
+            estimated = a * sum_x + b * n_pos
+            # numerical safety: ensure non-negative
+            return float(max(0.0, estimated))
+
+        else:
+            # fallback: average of seen epochs times remaining count
+            avg = float(np.mean(epoch_durations)) if n_obs > 0 else 0.0
+            remaining = max(0, int(training_epochs) - n_obs)
+            return avg * remaining

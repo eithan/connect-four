@@ -39,7 +39,8 @@ class ResNet(nn.Module):
         )
 
     def forward(self, x):
-        x = self.base(x) 
+        # Avoid using view with symbolic shapes for ONNX dynamo, prefer reshape
+        x = self.base(x)
         x_value = self.value_head(x)
         x_policy = self.policy_head(x)
         return x_value, x_policy

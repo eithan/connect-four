@@ -41,15 +41,23 @@ def get_model_path(mode):
     return model_files.get(mode, model_files['weights'])
 
 def train(alphazero):
-    print(f"Starting training...")
-        
+    import json
+    from datetime import datetime
+    import time
+
+    print(f"Starting training... ({config.training_epochs} training epochs x {config.games_per_epoch} games per epoch)")
+    
     evaluator = Evaluator(alphazero)
 
     # Evaluate pre training
     evaluator.evaluate()
 
     # Main training/eval loop
+    start_time = datetime.now()
+    wall_start = time.time()
     alphazero.train(config.training_epochs)
+    wall_elapsed = time.time() - wall_start
+    end_time = datetime.now()
     evaluator.evaluate()
     # for _ in range(config.training_epochs):
     #     alphazero.train(1)
@@ -70,6 +78,59 @@ def train(alphazero):
 
     # for client-side deployment we  use ONNX
     convert_weights_to_onnx_model(alphazero)
+
+    # results summary
+    write_results_summary(start_time, end_time, wall_elapsed, weights_path, models_dir)
+
+def write_results_summary(start_time, end_time, wall_elapsed, weights_path, models_dir):
+    import json
+    results_path = os.path.join(models_dir, 'results_summary.txt')
+    summary = {
+        "start_utc": start_time.isoformat() + "Z",
+        "end_utc": end_time.isoformat() + "Z",
+        "elapsed_seconds": round(wall_elapsed, 3),
+        "outputs": {
+            "weights_path": weights_path,
+            "torchscript_path": get_model_path('torchscript'),
+            "onnx_path": get_model_path('onnx'),
+        },
+        "alpha_zero_config": {
+            "n_filters": config.n_filters,
+            "n_res_blocks": config.n_res_blocks,
+            "exploration_constant": config.exploration_constant,
+            "temperature": config.temperature,
+            "dirichlet_alpha": config.dirichlet_alpha,
+            "dirichlet_eps": config.dirichlet_eps,
+            "learning_rate": config.learning_rate,
+            "training_epochs": config.training_epochs,
+            "games_per_epoch": config.games_per_epoch,
+            "minibatch_size": config.minibatch_size,
+            "n_minibatches": config.n_minibatches,
+            "mcts_start_search_iter": config.mcts_start_search_iter,
+            "mcts_max_search_iter": config.mcts_max_search_iter,
+            "mcts_search_increment": config.mcts_search_increment,
+            "seed": config.seed,
+            "device": str(config.device),
+        },
+    }
+
+    with open(results_path, 'w') as f:
+        # Human-friendly text with a JSON blob at the end for parsing
+        f.write("AlphaZero Training Summary\n")
+        f.write("==========================\n")
+        f.write(f"Start (UTC): {summary['start_utc']}\n")
+        f.write(f"End   (UTC): {summary['end_utc']}\n")
+        f.write(f"Elapsed Time: {summary['elapsed_seconds']}s ({summary['elapsed_seconds'] / 60:.2f}m) ({summary['elapsed_seconds'] / 3600:.2f}h)\n\n")
+        f.write("Outputs:\n")
+        f.write(f"- Weights: {summary['outputs']['weights_path']}\n")
+        f.write(f"- TorchScript: {summary['outputs']['torchscript_path']}\n")
+        f.write(f"- ONNX: {summary['outputs']['onnx_path']}\n\n")
+        f.write("Config:\n")
+        for k, v in summary['alpha_zero_config'].items():
+            f.write(f"- {k}: {v}\n")
+        f.write("\nJSON:\n")
+        f.write(json.dumps(summary, indent=2))
+    print(f"Wrote results summary to {results_path}")    
     
 def convert_weights_to_ts_model(alphazero, reload=False):
     print("Converting weights to TorchScript model...")
@@ -99,20 +160,21 @@ def convert_weights_to_onnx_model(alphazero, reload=False):
         alphazero.network.eval()
     
     onnx_path = get_model_path('onnx')
-    dummy_input = torch.zeros(1, 3, 6, 7, dtype=torch.float32)  # match conv input
+    dummy_input = torch.zeros(1, 3, 6, 7, dtype=torch.float32).contiguous()  # match conv input
+    # Ensure eval/CPU before export
+    alphazero.network.to("cpu")
+    alphazero.network.eval()
+    # Export with static shapes (batch=1), using a newer opset and constant folding to help lower convolutions
     torch.onnx.export(
         alphazero.network,
         dummy_input,
         onnx_path,
+        dynamo=True,
         export_params=True,
-        opset_version=17,
+        do_constant_folding=True,
+        opset_version=18,
         input_names=["input"],
         output_names=["value", "policy_logits"],
-        dynamic_axes={
-            "input": {0: "batch"},
-            "value": {0: "batch"},
-            "policy_logits": {0: "batch"},
-        }
     )
     print(f"Export completed! ONNX Model saved at {onnx_path}.")
     print(f"DON'T FORGET TO COPY THE ONNX FILES TO THE WEB APP PUBLIC DIRECTORY!")
@@ -208,6 +270,9 @@ def parse_arguments():
     parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
 
+    parser.add_argument('--epochs', type=int, default=None, help='Override number of training epochs')
+    parser.add_argument('--games_per_epoch', type=int, default=None, help='Override number of games per epoch')
+
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -217,6 +282,12 @@ if __name__ == "__main__":
         seed_everything(args.seed)
     
     game = Connect4()
+    # Apply CLI overrides to config
+    if args.epochs is not None:
+        config.training_epochs = int(args.epochs)
+    if args.games_per_epoch is not None:
+        config.games_per_epoch = int(args.games_per_epoch)
+
     alphazero = AlphaZeroTrainer(game, config)
     
     if args.action == 'train':
