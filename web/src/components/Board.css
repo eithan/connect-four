@@ -103,6 +103,8 @@
 .controls button {
   padding: 12px 20px;
   font-size: clamp(14px, 3vw, 16px);
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-weight: 500;
   border: none;
   border-radius: 5px;
   background-color: #4CAF50;
@@ -147,12 +149,16 @@
   padding: 8px 16px;
   border-radius: 20px;
   font-weight: bold;
-  font-size: clamp(12px, 2.5vw, 14px);
+  font-size: clamp(14px, 3vw, 16px);
+  font-family: 'Orbitron', 'Courier New', monospace;
   color: white;
-  text-align: center;
+  text-align: left;
   min-width: 120px;
   max-width: 160px;
   width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .player-label.red {
@@ -170,12 +176,23 @@
   border-radius: 8px;
   background-color: #333;
   color: white;
-  font-size: clamp(12px, 2.5vw, 14px);
+  font-size: clamp(14px, 3vw, 16px);
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-weight: 400;
   cursor: pointer;
   transition: background-color 0.3s;
   min-width: 120px;
   max-width: 160px;
   width: 100%;
+}
+
+.player-select select option {
+  background-color: #333;
+  color: white;
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: clamp(14px, 3vw, 16px);
+  font-weight: 400;
+  padding: 8px 12px;
 }
 
 .player-select select:focus {
