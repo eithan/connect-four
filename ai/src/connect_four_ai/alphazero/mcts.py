@@ -17,10 +17,10 @@ class MCTS:
         self.game = game
         self.config = config
 
-    def search(self, state, total_iterations, temperature=None):
+    def search(self, state, total_iterations, temperature=None, use_root_dirichlet_noise: bool = True):
         """Performs a search for the desired number of iterations, returns an action and the tree root."""
         # Create the root
-        root = Node(None, state, 1, self.game, self.config)
+        root = TreeNode(None, state, 1, self.game, self.config)
 
         # Expand the root, adding noise to each action
         # Get valid actions
@@ -33,26 +33,30 @@ class MCTS:
             value, logits = self.network(state_tensor)
             #print(f"MCTS got value shape: {value.shape}, logits shape: {logits.shape}")
 
-        # Get action probabilities
-        action_probs = F.softmax(logits.view(self.game.cols), dim=0).cpu().numpy()
+        # Compute policy over all actions, then mix Dirichlet noise only on valid actions
+        logits_flat = logits.view(-1)
+        policy_probs = F.softmax(logits_flat, dim=0).detach().cpu().numpy()
+        priors = np.zeros(self.game.cols, dtype=np.float32)
+        priors[:] = policy_probs
 
-        # Calculate and add dirichlet noise
-        noise = np.random.dirichlet([self.config.dirichlet_alpha] * self.game.cols)
-        action_probs = ((1 - self.config.dirichlet_eps) * action_probs) + self.config.dirichlet_eps * noise
+        if use_root_dirichlet_noise and len(valid_actions) > 0:
+            noise = np.random.dirichlet([self.config.dirichlet_alpha] * len(valid_actions))
+            priors_valid = priors[valid_actions]
+            priors[valid_actions] = (1 - self.config.dirichlet_eps) * priors_valid + self.config.dirichlet_eps * noise
 
-        # Mask unavailable actions
-        mask = np.full(self.game.cols, False)
-        mask[valid_actions] = True
-        action_probs = action_probs[mask]
+        # Normalize priors over valid actions only
+        denom = np.sum(priors[valid_actions]) if len(valid_actions) > 0 else 1.0
+        if denom == 0:
+            # uniform over valid actions as fallback
+            priors[valid_actions] = 1.0 / max(1, len(valid_actions))
+        else:
+            priors[valid_actions] /= denom
 
-        # Softmax
-        action_probs /= np.sum(action_probs)
-
-        # Create a child for each possible action
-        for action, prob in zip(valid_actions, action_probs):
-            child_state = -self.game.get_next_state(state, action)
-            root.children[action] = Node(root, child_state, -1, self.game, self.config)
-            root.children[action].prob = prob
+        # Create a child for each possible valid action
+        for action in valid_actions:
+            child_state = -self.game.get_next_state(state, action, to_play=1)
+            root.children[action] = TreeNode(root, child_state, -1, self.game, self.config)
+            root.children[action].prob = float(priors[action])
 
         # Since we're not backpropagating, manually increase visits
         root.n_visits = 1
@@ -79,12 +83,19 @@ class MCTS:
                     value, logits = self.network(state_tensor)
                     value = value.item()
 
-                # Mask invalid actions, then calculate masked action probs
-                mask = np.full(self.game.cols, False)
-                mask[valid_actions] = True
-                action_probs = F.softmax(logits.view(self.game.cols)[mask], dim=0).cpu().numpy()
-                for child, prob in zip(current_node.children.values(), action_probs):
-                    child.prob = prob
+                # Mask invalid actions for this node, then set child priors
+                node_valid_actions = self.game.get_valid_actions(current_node.state)
+                logits_flat = logits.view(-1)
+                masked_logits = logits_flat.clone()
+                # set invalid actions to -inf so they get zero probability after softmax
+                invalid_mask = torch.ones(self.game.cols, dtype=torch.bool, device=masked_logits.device)
+                if len(node_valid_actions) > 0:
+                    invalid_mask[torch.tensor(node_valid_actions, device=masked_logits.device)] = False
+                masked_logits[invalid_mask] = float('-inf')
+                node_action_probs = F.softmax(masked_logits, dim=0).detach().cpu().numpy()
+                for action in node_valid_actions:
+                    if action in current_node.children:
+                        current_node.children[action].prob = float(node_action_probs[action])
             # If node is terminal, get the value of it from game instance
             else:
                 value = self.game.evaluate(current_node.state)
@@ -112,7 +123,7 @@ class MCTS:
             return np.random.choice([*action_counts.keys()], p=distribution/sum(distribution))
 
 
-class Node:
+class TreeNode:
     """Represents a node in the MCTS, holding the game state and statistics for MCTS to operate."""
     
     def __init__(self, parent, state, to_play, game, config):
@@ -138,10 +149,10 @@ class Node:
             return
 
         # Create a child for each possible action
-        for action in zip(valid_actions):
+        for action in valid_actions:
             # Make move, then flip board to perspective of next player
-            child_state = -self.game.get_next_state(self.state, action)
-            self.children[action] = Node(self, child_state, -self.to_play, self.game, self.config)
+            child_state = -self.game.get_next_state(self.state, action, to_play=self.to_play)
+            self.children[action] = TreeNode(self, child_state, -self.to_play, self.game, self.config)
 
     def select_child(self):
         """Select the child node with the highest PUCT score."""
@@ -175,8 +186,8 @@ class Node:
         return len(self.children) == 0
 
     def is_terminal(self):
-        """Check if the node represents a terminal state."""
-        return (self.n_visits != 0) and (len(self.children) == 0)
+        """Check if the node represents a terminal state (no valid moves or game over)."""
+        return len(self.game.get_valid_actions(self.state)) == 0
 
     def get_value(self):
         """Calculate the average value of this node."""

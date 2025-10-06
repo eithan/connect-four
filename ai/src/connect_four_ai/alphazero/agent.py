@@ -13,9 +13,6 @@ class AlphaZeroAgent:
     def __init__(self, alphazero_trainer):
         self.alphazero_trainer = alphazero_trainer
         self.alphazero_trainer.network.eval()
-        
-        # Remove noise from move calculations
-        self.alphazero_trainer.config.dirichlet_eps = 0
 
     def select_action(self, state, search_iterations=200):
         """Select an action for the given state."""
@@ -41,6 +38,6 @@ class AlphaZeroAgent:
         # Else use MCTS 
         else:
             #print(f"Using MCTS with {search_iterations} iterations")
-            action, _ = self.alphazero_trainer.mcts.search(state, search_iterations)
+            action, _ = self.alphazero_trainer.mcts.search(state, search_iterations, use_root_dirichlet_noise=False)
             #print(f"MCTS selected action: {action}")
             return action

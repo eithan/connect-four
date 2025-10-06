@@ -5,11 +5,15 @@ AlphaZero training implementation.
 import numpy as np
 import torch
 from torch import nn
+import torch.nn.functional as F
+import logging
 
 from .network import ResNet
 from .mcts import MCTS
 
 import time
+
+logger = logging.getLogger(__name__)
 
 class AlphaZeroTrainer:
     """AlphaZero training implementation with self-play and neural network updates."""
@@ -46,7 +50,8 @@ class AlphaZeroTrainer:
         # For each training epoch
         time_start = time.time()
         for epoch in range(int(training_epochs)):
-            print(f"[{time.time() - time_start:.2f}s] Training epoch {epoch}/{training_epochs} ({self.config.games_per_epoch} games per epoch)")
+            if self.verbose:
+                logger.info(f"[{time.time() - time_start:.2f}s] Training epoch {epoch}/{training_epochs} ({self.config.games_per_epoch} games per epoch)")
 
             # Play specified number of games
             for _ in range(int(self.config.games_per_epoch)):
@@ -58,7 +63,8 @@ class AlphaZeroTrainer:
             elapsed_time = time.time() - time_start
             time_per_epoch = elapsed_time / (epoch + 1)
             estimated_time_remaining = time_per_epoch * (training_epochs - epoch - 1)
-            print(f"Estimated time remaining: {estimated_time_remaining:.2f}s ({estimated_time_remaining / 60:.2f}m) ({estimated_time_remaining / 3600:.2f}h)")
+            if self.verbose:
+                logger.info(f"Estimated time remaining: {estimated_time_remaining:.2f}s ({estimated_time_remaining / 60:.2f}m) ({estimated_time_remaining / 3600:.2f}h)")
 
 
     def self_play(self):
@@ -67,7 +73,7 @@ class AlphaZeroTrainer:
         done = False
         while not done:
             # Search for a move
-            action, root = self.mcts.search(state, self.search_iterations)
+            action, root = self.mcts.search(state, self.search_iterations, use_root_dirichlet_noise=True)
 
             # Value target is the value of the MCTS root node
             value = root.get_value()
@@ -97,7 +103,7 @@ class AlphaZeroTrainer:
 
         # Logging if verbose
         if self.verbose and self.total_games % 100 == 0:
-            print(f"\nTotal Games: {self.total_games}, Items in Memory: {self.current_memory_index}, Search Iterations: {self.search_iterations}\n")
+            logger.info(f"\nTotal Games: {self.total_games}, Items in Memory: {self.current_memory_index}, Search Iterations: {self.search_iterations}\n")
 
     def append_to_memory(self, state, value, visits):
         """
@@ -155,7 +161,10 @@ class AlphaZeroTrainer:
             value_preds, policy_logits = self.network(mb_states)
 
             # Loss calculation
-            policy_loss = self.loss_cross_entropy(policy_logits, mb_policy_targets)
+            # Policy: match MCTS visit distribution using KL divergence
+            policy_log_probs = F.log_softmax(policy_logits, dim=1)
+            policy_loss = nn.KLDivLoss(reduction="batchmean")(policy_log_probs, mb_policy_targets)
+            # Value: MSE between predicted value and root value target
             value_loss = self.loss_mse(value_preds.view(-1), mb_value_targets.view(-1))
             loss = policy_loss + value_loss
 

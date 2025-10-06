@@ -5,13 +5,27 @@ Refactored train_new.py using modular AlphaZero implementation.
 import argparse
 import os
 import torch
-from connect_four_ai.alphazero import Config, config_dict, Connect4, AlphaZeroTrainer, AlphaZeroAgent, Evaluator, ONNXAlphaZeroNetwork
+import logging
+import random
+import numpy as np
+from connect_four_ai.alphazero import AlphaZeroConfig, config_dict, Connect4, ConnectFour, AlphaZeroTrainer, AlphaZeroAgent, Evaluator, ONNXAlphaZeroNetwork
 
 # for ONNX model
 import onnxruntime as ort
 import numpy as np
 
-config = Config(config_dict)
+config = AlphaZeroConfig.from_dict(config_dict)
+
+def init_logging(verbose: bool = True) -> None:
+    level = logging.INFO if verbose else logging.WARNING
+    logging.basicConfig(level=level, format='[%(asctime)s] %(levelname)s:%(name)s: %(message)s')
+
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 def get_model_path(mode):
     """Get the correct model file path based on mode."""
@@ -90,10 +104,16 @@ def convert_weights_to_onnx_model(alphazero, reload=False):
         alphazero.network,
         dummy_input,
         onnx_path,
-        dynamo=True,
+        export_params=True,
+        opset_version=17,
         input_names=["input"],
-        output_names=["output"],
-        dynamic_shapes=[{0: "batch_size"}])
+        output_names=["value", "policy_logits"],
+        dynamic_axes={
+            "input": {0: "batch"},
+            "value": {0: "batch"},
+            "policy_logits": {0: "batch"},
+        }
+    )
     print(f"Export completed! ONNX Model saved at {onnx_path}.")
     print(f"DON'T FORGET TO COPY THE ONNX FILES TO THE WEB APP PUBLIC DIRECTORY!")
 
@@ -185,10 +205,16 @@ def parse_arguments():
                        default='onnx', 
                        help='Model format to use (default: onnx)')
 
+    parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
+
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_arguments()
+    init_logging(args.verbose)
+    if args.seed is not None:
+        seed_everything(args.seed)
     
     game = Connect4()
     alphazero = AlphaZeroTrainer(game, config)

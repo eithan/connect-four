@@ -11,24 +11,25 @@ This module provides his complete Connect Four AlphaZero implementation broken a
 - Evaluation utilities (Evaluator)
 """
 
-from .config import Config, config_dict
-from .game import Connect4
+from .config import AlphaZeroConfig, config_dict
+from .game import Connect4, ConnectFour
 from .network import ResNet, ConvBase, ResidualBlock
-from .mcts import MCTS, Node
+from .mcts import MCTS, TreeNode
 from .trainer import AlphaZeroTrainer
 from .agent import AlphaZeroAgent
 from .evaluator import Evaluator
 from .onnxalphazeronetwork import ONNXAlphaZeroNetwork
 
 __all__ = [
-    'Config',
+    'AlphaZeroConfig',
     'config_dict', 
     'Connect4',
+    'ConnectFour',
     'ResNet',
     'ConvBase', 
     'ResidualBlock',
     'MCTS',
-    'Node',
+    'TreeNode',
     'AlphaZeroTrainer',
     'AlphaZeroAgent',
     'Evaluator',

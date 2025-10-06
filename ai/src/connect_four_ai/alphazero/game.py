@@ -3,7 +3,6 @@ Connect Four game engine implementation.
 """
 
 import numpy as np
-from scipy.signal import convolve2d
 
 
 class Connect4:
@@ -34,32 +33,51 @@ class Connect4:
         if self.evaluate(state) != 0:
             return np.array([])
         
-        # Identify valid columns to play
-        cols = np.sum(np.abs(state), axis=0)
-        return np.where((cols // self.rows) == 0)[0]
+        # Valid if the top cell of the column is empty
+        return np.where(state[0] == 0)[0]
 
     def evaluate(self, state):
         """Evaluate the current position. Returns 1 for player 1 win, -1 for player 2 and 0 otherwise."""
-        # Kernels for checking win conditions
-        kernel = np.ones((1, 4), dtype=int)
-        
-        # Horizontal and vertical checks
-        horizontal_check = convolve2d(state, kernel, mode='valid')
-        vertical_check = convolve2d(state, kernel.T, mode='valid')
+        rows, cols = self.rows, self.cols
 
-        # Diagonal checks
-        diagonal_kernel = np.eye(4, dtype=int)
-        main_diagonal_check = convolve2d(state, diagonal_kernel, mode='valid')
-        anti_diagonal_check = convolve2d(state, np.fliplr(diagonal_kernel), mode='valid')
-        
-        # Check for winner
-        if any(cond.any() for cond in [horizontal_check == 4, vertical_check == 4, main_diagonal_check == 4, anti_diagonal_check == 4]):
-            return 1
-        elif any(cond.any() for cond in [horizontal_check == -4, vertical_check == -4, main_diagonal_check == -4, anti_diagonal_check == -4]):
-            return -1
+        # Horizontal
+        for r in range(rows):
+            for c in range(cols - 3):
+                window_sum = int(state[r, c:c+4].sum())
+                if window_sum == 4:
+                    return 1
+                if window_sum == -4:
+                    return -1
+
+        # Vertical
+        for r in range(rows - 3):
+            for c in range(cols):
+                window_sum = int(state[r:r+4, c].sum())
+                if window_sum == 4:
+                    return 1
+                if window_sum == -4:
+                    return -1
+
+        # Diagonal (down-right)
+        for r in range(rows - 3):
+            for c in range(cols - 3):
+                window_sum = int(state[r, c] + state[r+1, c+1] + state[r+2, c+2] + state[r+3, c+3])
+                if window_sum == 4:
+                    return 1
+                if window_sum == -4:
+                    return -1
+
+        # Anti-diagonal (down-left)
+        for r in range(rows - 3):
+            for c in range(3, cols):
+                window_sum = int(state[r, c] + state[r+1, c-1] + state[r+2, c-2] + state[r+3, c-3])
+                if window_sum == 4:
+                    return 1
+                if window_sum == -4:
+                    return -1
 
         # No winner
-        return 0  
+        return 0
 
     def step(self, state, action, to_play=1):
         """Play an action in a given state. Return the next_state, reward and done flag."""
@@ -68,7 +86,7 @@ class Connect4:
         reward = self.evaluate(next_state)
         
         # Check for game termination
-        done = True if reward != 0 or np.sum(abs(next_state)) >= (self.rows * self.cols - 1) else False
+        done = True if (reward != 0) or (np.sum(np.abs(next_state)) >= (self.rows * self.cols)) else False
         return next_state, reward, done
 
     def encode_state(self, state):
@@ -81,3 +99,8 @@ class Connect4:
     def reset(self):
         """Reset the board."""
         return np.zeros([self.rows, self.cols], dtype=np.int8)
+
+
+class ConnectFour(Connect4):
+    """Preferred name alias for `Connect4` for readability."""
+    pass

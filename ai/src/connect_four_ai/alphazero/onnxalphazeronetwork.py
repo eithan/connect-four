@@ -1,14 +1,17 @@
 import onnxruntime as ort
 import numpy as np
 import torch
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ONNXAlphaZeroNetwork:
     """ONNX AlphaZero network. For debugging purposes only because we load the model in javascript directly for playing."""
     def __init__(self, onnx_path: str):
-        self.session = ort.InferenceSession(onnx_path)
+        self.session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
         self.input_name = self.session.get_inputs()[0].name
         self.output_names = [output.name for output in self.session.get_outputs()]
-        print(f"ONNX model loaded. Input: {self.input_name}, Outputs: {self.output_names}")
+        logger.info(f"ONNX model loaded. Input: {self.input_name}, Outputs: {self.output_names}")
 
     # Dummy methods to mimic PyTorch API
     def eval(self):

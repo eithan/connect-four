@@ -5,6 +5,10 @@ Evaluation utilities for AlphaZero training.
 import random
 import numpy as np
 import torch
+import logging
+from typing import List, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class Evaluator:
@@ -21,7 +25,7 @@ class Evaluator:
         # Generate and prepare example states and actions for evaluation
         self.generate_examples()
 
-    def select_action(self, state):
+    def select_action(self, state) -> int:
         """Select an action based on the given state, will choose a winning or blocking moves."""
         valid_actions = self.game.get_valid_actions(state)
         
@@ -39,9 +43,9 @@ class Evaluator:
                 return action
 
         # Default to random action if no winning or blocking move
-        return random.choice(valid_actions)
+        return int(random.choice(list(valid_actions)))
 
-    def generate_examples(self):
+    def generate_examples(self) -> None:
         """Generate and prepare example states and actions for evaluation."""
         winning_examples = self.generate_examples_for_condition('win')
         blocking_examples = self.generate_examples_for_condition('block')
@@ -57,7 +61,7 @@ class Evaluator:
         self.X_target = torch.tensor(np.stack(encoded_states, axis=0), dtype=torch.float).to(self.config.device)
         self.y_target = torch.tensor(target_actions, dtype=torch.long).to(self.config.device)
 
-    def generate_examples_for_condition(self, condition):
+    def generate_examples_for_condition(self, condition: str):
         """Generate examples based on either 'win' or 'block' conditions."""
         examples = []
         while len(examples) < self.num_examples:
@@ -89,7 +93,7 @@ class Evaluator:
                 state = next_state
         return examples
 
-    def evaluate(self):
+    def evaluate(self) -> None:
         """Evaluate the policy network's accuracy and append it to self.accuracies."""
         with torch.no_grad():
             self.network.eval()
@@ -99,4 +103,4 @@ class Evaluator:
         
         self.accuracies.append(accuracy)
         if self.verbose:
-            print(f"Initial Evaluation Accuracy: {100 * accuracy:.1f}%")
+            logger.info(f"Initial Evaluation Accuracy: {100 * accuracy:.1f}%")

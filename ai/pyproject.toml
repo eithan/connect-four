@@ -10,7 +10,6 @@ packages = [{include = "connect_four_ai", from = "src"}]
 python = "^3.12.5"
 # Core numerical and scientific computing
 numpy = ">=1.21.5"
-scipy = ">=1.10.1"
 # PyTorch and deep learning
 torch = "^2.0.0"
 # ONNX support for model inference
