@@ -1,9 +1,9 @@
 
-pytorch2.8.0:À
+pytorch2.8.0:µ®
 ®
 input
 base.conv.0.weight
-base.conv.0.biasgetitemnode_Conv_30"Conv*
+base.conv.0.biasgetitemnode_Conv_29"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -15,9 +15,9 @@
 pkg.torch.onnx.class_hierarchyº['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
 pkg.torch.onnx.fx_nodej%relu : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%getitem,), kwargs = {})JN
 pkg.torch.onnx.name_scopes0['', 'base', 'base.conv', 'base.conv.2', 'relu']Jÿ
-pkg.torch.onnx.stack_traceπFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceπFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 70, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 71, in forward
     x = self.conv(x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
     input = module(input)
@@ -26,87 +26,82 @@
 √
 relu
 base.res_blocks.0.conv_1.weight
-base.res_blocks.0.conv_1.bias	getitem_5node_Conv_31"Conv*
+base.res_blocks.0.conv_1.bias	getitem_3node_Conv_30"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
 «
-	getitem_5relu_1node_relu_1"ReluJˇ
+	getitem_3relu_1node_relu_1"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.0: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.0.relu: torch.nn.modules.activation.ReLU/relu_1: aten.relu.defaultJÈ
 pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jà
-pkg.torch.onnx.fx_noden%relu_1 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_5,), kwargs = {})Jc
+pkg.torch.onnx.fx_noden%relu_1 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_3,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.0', 'base.res_blocks.0.relu', 'relu_1']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 91, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
     output = self.relu(self.batch_norm_1(self.conv_1(x)))
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
-∆
+≈
 relu_1
 base.res_blocks.0.conv_2.weight
-base.res_blocks.0.conv_2.bias
-getitem_10node_Conv_32"Conv*
+base.res_blocks.0.conv_2.bias	getitem_6node_Conv_31"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-›
-
-getitem_10
-reluadd_8
-node_add_8"AddJ√
-	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.0: connect_four_ai.alphazero.network.ResidualBlock/add_8: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jå
-pkg.torch.onnx.fx_noder%add_8 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_10, %relu), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.0', 'add_8']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+—
+	getitem_6
+reluaddnode_add"AddJ¡
+	namespace≥: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.0: connect_four_ai.alphazero.network.ResidualBlock/add: aten.add.TensorJ√
+pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jâ
+pkg.torch.onnx.fx_nodeo%add : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_6, %relu), kwargs = {})JF
+pkg.torch.onnx.name_scopes(['', 'base', 'base.res_blocks.0', 'add']JÀ
+pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
-¶
-add_8relu_2node_relu_2"ReluJˇ
+¢
+addrelu_2node_relu_2"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.0: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.0.relu: torch.nn.modules.activation.ReLU/relu_2: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
-pkg.torch.onnx.fx_nodej%relu_2 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_8,), kwargs = {})Jc
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÇ
+pkg.torch.onnx.fx_nodeh%relu_2 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.0', 'base.res_blocks.0.relu', 'relu_2']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
-∆
+≈
 relu_2
 base.res_blocks.1.conv_1.weight
-base.res_blocks.1.conv_1.bias
-getitem_15node_Conv_33"Conv*
+base.res_blocks.1.conv_1.bias	getitem_9node_Conv_32"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-…
-
-getitem_15relu_3node_relu_3"ReluJˇ
+«
+	getitem_9relu_3node_relu_3"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.1: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.1.relu: torch.nn.modules.activation.ReLU/relu_3: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jâ
-pkg.torch.onnx.fx_nodeo%relu_3 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_15,), kwargs = {})Jc
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jà
+pkg.torch.onnx.fx_noden%relu_3 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_9,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.1', 'base.res_blocks.1.relu', 'relu_3']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 91, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
     output = self.relu(self.batch_norm_1(self.conv_1(x)))
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -114,37 +109,38 @@ getitem_15relu_3node_relu_3"ReluJˇ
 relu_3
 base.res_blocks.1.conv_2.weight
 base.res_blocks.1.conv_2.bias
-getitem_20node_Conv_34"Conv*
+getitem_12node_Conv_33"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-Ê
+·
 
-getitem_20
-relu_2add_11node_add_11"AddJƒ
-	namespace∂: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.1: connect_four_ai.alphazero.network.ResidualBlock/add_11: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%add_11 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_20, %relu_2), kwargs = {})JI
-pkg.torch.onnx.name_scopes+['', 'base', 'base.res_blocks.1', 'add_11']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+getitem_12
+relu_2add_1
+node_add_1"AddJ√
+	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.1: connect_four_ai.alphazero.network.ResidualBlock/add_1: aten.add.TensorJ√
+pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jé
+pkg.torch.onnx.fx_nodet%add_1 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_12, %relu_2), kwargs = {})JH
+pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.1', 'add_1']JÀ
+pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
-®
-add_11relu_4node_relu_4"ReluJˇ
+¶
+add_1relu_4node_relu_4"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.1: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.1.relu: torch.nn.modules.activation.ReLU/relu_4: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
-pkg.torch.onnx.fx_nodek%relu_4 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_11,), kwargs = {})Jc
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
+pkg.torch.onnx.fx_nodej%relu_4 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_1,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.1', 'base.res_blocks.1.relu', 'relu_4']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -152,7 +148,7 @@ getitem_20
 relu_4
 base.res_blocks.2.conv_1.weight
 base.res_blocks.2.conv_1.bias
-getitem_25node_Conv_35"Conv*
+getitem_15node_Conv_34"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -160,16 +156,16 @@ getitem_25node_Conv_35"Conv*
 	dilations@@†
 …
 
-getitem_25relu_5node_relu_5"ReluJˇ
+getitem_15relu_5node_relu_5"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.2: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.2.relu: torch.nn.modules.activation.ReLU/relu_5: aten.relu.defaultJÈ
 pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jâ
-pkg.torch.onnx.fx_nodeo%relu_5 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_25,), kwargs = {})Jc
+pkg.torch.onnx.fx_nodeo%relu_5 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_15,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.2', 'base.res_blocks.2.relu', 'relu_5']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 91, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
     output = self.relu(self.batch_norm_1(self.conv_1(x)))
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -177,37 +173,38 @@ getitem_25relu_5node_relu_5"ReluJˇ
 relu_5
 base.res_blocks.2.conv_2.weight
 base.res_blocks.2.conv_2.bias
-getitem_30node_Conv_36"Conv*
+getitem_18node_Conv_35"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-Ê
+·
 
-getitem_30
-relu_4add_14node_add_14"AddJƒ
-	namespace∂: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.2: connect_four_ai.alphazero.network.ResidualBlock/add_14: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%add_14 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_30, %relu_4), kwargs = {})JI
-pkg.torch.onnx.name_scopes+['', 'base', 'base.res_blocks.2', 'add_14']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+getitem_18
+relu_4add_2
+node_add_2"AddJ√
+	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.2: connect_four_ai.alphazero.network.ResidualBlock/add_2: aten.add.TensorJ√
+pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jé
+pkg.torch.onnx.fx_nodet%add_2 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_18, %relu_4), kwargs = {})JH
+pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.2', 'add_2']JÀ
+pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
-®
-add_14relu_6node_relu_6"ReluJˇ
+¶
+add_2relu_6node_relu_6"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.2: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.2.relu: torch.nn.modules.activation.ReLU/relu_6: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
-pkg.torch.onnx.fx_nodek%relu_6 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_14,), kwargs = {})Jc
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
+pkg.torch.onnx.fx_nodej%relu_6 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_2,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.2', 'base.res_blocks.2.relu', 'relu_6']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -215,7 +212,7 @@ getitem_30
 relu_6
 base.res_blocks.3.conv_1.weight
 base.res_blocks.3.conv_1.bias
-getitem_35node_Conv_37"Conv*
+getitem_21node_Conv_36"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -223,16 +220,16 @@ getitem_35node_Conv_37"Conv*
 	dilations@@†
 …
 
-getitem_35relu_7node_relu_7"ReluJˇ
+getitem_21relu_7node_relu_7"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.3: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.3.relu: torch.nn.modules.activation.ReLU/relu_7: aten.relu.defaultJÈ
 pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jâ
-pkg.torch.onnx.fx_nodeo%relu_7 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_35,), kwargs = {})Jc
+pkg.torch.onnx.fx_nodeo%relu_7 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_21,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.3', 'base.res_blocks.3.relu', 'relu_7']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 91, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
     output = self.relu(self.batch_norm_1(self.conv_1(x)))
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -240,37 +237,38 @@ getitem_35relu_7node_relu_7"ReluJˇ
 relu_7
 base.res_blocks.3.conv_2.weight
 base.res_blocks.3.conv_2.bias
-getitem_40node_Conv_38"Conv*
+getitem_24node_Conv_37"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-Ê
+·
 
-getitem_40
-relu_6add_17node_add_17"AddJƒ
-	namespace∂: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.3: connect_four_ai.alphazero.network.ResidualBlock/add_17: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%add_17 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_40, %relu_6), kwargs = {})JI
-pkg.torch.onnx.name_scopes+['', 'base', 'base.res_blocks.3', 'add_17']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+getitem_24
+relu_6add_3
+node_add_3"AddJ√
+	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.3: connect_four_ai.alphazero.network.ResidualBlock/add_3: aten.add.TensorJ√
+pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jé
+pkg.torch.onnx.fx_nodet%add_3 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_24, %relu_6), kwargs = {})JH
+pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.3', 'add_3']JÀ
+pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
-®
-add_17relu_8node_relu_8"ReluJˇ
+¶
+add_3relu_8node_relu_8"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.3: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.3.relu: torch.nn.modules.activation.ReLU/relu_8: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
-pkg.torch.onnx.fx_nodek%relu_8 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_17,), kwargs = {})Jc
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
+pkg.torch.onnx.fx_nodej%relu_8 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_3,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.3', 'base.res_blocks.3.relu', 'relu_8']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -278,7 +276,7 @@ getitem_40
 relu_8
 base.res_blocks.4.conv_1.weight
 base.res_blocks.4.conv_1.bias
-getitem_45node_Conv_39"Conv*
+getitem_27node_Conv_38"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -286,16 +284,16 @@ getitem_45node_Conv_39"Conv*
 	dilations@@†
 …
 
-getitem_45relu_9node_relu_9"ReluJˇ
+getitem_27relu_9node_relu_9"ReluJˇ
 	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.4: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.4.relu: torch.nn.modules.activation.ReLU/relu_9: aten.relu.defaultJÈ
 pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jâ
-pkg.torch.onnx.fx_nodeo%relu_9 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_45,), kwargs = {})Jc
+pkg.torch.onnx.fx_nodeo%relu_9 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_27,), kwargs = {})Jc
 pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.4', 'base.res_blocks.4.relu', 'relu_9']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 91, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
     output = self.relu(self.batch_norm_1(self.conv_1(x)))
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -303,37 +301,38 @@ getitem_45relu_9node_relu_9"ReluJˇ
 relu_9
 base.res_blocks.4.conv_2.weight
 base.res_blocks.4.conv_2.bias
-getitem_50node_Conv_40"Conv*
+getitem_30node_Conv_39"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-Ê
+·
 
-getitem_50
-relu_8add_20node_add_20"AddJƒ
-	namespace∂: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.4: connect_four_ai.alphazero.network.ResidualBlock/add_20: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%add_20 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_50, %relu_8), kwargs = {})JI
-pkg.torch.onnx.name_scopes+['', 'base', 'base.res_blocks.4', 'add_20']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+getitem_30
+relu_8add_4
+node_add_4"AddJ√
+	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.4: connect_four_ai.alphazero.network.ResidualBlock/add_4: aten.add.TensorJ√
+pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jé
+pkg.torch.onnx.fx_nodet%add_4 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_30, %relu_8), kwargs = {})JH
+pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.4', 'add_4']JÀ
+pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
-≠
-add_20relu_10node_relu_10"ReluJÄ
+´
+add_4relu_10node_relu_10"ReluJÄ
 	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.4: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.4.relu: torch.nn.modules.activation.ReLU/relu_10: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÜ
-pkg.torch.onnx.fx_nodel%relu_10 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_20,), kwargs = {})Jd
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
+pkg.torch.onnx.fx_nodek%relu_10 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_4,), kwargs = {})Jd
 pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.4', 'base.res_blocks.4.relu', 'relu_10']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -341,7 +340,7 @@ getitem_50
 relu_10
 base.res_blocks.5.conv_1.weight
 base.res_blocks.5.conv_1.bias
-getitem_55node_Conv_41"Conv*
+getitem_33node_Conv_40"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -349,16 +348,16 @@ getitem_55node_Conv_41"Conv*
 	dilations@@†
 Œ
 
-getitem_55relu_11node_relu_11"ReluJÄ
+getitem_33relu_11node_relu_11"ReluJÄ
 	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.5: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.5.relu: torch.nn.modules.activation.ReLU/relu_11: aten.relu.defaultJÈ
 pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_11 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_55,), kwargs = {})Jd
+pkg.torch.onnx.fx_nodep%relu_11 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_33,), kwargs = {})Jd
 pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.5', 'base.res_blocks.5.relu', 'relu_11']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 91, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
     output = self.relu(self.batch_norm_1(self.conv_1(x)))
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -366,37 +365,38 @@ getitem_55relu_11node_relu_11"ReluJÄ
 relu_11
 base.res_blocks.5.conv_2.weight
 base.res_blocks.5.conv_2.bias
-getitem_60node_Conv_42"Conv*
+getitem_36node_Conv_41"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-Ë
+„
 
-getitem_60
-relu_10add_23node_add_23"AddJƒ
-	namespace∂: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.5: connect_four_ai.alphazero.network.ResidualBlock/add_23: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jê
-pkg.torch.onnx.fx_nodev%add_23 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_60, %relu_10), kwargs = {})JI
-pkg.torch.onnx.name_scopes+['', 'base', 'base.res_blocks.5', 'add_23']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+getitem_36
+relu_10add_5
+node_add_5"AddJ√
+	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.5: connect_four_ai.alphazero.network.ResidualBlock/add_5: aten.add.TensorJ√
+pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
+pkg.torch.onnx.fx_nodeu%add_5 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_36, %relu_10), kwargs = {})JH
+pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.5', 'add_5']JÀ
+pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
-≠
-add_23relu_12node_relu_12"ReluJÄ
+´
+add_5relu_12node_relu_12"ReluJÄ
 	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.5: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.5.relu: torch.nn.modules.activation.ReLU/relu_12: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÜ
-pkg.torch.onnx.fx_nodel%relu_12 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_23,), kwargs = {})Jd
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
+pkg.torch.onnx.fx_nodek%relu_12 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_5,), kwargs = {})Jd
 pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.5', 'base.res_blocks.5.relu', 'relu_12']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -404,7 +404,7 @@ getitem_60
 relu_12
 base.res_blocks.6.conv_1.weight
 base.res_blocks.6.conv_1.bias
-getitem_65node_Conv_43"Conv*
+getitem_39node_Conv_42"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -412,16 +412,16 @@ getitem_65node_Conv_43"Conv*
 	dilations@@†
 Œ
 
-getitem_65relu_13node_relu_13"ReluJÄ
+getitem_39relu_13node_relu_13"ReluJÄ
 	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.6: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.6.relu: torch.nn.modules.activation.ReLU/relu_13: aten.relu.defaultJÈ
 pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_13 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_65,), kwargs = {})Jd
+pkg.torch.onnx.fx_nodep%relu_13 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_39,), kwargs = {})Jd
 pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.6', 'base.res_blocks.6.relu', 'relu_13']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 91, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
     output = self.relu(self.batch_norm_1(self.conv_1(x)))
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -429,37 +429,38 @@ getitem_65relu_13node_relu_13"ReluJÄ
 relu_13
 base.res_blocks.6.conv_2.weight
 base.res_blocks.6.conv_2.bias
-getitem_70node_Conv_44"Conv*
+getitem_42node_Conv_43"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-Ë
+„
 
-getitem_70
-relu_12add_26node_add_26"AddJƒ
-	namespace∂: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.6: connect_four_ai.alphazero.network.ResidualBlock/add_26: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jê
-pkg.torch.onnx.fx_nodev%add_26 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_70, %relu_12), kwargs = {})JI
-pkg.torch.onnx.name_scopes+['', 'base', 'base.res_blocks.6', 'add_26']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+getitem_42
+relu_12add_6
+node_add_6"AddJ√
+	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.6: connect_four_ai.alphazero.network.ResidualBlock/add_6: aten.add.TensorJ√
+pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
+pkg.torch.onnx.fx_nodeu%add_6 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_42, %relu_12), kwargs = {})JH
+pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.6', 'add_6']JÀ
+pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
-≠
-add_26relu_14node_relu_14"ReluJÄ
+´
+add_6relu_14node_relu_14"ReluJÄ
 	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.6: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.6.relu: torch.nn.modules.activation.ReLU/relu_14: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÜ
-pkg.torch.onnx.fx_nodel%relu_14 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_26,), kwargs = {})Jd
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
+pkg.torch.onnx.fx_nodek%relu_14 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_6,), kwargs = {})Jd
 pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.6', 'base.res_blocks.6.relu', 'relu_14']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -467,7 +468,7 @@ getitem_70
 relu_14
 base.res_blocks.7.conv_1.weight
 base.res_blocks.7.conv_1.bias
-getitem_75node_Conv_45"Conv*
+getitem_45node_Conv_44"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -475,16 +476,16 @@ getitem_75node_Conv_45"Conv*
 	dilations@@†
 Œ
 
-getitem_75relu_15node_relu_15"ReluJÄ
+getitem_45relu_15node_relu_15"ReluJÄ
 	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.7: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.7.relu: torch.nn.modules.activation.ReLU/relu_15: aten.relu.defaultJÈ
 pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_15 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_75,), kwargs = {})Jd
+pkg.torch.onnx.fx_nodep%relu_15 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_45,), kwargs = {})Jd
 pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.7', 'base.res_blocks.7.relu', 'relu_15']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 91, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
     output = self.relu(self.batch_norm_1(self.conv_1(x)))
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -492,37 +493,38 @@ getitem_75relu_15node_relu_15"ReluJÄ
 relu_15
 base.res_blocks.7.conv_2.weight
 base.res_blocks.7.conv_2.bias
-getitem_80node_Conv_46"Conv*
+getitem_48node_Conv_45"Conv*
 group†*
 pads@@@@†*
 strides@@†*
 auto_pad"NOTSET†*
 	dilations@@†
-Ë
+„
 
-getitem_80
-relu_14add_29node_add_29"AddJƒ
-	namespace∂: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.7: connect_four_ai.alphazero.network.ResidualBlock/add_29: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jê
-pkg.torch.onnx.fx_nodev%add_29 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_80, %relu_14), kwargs = {})JI
-pkg.torch.onnx.name_scopes+['', 'base', 'base.res_blocks.7', 'add_29']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+getitem_48
+relu_14add_7
+node_add_7"AddJ√
+	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.7: connect_four_ai.alphazero.network.ResidualBlock/add_7: aten.add.TensorJ√
+pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
+pkg.torch.onnx.fx_nodeu%add_7 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_48, %relu_14), kwargs = {})JH
+pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.7', 'add_7']JÀ
+pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
-≠
-add_29relu_16node_relu_16"ReluJÄ
+´
+add_7relu_16node_relu_16"ReluJÄ
 	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.7: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.7.relu: torch.nn.modules.activation.ReLU/relu_16: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÜ
-pkg.torch.onnx.fx_nodel%relu_16 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_29,), kwargs = {})Jd
+pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
+pkg.torch.onnx.fx_nodek%relu_16 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_7,), kwargs = {})Jd
 pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.7', 'base.res_blocks.7.relu', 'relu_16']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 42, in forward
+pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
     x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 72, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
     x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 93, in forward
+  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
     return self.relu(output + x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
     return F.relu(input, inplace=self.inplace)
@@ -530,7 +532,7 @@ getitem_80
 relu_16
 value_head.0.weight
 value_head.0.bias
-getitem_85node_Conv_47"Conv*
+getitem_51node_Conv_46"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -538,12 +540,12 @@ getitem_85node_Conv_47"Conv*
 	dilations@@†
 »	
 
-getitem_85relu_17node_relu_17"ReluJ¥
+getitem_51relu_17node_relu_17"ReluJ¥
 	namespace¶: connect_four_ai.alphazero.network.ResNet/value_head: torch.nn.modules.container.Sequential/value_head.2: torch.nn.modules.activation.ReLU/relu_17: aten.relu.defaultJ±
 pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_17 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_85,), kwargs = {})JK
+pkg.torch.onnx.fx_nodep%relu_17 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_51,), kwargs = {})JK
 pkg.torch.onnx.name_scopes-['', 'value_head', 'value_head.2', 'relu_17']J◊
-pkg.torch.onnx.stack_trace∏File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
+pkg.torch.onnx.stack_trace∏File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
     x_value = self.value_head(x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
     input = module(input)
@@ -551,13 +553,13 @@ getitem_85relu_17node_relu_17"ReluJ¥
     return F.relu(input, inplace=self.inplace)
 ›	
 relu_17
-val_22view	node_view"Reshape*
+val_57view	node_view"Reshape*
 	allowzero†J±
 	namespace£: connect_four_ai.alphazero.network.ResNet/value_head: torch.nn.modules.container.Sequential/value_head.3: torch.nn.modules.flatten.Flatten/view: aten.view.defaultJ±
 pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.flatten.Flatten', 'aten.view.default']Jç
 pkg.torch.onnx.fx_nodes%view : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%relu_17, [1, 168]), kwargs = {})JH
 pkg.torch.onnx.name_scopes*['', 'value_head', 'value_head.3', 'view']J€
-pkg.torch.onnx.stack_traceºFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
+pkg.torch.onnx.stack_traceºFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
     x_value = self.value_head(x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
     input = module(input)
@@ -576,19 +578,19 @@ getitem_85relu_17node_relu_17"ReluJ¥
 pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.linear.Linear', 'aten.linear.default']J≥
 pkg.torch.onnx.fx_nodeò%linear : [num_users=1] = call_function[target=torch.ops.aten.linear.default](args = (%view, %p_value_head_4_weight, %p_value_head_4_bias), kwargs = {})JJ
 pkg.torch.onnx.name_scopes,['', 'value_head', 'value_head.4', 'linear']J◊
-pkg.torch.onnx.stack_trace∏File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
+pkg.torch.onnx.stack_trace∏File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
     x_value = self.value_head(x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
     input = module(input)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/linear.py", line 125, in forward
     return F.linear(input, self.weight, self.bias)
-°	
-linearoutput	node_tanh"TanhJ±
+†	
+linearvalue	node_tanh"TanhJ±
 	namespace£: connect_four_ai.alphazero.network.ResNet/value_head: torch.nn.modules.container.Sequential/value_head.5: torch.nn.modules.activation.Tanh/tanh: aten.tanh.defaultJ±
 pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.Tanh', 'aten.tanh.default']JÉ
 pkg.torch.onnx.fx_nodei%tanh : [num_users=1] = call_function[target=torch.ops.aten.tanh.default](args = (%linear,), kwargs = {})JH
 pkg.torch.onnx.name_scopes*['', 'value_head', 'value_head.5', 'tanh']J≈
-pkg.torch.onnx.stack_trace¶File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
+pkg.torch.onnx.stack_trace¶File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
     x_value = self.value_head(x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
     input = module(input)
@@ -598,7 +600,7 @@ getitem_85relu_17node_relu_17"ReluJ¥
 relu_16
 policy_head.0.weight
 policy_head.0.bias
-getitem_90node_Conv_48"Conv*
+getitem_54node_Conv_47"Conv*
 group†*
 pads@@@@†*
 strides@@†*
@@ -606,12 +608,12 @@ getitem_90node_Conv_48"Conv*
 	dilations@@†
 Œ	
 
-getitem_90relu_18node_relu_18"ReluJ∂
+getitem_54relu_18node_relu_18"ReluJ∂
 	namespace®: connect_four_ai.alphazero.network.ResNet/policy_head: torch.nn.modules.container.Sequential/policy_head.2: torch.nn.modules.activation.ReLU/relu_18: aten.relu.defaultJ±
 pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_18 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_90,), kwargs = {})JM
+pkg.torch.onnx.fx_nodep%relu_18 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_54,), kwargs = {})JM
 pkg.torch.onnx.name_scopes/['', 'policy_head', 'policy_head.2', 'relu_18']JŸ
-pkg.torch.onnx.stack_trace∫File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
+pkg.torch.onnx.stack_trace∫File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 45, in forward
     x_policy = self.policy_head(x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
     input = module(input)
@@ -619,23 +621,23 @@ getitem_90relu_18node_relu_18"ReluJ∂
     return F.relu(input, inplace=self.inplace)
 Ó	
 relu_18
-val_27view_1node_view_1"Reshape*
+val_64view_1node_view_1"Reshape*
 	allowzero†Jµ
 	namespaceß: connect_four_ai.alphazero.network.ResNet/policy_head: torch.nn.modules.container.Sequential/policy_head.3: torch.nn.modules.flatten.Flatten/view_1: aten.view.defaultJ±
 pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.flatten.Flatten', 'aten.view.default']Jê
 pkg.torch.onnx.fx_nodev%view_1 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%relu_18, [1, 1344]), kwargs = {})JL
 pkg.torch.onnx.name_scopes.['', 'policy_head', 'policy_head.3', 'view_1']J›
-pkg.torch.onnx.stack_traceæFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
+pkg.torch.onnx.stack_traceæFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 45, in forward
     x_policy = self.policy_head(x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
     input = module(input)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/flatten.py", line 53, in forward
     return input.flatten(self.start_dim, self.end_dim)
-Ê
+Î
 
 view_1
 policy_head.4.weight
-policy_head.4.biaslinear_1node_linear_1"Gemm*
+policy_head.4.biaspolicy_logitsnode_linear_1"Gemm*
 beta  Ä?†*
 transB†*
 alpha  Ä?†*
@@ -644,7 +646,7 @@ getitem_90relu_18node_relu_18"ReluJ∂
 pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.linear.Linear', 'aten.linear.default']Jπ
 pkg.torch.onnx.fx_nodeû%linear_1 : [num_users=1] = call_function[target=torch.ops.aten.linear.default](args = (%view_1, %p_policy_head_4_weight, %p_policy_head_4_bias), kwargs = {})JN
 pkg.torch.onnx.name_scopes0['', 'policy_head', 'policy_head.4', 'linear_1']JŸ
-pkg.torch.onnx.stack_trace∫File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
+pkg.torch.onnx.stack_trace∫File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 45, in forward
     x_policy = self.policy_head(x)
   File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
     input = module(input)
@@ -755,39 +757,40 @@ main_graph*qÄBbase.conv.0.weightj-
 length512p*u ÄBpolicy_head.0.weightj-
 location!alphazero-network-model.onnx.dataj
 offset79264j
-length147456p*õ Bpolicy_head.0.biasJÄ6˙Ê;ú™¢ºfµùºA!„<˝œ<!Vÿºd)<HRµºN/≈<ë^o<é0å∫@8∑;msºd6ﬂºÀîÎ<‘O¿<3ñ‰ºtƒØ;â<©t<§•∫N≥;ú÷ìº£Ìª(åºIÖà∫¬BÒ∫§˛®ºÊÂ±ªw +;óY<∫z8*p¿
+length147456p*õ Bpolicy_head.0.biasJÄá– øø˜>ÍI>>ógQ?_k«>_8?˘<?å˚>KÇ˛æJG? ¬?&yÇ?Æ˚∂æüﬁâ?‹˘f?Æ.?˝~?/‰?O5?Aòæ…Õ@?Ú4?íM∞>è-T?™ÈÏ>J%e?√?Ïò>*˜=¨˘æ¸˘>?™D?*p¿
 Bpolicy_head.4.weightj-
 location!alphazero-network-model.onnx.dataj
 offset41632j
-length37632p*6Bpolicy_head.4.biasJ`˝lª\ <‘·î;‰Î∏<ÔüÖºl°m<T∑ù;*sÄBvalue_head.0.weightj-
+length37632p*6Bpolicy_head.4.biasJ¡®<{aΩªX>m<Ô‡&<IdºT\“<õ;*sÄBvalue_head.0.weightj-
 location!alphazero-network-model.onnx.dataj
 offset23200j
-length18432p*)Bvalue_head.0.biasJ›F∑ª{uB;TS'<uÕÇº*l®Bvalue_head.4.weightj-
+length18432p*)Bvalue_head.0.biasJI
+ÍΩ‰üwæ¨„æõ?*l®Bvalue_head.4.weightj-
 location!alphazero-network-model.onnx.dataj
 offset8704j
-length672p*Bvalue_head.4.biasJ≥j¥ª*Bval_22J       ®       *Bval_27J       @      Zœ
-input 
-
-
-batch_size
+length672p*Bvalue_head.4.biasJÔ}J=*Bval_57J       ®       *Bval_64J       @      Z≈
+input
+
+
 
 
 "=
 /pkg.torch.export.graph_signature.InputSpec.kind
 USER_INPUT"=
 5pkg.torch.export.graph_signature.InputSpec.persistentNone"&
-!pkg.torch.onnx.original_node_namexbÑ
-output
+!pkg.torch.onnx.original_node_namexbÉ
+value
 
 
 "?
 0pkg.torch.export.graph_signature.OutputSpec.kindUSER_OUTPUT")
-!pkg.torch.onnx.original_node_nametanhb[
-linear_1
+!pkg.torch.onnx.original_node_nametanhbè
+policy_logits
 
 
 "?
-0pkg.torch.export.graph_signature.OutputSpec.kindUSER_OUTPUTj-
+0pkg.torch.export.graph_signature.OutputSpec.kindUSER_OUTPUT"-
+!pkg.torch.onnx.original_node_namelinear_1j-
 base.conv.0.weight
 
 Ä
@@ -990,16 +993,16 @@ USER_INPUT"=
 /pkg.torch.export.graph_signature.InputSpec.kind	PARAMETER"=
 5pkg.torch.export.graph_signature.InputSpec.persistentNone"8
 !pkg.torch.onnx.original_node_namep_value_head_4_biasjR
-val_22
+val_57
 
 
 "<
-$pkg.onnxscript.optimizer.folded_from['val_20', 'val_21']jR
-val_27
+$pkg.onnxscript.optimizer.folded_from['val_55', 'val_56']jR
+val_64
 
 
 "<
-$pkg.onnxscript.optimizer.folded_from['val_25', 'val_26']j"
+$pkg.onnxscript.optimizer.folded_from['val_62', 'val_63']j"
 getitem
 
 
@@ -1012,7 +1015,7 @@ $pkg.onnxscript.optimizer.folded_from['val_25', 'val_26']j"
 Ä
 
 j$
-	getitem_5
+	getitem_3
 
 
 Ä
@@ -1023,15 +1026,14 @@ $pkg.onnxscript.optimizer.folded_from['val_25', 'val_26']j"
 
 Ä
 
-j%
-
-getitem_10
+j$
+	getitem_6
 
 
 Ä
 
-j 
-add_8
+j
+add
 
 
 Ä
@@ -1042,9 +1044,8 @@ getitem_10
 
 Ä
 
-j%
-
-getitem_15
+j$
+	getitem_9
 
 
 Ä
@@ -1057,13 +1058,13 @@ getitem_15
 
 j%
 
-getitem_20
+getitem_12
 
 
 Ä
 
-j!
-add_11
+j 
+add_1
 
 
 Ä
@@ -1076,7 +1077,7 @@ getitem_20
 
 j%
 
-getitem_25
+getitem_15
 
 
 Ä
@@ -1089,13 +1090,13 @@ getitem_25
 
 j%
 
-getitem_30
+getitem_18
 
 
 Ä
 
-j!
-add_14
+j 
+add_2
 
 
 Ä
@@ -1108,7 +1109,7 @@ getitem_30
 
 j%
 
-getitem_35
+getitem_21
 
 
 Ä
@@ -1121,13 +1122,13 @@ getitem_35
 
 j%
 
-getitem_40
+getitem_24
 
 
 Ä
 
-j!
-add_17
+j 
+add_3
 
 
 Ä
@@ -1140,7 +1141,7 @@ getitem_40
 
 j%
 
-getitem_45
+getitem_27
 
 
 Ä
@@ -1153,13 +1154,13 @@ getitem_45
 
 j%
 
-getitem_50
+getitem_30
 
 
 Ä
 
-j!
-add_20
+j 
+add_4
 
 
 Ä
@@ -1172,7 +1173,7 @@ getitem_50
 
 j%
 
-getitem_55
+getitem_33
 
 
 Ä
@@ -1185,13 +1186,13 @@ getitem_55
 
 j%
 
-getitem_60
+getitem_36
 
 
 Ä
 
-j!
-add_23
+j 
+add_5
 
 
 Ä
@@ -1204,7 +1205,7 @@ getitem_60
 
 j%
 
-getitem_65
+getitem_39
 
 
 Ä
@@ -1217,13 +1218,13 @@ getitem_65
 
 j%
 
-getitem_70
+getitem_42
 
 
 Ä
 
-j!
-add_26
+j 
+add_6
 
 
 Ä
@@ -1236,7 +1237,7 @@ getitem_70
 
 j%
 
-getitem_75
+getitem_45
 
 
 Ä
@@ -1249,13 +1250,13 @@ getitem_75
 
 j%
 
-getitem_80
+getitem_48
 
 
 Ä
 
-j!
-add_29
+j 
+add_7
 
 
 Ä
@@ -1268,7 +1269,7 @@ getitem_80
 
 j$
 
-getitem_85
+getitem_51
 
 
 
@@ -1289,7 +1290,7 @@ getitem_85
 
 j$
 
-getitem_90
+getitem_54
 
 
  
@@ -1305,8 +1306,8 @@ getitem_90
 	
 
 ¿
-ÇÕé
-0pkg.torch.export.ExportedProgram.graph_signatureóé
+Ç«k
+0pkg.torch.export.ExportedProgram.graph_signatureík
 # inputs
 p_base_conv_0_weight: PARAMETER target='base.conv.0.weight'
 p_base_conv_0_bias: PARAMETER target='base.conv.0.bias'
@@ -1448,65 +1449,8 @@ b_value_head_1_num_batches_tracked: BUFFER target='value_head.1.num_batches_trac
 x: USER_INPUT
 
 # outputs
-getitem_3: BUFFER_MUTATION target='base.conv.1.running_mean'
-getitem_4: BUFFER_MUTATION target='base.conv.1.running_var'
-add_5: BUFFER_MUTATION target='base.conv.1.num_batches_tracked'
-getitem_8: BUFFER_MUTATION target='base.res_blocks.0.batch_norm_1.running_mean'
-getitem_9: BUFFER_MUTATION target='base.res_blocks.0.batch_norm_1.running_var'
-add_6: BUFFER_MUTATION target='base.res_blocks.0.batch_norm_1.num_batches_tracked'
-getitem_13: BUFFER_MUTATION target='base.res_blocks.0.batch_norm_2.running_mean'
-getitem_14: BUFFER_MUTATION target='base.res_blocks.0.batch_norm_2.running_var'
-add_7: BUFFER_MUTATION target='base.res_blocks.0.batch_norm_2.num_batches_tracked'
-getitem_18: BUFFER_MUTATION target='base.res_blocks.1.batch_norm_1.running_mean'
-getitem_19: BUFFER_MUTATION target='base.res_blocks.1.batch_norm_1.running_var'
-add_9: BUFFER_MUTATION target='base.res_blocks.1.batch_norm_1.num_batches_tracked'
-getitem_23: BUFFER_MUTATION target='base.res_blocks.1.batch_norm_2.running_mean'
-getitem_24: BUFFER_MUTATION target='base.res_blocks.1.batch_norm_2.running_var'
-add_10: BUFFER_MUTATION target='base.res_blocks.1.batch_norm_2.num_batches_tracked'
-getitem_28: BUFFER_MUTATION target='base.res_blocks.2.batch_norm_1.running_mean'
-getitem_29: BUFFER_MUTATION target='base.res_blocks.2.batch_norm_1.running_var'
-add_12: BUFFER_MUTATION target='base.res_blocks.2.batch_norm_1.num_batches_tracked'
-getitem_33: BUFFER_MUTATION target='base.res_blocks.2.batch_norm_2.running_mean'
-getitem_34: BUFFER_MUTATION target='base.res_blocks.2.batch_norm_2.running_var'
-add_13: BUFFER_MUTATION target='base.res_blocks.2.batch_norm_2.num_batches_tracked'
-getitem_38: BUFFER_MUTATION target='base.res_blocks.3.batch_norm_1.running_mean'
-getitem_39: BUFFER_MUTATION target='base.res_blocks.3.batch_norm_1.running_var'
-add_15: BUFFER_MUTATION target='base.res_blocks.3.batch_norm_1.num_batches_tracked'
-getitem_43: BUFFER_MUTATION target='base.res_blocks.3.batch_norm_2.running_mean'
-getitem_44: BUFFER_MUTATION target='base.res_blocks.3.batch_norm_2.running_var'
-add_16: BUFFER_MUTATION target='base.res_blocks.3.batch_norm_2.num_batches_tracked'
-getitem_48: BUFFER_MUTATION target='base.res_blocks.4.batch_norm_1.running_mean'
-getitem_49: BUFFER_MUTATION target='base.res_blocks.4.batch_norm_1.running_var'
-add_18: BUFFER_MUTATION target='base.res_blocks.4.batch_norm_1.num_batches_tracked'
-getitem_53: BUFFER_MUTATION target='base.res_blocks.4.batch_norm_2.running_mean'
-getitem_54: BUFFER_MUTATION target='base.res_blocks.4.batch_norm_2.running_var'
-add_19: BUFFER_MUTATION target='base.res_blocks.4.batch_norm_2.num_batches_tracked'
-getitem_58: BUFFER_MUTATION target='base.res_blocks.5.batch_norm_1.running_mean'
-getitem_59: BUFFER_MUTATION target='base.res_blocks.5.batch_norm_1.running_var'
-add_21: BUFFER_MUTATION target='base.res_blocks.5.batch_norm_1.num_batches_tracked'
-getitem_63: BUFFER_MUTATION target='base.res_blocks.5.batch_norm_2.running_mean'
-getitem_64: BUFFER_MUTATION target='base.res_blocks.5.batch_norm_2.running_var'
-add_22: BUFFER_MUTATION target='base.res_blocks.5.batch_norm_2.num_batches_tracked'
-getitem_68: BUFFER_MUTATION target='base.res_blocks.6.batch_norm_1.running_mean'
-getitem_69: BUFFER_MUTATION target='base.res_blocks.6.batch_norm_1.running_var'
-add_24: BUFFER_MUTATION target='base.res_blocks.6.batch_norm_1.num_batches_tracked'
-getitem_73: BUFFER_MUTATION target='base.res_blocks.6.batch_norm_2.running_mean'
-getitem_74: BUFFER_MUTATION target='base.res_blocks.6.batch_norm_2.running_var'
-add_25: BUFFER_MUTATION target='base.res_blocks.6.batch_norm_2.num_batches_tracked'
-getitem_78: BUFFER_MUTATION target='base.res_blocks.7.batch_norm_1.running_mean'
-getitem_79: BUFFER_MUTATION target='base.res_blocks.7.batch_norm_1.running_var'
-add_27: BUFFER_MUTATION target='base.res_blocks.7.batch_norm_1.num_batches_tracked'
-getitem_83: BUFFER_MUTATION target='base.res_blocks.7.batch_norm_2.running_mean'
-getitem_84: BUFFER_MUTATION target='base.res_blocks.7.batch_norm_2.running_var'
-add_28: BUFFER_MUTATION target='base.res_blocks.7.batch_norm_2.num_batches_tracked'
-getitem_93: BUFFER_MUTATION target='policy_head.1.running_mean'
-getitem_94: BUFFER_MUTATION target='policy_head.1.running_var'
-add_31: BUFFER_MUTATION target='policy_head.1.num_batches_tracked'
-getitem_88: BUFFER_MUTATION target='value_head.1.running_mean'
-getitem_89: BUFFER_MUTATION target='value_head.1.running_var'
-add_30: BUFFER_MUTATION target='value_head.1.num_batches_tracked'
 tanh: USER_OUTPUT
 linear_1: USER_OUTPUT
-ÇJ
-2pkg.torch.export.ExportedProgram.range_constraints{s77: VR[0, int_oo]}B
+Ç8
+2pkg.torch.export.ExportedProgram.range_constraints{}B
  

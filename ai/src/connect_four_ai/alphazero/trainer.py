@@ -12,6 +12,10 @@ from .network import ResNet
 from .mcts import MCTS
 
 import time
+import datetime
+import logging
+logger = logging.getLogger(__name__)
+
 
 class AlphaZeroTrainer:
     """AlphaZero training implementation with self-play and neural network updates."""
@@ -51,7 +55,7 @@ class AlphaZeroTrainer:
         epoch_durations = []
         for epoch in range(int(training_epochs)):
             if self.verbose:
-                print(f"[{time.time() - time_start:.2f}s] Training epoch {epoch + 1}/{training_epochs} ({self.config.games_per_epoch} games per epoch)")
+                logging.info(f"[{time.time() - time_start:.2f}s] Training epoch {epoch + 1}/{training_epochs} ({self.config.games_per_epoch} games per epoch)")
 
             # Play specified number of games
             for _ in range(int(self.config.games_per_epoch)):
@@ -69,10 +73,18 @@ class AlphaZeroTrainer:
                 # Estimate remaining time using a simple linear trend of epoch durations
                 # Fit y = a + b*x over observed epochs (x = 1..n)
                 estimated_time_remaining = self.estimated_time_remaining_analytic(epoch_durations, training_epochs)
-                print(
-                    f"Estimated time remaining: {estimated_time_remaining:.2f}s "
-                    f"({estimated_time_remaining / 60:.2f}m) ({estimated_time_remaining / 3600:.2f}h)"
-                )
+                
+                # Format time remaining as hours:minutes:seconds
+                hours = int(estimated_time_remaining // 3600)
+                minutes = int((estimated_time_remaining % 3600) // 60)
+                seconds = int(estimated_time_remaining % 60)
+                time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                
+                # Calculate estimated finish time
+                finish_time = datetime.datetime.now() + datetime.timedelta(seconds=estimated_time_remaining)
+                finish_str = finish_time.strftime("%Y-%m-%d %H:%M:%S")
+                
+                logging.info(f"Estimated time remaining: {time_str} (approx. {finish_str})")
 
     def self_play(self):
         """Perform one episode of self-play."""
@@ -110,7 +122,7 @@ class AlphaZeroTrainer:
 
         # Logging if verbose
         if self.verbose and self.total_games % 100 == 0:
-            print(f"\nTotal Games: {self.total_games}, Items in Memory: {self.current_memory_index}, Search Iterations: {self.search_iterations}\n")
+            logging.info(f"Total Games: {self.total_games}, Items in Memory: {self.current_memory_index}, Search Iterations: {self.search_iterations}")
 
     def append_to_memory(self, state, value, visits):
         """
@@ -233,3 +245,33 @@ class AlphaZeroTrainer:
             avg = float(np.mean(epoch_durations)) if n_obs > 0 else 0.0
             remaining = max(0, int(training_epochs) - n_obs)
             return avg * remaining
+
+    # ----------------------------
+    # Checkpointing (resume support)
+    # ----------------------------
+    def save_checkpoint(self, path: str, elapsed_time: float = 0.0, config_history: list = None) -> None:
+        """Save training checkpoint containing model and optimizer state."""
+        checkpoint = {
+            'model_state_dict': self.network.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'search_iterations': self.search_iterations,
+            'total_games': self.total_games,
+            'config': self.config,
+            'config_history': config_history or [self.config],
+            'elapsed_time': elapsed_time,
+        }
+        torch.save(checkpoint, path)
+
+    def load_checkpoint(self, path: str, map_location=None, strict: bool = True) -> None:
+        """Load training checkpoint and restore model/optimizer/counters."""
+        if map_location is None:
+            map_location = self.config.device
+        # Use weights_only=False for checkpoints since they contain custom objects
+        checkpoint = torch.load(path, map_location=map_location, weights_only=False)
+        self.network.load_state_dict(checkpoint['model_state_dict'], strict=strict)
+        if 'optimizer_state_dict' in checkpoint:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.search_iterations = checkpoint.get('search_iterations', self.search_iterations)
+        self.total_games = checkpoint.get('total_games', self.total_games)
+        self.network.to(self.config.device)
+        self.network.eval()

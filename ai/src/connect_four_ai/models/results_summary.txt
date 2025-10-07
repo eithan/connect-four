@@ -1,0 +1,104 @@
+AlphaZero Training Summary
+==========================
+Total Training Time (includes prior training runs, if any): 00:44:43
+Total Games Trained: 2,000
+
+Start (UTC): 2025-10-06T19:04:43.380277Z
+End   (UTC): 2025-10-06T19:16:32.498181Z
+Elapsed Time: 709.118s (11.82m) (0.20h)
+
+Outputs:
+- Weights: /Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-weights.pth
+- TorchScript: /Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-model-ts.pt
+- ONNX: /Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-model.onnx
+
+Training Configs:
+
+Config 1:
+  - n_filters: 128
+  - n_res_blocks: 8
+  - exploration_constant: 2
+  - temperature: 1.25
+  - dirichlet_alpha: 1.0
+  - dirichlet_eps: 0.25
+  - learning_rate: 0.001
+  - training_epochs: 10
+  - games_per_epoch: 100
+  - minibatch_size: 128
+  - n_minibatches: 4
+  - mcts_start_search_iter: 30
+  - mcts_max_search_iter: 150
+  - mcts_search_increment: 1
+  - seed: None
+  - device: cpu
+
+Config 2:
+  - n_filters: 128
+  - n_res_blocks: 8
+  - exploration_constant: 2
+  - temperature: 1.25
+  - dirichlet_alpha: 1.0
+  - dirichlet_eps: 0.25
+  - learning_rate: 0.001
+  - training_epochs: 10
+  - games_per_epoch: 100
+  - minibatch_size: 128
+  - n_minibatches: 4
+  - mcts_start_search_iter: 30
+  - mcts_max_search_iter: 150
+  - mcts_search_increment: 1
+  - seed: None
+  - device: cpu
+
+JSON:
+{
+  "total_training_time_seconds": 2683.371,
+  "total_training_time_formatted": "00:44:43",
+  "total_games_trained": 2000,
+  "start_utc": "2025-10-06T19:04:43.380277Z",
+  "end_utc": "2025-10-06T19:16:32.498181Z",
+  "elapsed_seconds": 709.118,
+  "outputs": {
+    "weights_path": "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-weights.pth",
+    "torchscript_path": "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-model-ts.pt",
+    "onnx_path": "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-model.onnx"
+  },
+  "training_configs": [
+    {
+      "n_filters": 128,
+      "n_res_blocks": 8,
+      "exploration_constant": 2,
+      "temperature": 1.25,
+      "dirichlet_alpha": 1.0,
+      "dirichlet_eps": 0.25,
+      "learning_rate": 0.001,
+      "training_epochs": 10,
+      "games_per_epoch": 100,
+      "minibatch_size": 128,
+      "n_minibatches": 4,
+      "mcts_start_search_iter": 30,
+      "mcts_max_search_iter": 150,
+      "mcts_search_increment": 1,
+      "seed": null,
+      "device": "cpu"
+    },
+    {
+      "n_filters": 128,
+      "n_res_blocks": 8,
+      "exploration_constant": 2,
+      "temperature": 1.25,
+      "dirichlet_alpha": 1.0,
+      "dirichlet_eps": 0.25,
+      "learning_rate": 0.001,
+      "training_epochs": 10,
+      "games_per_epoch": 100,
+      "minibatch_size": 128,
+      "n_minibatches": 4,
+      "mcts_start_search_iter": 30,
+      "mcts_max_search_iter": 150,
+      "mcts_search_increment": 1,
+      "seed": null,
+      "device": "cpu"
+    }
+  ]
+}

@@ -36,11 +36,12 @@ def get_model_path(mode):
     model_files = {
         'weights': os.path.join(models_dir, 'alphazero-network-weights.pth'),
         'torchscript': os.path.join(models_dir, 'alphazero-network-model-ts.pt'),
-        'onnx': os.path.join(models_dir, 'alphazero-network-model.onnx')
+        'onnx': os.path.join(models_dir, 'alphazero-network-model.onnx'),
+        'checkpoint': os.path.join(models_dir, 'alphazero-checkpoint.pt')
     }
     return model_files.get(mode, model_files['weights'])
 
-def train(alphazero):
+def train(alphazero, resume: bool = False):
     import json
     from datetime import datetime
     import time
@@ -69,8 +70,28 @@ def train(alphazero):
     os.makedirs(models_dir, exist_ok=True)
     
     # this is our pytorch model containing the weights
+    models_dir = os.path.dirname(get_model_path('weights'))
+    os.makedirs(models_dir, exist_ok=True)
     weights_path = get_model_path('weights')
     torch.save(alphazero.network.state_dict(), weights_path)
+    
+    # Calculate total training time and accumulate config history
+    checkpoint_path = get_model_path('checkpoint')
+    total_elapsed_time = wall_elapsed
+    config_history = [config]
+    
+    if os.path.exists(checkpoint_path):
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+            if 'elapsed_time' in checkpoint:
+                total_elapsed_time = checkpoint['elapsed_time'] + wall_elapsed
+            if 'config_history' in checkpoint:
+                config_history = checkpoint['config_history'] + [config]
+        except Exception as e:
+            print(f"Warning: Could not load previous checkpoint for time accumulation: {e}")
+    
+    # save checkpoint (model + optimizer + counters + config history + total elapsed time)
+    alphazero.save_checkpoint(checkpoint_path, total_elapsed_time, config_history)
     print(f"Training completed! Model saved at {weights_path}.")
 
     # for Cloud deployment we have to use TorchScript and export to CPU
@@ -85,7 +106,37 @@ def train(alphazero):
 def write_results_summary(start_time, end_time, wall_elapsed, weights_path, models_dir):
     import json
     results_path = os.path.join(models_dir, 'results_summary.txt')
+    
+    # Load checkpoint to get config history and accumulated training time
+    checkpoint_path = get_model_path('checkpoint')
+    total_training_time = wall_elapsed
+    training_configs = [config]
+    
+    if os.path.exists(checkpoint_path):
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+            if 'elapsed_time' in checkpoint:
+                total_training_time = checkpoint['elapsed_time']  # This now contains the total accumulated time
+            if 'config_history' in checkpoint:
+                training_configs = checkpoint['config_history']
+            elif 'config' in checkpoint:
+                training_configs.append(checkpoint['config'])
+        except Exception as e:
+            print(f"Warning: Could not load checkpoint for config history: {e}")
+    
+    # Calculate total games trained across all configs
+    total_games_trained = sum(cfg.training_epochs * cfg.games_per_epoch for cfg in training_configs)
+    
+    # Format total training time nicely
+    hours = int(total_training_time // 3600)
+    minutes = int((total_training_time % 3600) // 60)
+    seconds = int(total_training_time % 60)
+    time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    
     summary = {
+        "total_training_time_seconds": round(total_training_time, 3),
+        "total_training_time_formatted": time_str,
+        "total_games_trained": total_games_trained,
         "start_utc": start_time.isoformat() + "Z",
         "end_utc": end_time.isoformat() + "Z",
         "elapsed_seconds": round(wall_elapsed, 3),
@@ -94,30 +145,34 @@ def write_results_summary(start_time, end_time, wall_elapsed, weights_path, mode
             "torchscript_path": get_model_path('torchscript'),
             "onnx_path": get_model_path('onnx'),
         },
-        "alpha_zero_config": {
-            "n_filters": config.n_filters,
-            "n_res_blocks": config.n_res_blocks,
-            "exploration_constant": config.exploration_constant,
-            "temperature": config.temperature,
-            "dirichlet_alpha": config.dirichlet_alpha,
-            "dirichlet_eps": config.dirichlet_eps,
-            "learning_rate": config.learning_rate,
-            "training_epochs": config.training_epochs,
-            "games_per_epoch": config.games_per_epoch,
-            "minibatch_size": config.minibatch_size,
-            "n_minibatches": config.n_minibatches,
-            "mcts_start_search_iter": config.mcts_start_search_iter,
-            "mcts_max_search_iter": config.mcts_max_search_iter,
-            "mcts_search_increment": config.mcts_search_increment,
-            "seed": config.seed,
-            "device": str(config.device),
-        },
+        "training_configs": [
+            {
+                "n_filters": cfg.n_filters,
+                "n_res_blocks": cfg.n_res_blocks,
+                "exploration_constant": cfg.exploration_constant,
+                "temperature": cfg.temperature,
+                "dirichlet_alpha": cfg.dirichlet_alpha,
+                "dirichlet_eps": cfg.dirichlet_eps,
+                "learning_rate": cfg.learning_rate,
+                "training_epochs": cfg.training_epochs,
+                "games_per_epoch": cfg.games_per_epoch,
+                "minibatch_size": cfg.minibatch_size,
+                "n_minibatches": cfg.n_minibatches,
+                "mcts_start_search_iter": cfg.mcts_start_search_iter,
+                "mcts_max_search_iter": cfg.mcts_max_search_iter,
+                "mcts_search_increment": cfg.mcts_search_increment,
+                "seed": cfg.seed,
+                "device": str(cfg.device),
+            } for cfg in training_configs
+        ],
     }
 
     with open(results_path, 'w') as f:
         # Human-friendly text with a JSON blob at the end for parsing
         f.write("AlphaZero Training Summary\n")
         f.write("==========================\n")
+        f.write(f"Total Training Time (includes prior training runs, if any): {time_str}\n")
+        f.write(f"Total Games Trained: {total_games_trained:,}\n\n")
         f.write(f"Start (UTC): {summary['start_utc']}\n")
         f.write(f"End   (UTC): {summary['end_utc']}\n")
         f.write(f"Elapsed Time: {summary['elapsed_seconds']}s ({summary['elapsed_seconds'] / 60:.2f}m) ({summary['elapsed_seconds'] / 3600:.2f}h)\n\n")
@@ -125,10 +180,13 @@ def write_results_summary(start_time, end_time, wall_elapsed, weights_path, mode
         f.write(f"- Weights: {summary['outputs']['weights_path']}\n")
         f.write(f"- TorchScript: {summary['outputs']['torchscript_path']}\n")
         f.write(f"- ONNX: {summary['outputs']['onnx_path']}\n\n")
-        f.write("Config:\n")
-        for k, v in summary['alpha_zero_config'].items():
-            f.write(f"- {k}: {v}\n")
-        f.write("\nJSON:\n")
+        f.write("Training Configs:\n\n")
+        for i, cfg in enumerate(summary['training_configs']):
+            f.write(f"Config {i+1}:\n")
+            for k, v in cfg.items():
+                f.write(f"  - {k}: {v}\n")
+            f.write("\n")
+        f.write("JSON:\n")
         f.write(json.dumps(summary, indent=2))
     print(f"Wrote results summary to {results_path}")    
     
@@ -272,6 +330,7 @@ def parse_arguments():
 
     parser.add_argument('--epochs', type=int, default=None, help='Override number of training epochs')
     parser.add_argument('--games_per_epoch', type=int, default=None, help='Override number of games per epoch')
+    parser.add_argument('--resume', action='store_true', help='Resume training from latest checkpoint or weights')
 
     return parser.parse_args()
 
@@ -291,8 +350,25 @@ if __name__ == "__main__":
     alphazero = AlphaZeroTrainer(game, config)
     
     if args.action == 'train':
+        # Optionally resume
+        if args.resume:
+            ckpt = get_model_path('checkpoint')
+            weights = get_model_path('weights')
+            if os.path.exists(ckpt):
+                print(f"Resuming from checkpoint: {ckpt}")
+                try:
+                    alphazero.load_checkpoint(ckpt)
+                except Exception as e:
+                    print(f"Failed to load checkpoint ({e}), trying weights: {weights}")
+                    if os.path.exists(weights):
+                        load_weights_to_alphazero(alphazero)
+            elif os.path.exists(weights):
+                print(f"Resuming from weights: {weights}")
+                load_weights_to_alphazero(alphazero)
+            else:
+                print("No checkpoint or weights found; starting fresh.")
         # Train the model
-        train(alphazero)
+        train(alphazero, resume=args.resume)
     elif args.action == 'export':
         if args.export_mode == 'torchscript':
             convert_weights_to_ts_model(alphazero)

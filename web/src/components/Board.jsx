@@ -134,7 +134,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
     }
     
     try {
-      const aiMove = await ai.getMove(board);
+      const aiMove = await ai.getMove(board, currentPlayer);
       console.log("*** AI move:", aiMove);
       return aiMove;
     } catch (error) {

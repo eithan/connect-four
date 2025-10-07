@@ -1,4 +1,4 @@
-//import * as ort from "onnxruntime-web";
+import * as ort from "onnxruntime-web";
 
 /**
  * ONNX Connect Four AI
@@ -9,19 +9,19 @@ class ConnectFourAI {
     this.session = null;
     this.inputName = null;
     this.outputName = null;
+    this.outputNames = [];
   }
 
   async init() {
     try {
       console.log('Initializing AI with model URL:', this.modelUrl);
       
-      // Configure onnxruntime-web to use CDN for WASM files
-      // Try without specifying wasmPaths first - let it use bundled files
-      // ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/';
-      
-      // Load the ONNX model in browser
-      console.log('Creating inference session...');
-      
+      // Optional performance hints
+      try {
+        ort.env.wasm.numThreads = Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
+        ort.env.wasm.simd = true;
+      } catch (_) {}
+
       // First, verify the model file is accessible
       try {
         const response = await fetch(this.modelUrl);
@@ -33,36 +33,56 @@ class ConnectFourAI {
         console.error('Failed to fetch model file:', fetchError);
         throw new Error(`Cannot access model file: ${fetchError.message}`);
       }
-      
-      // Try to load the model with explicit external data configuration
-      try {
-        const externalDataUrl = `${this.modelUrl}.data`;
-        console.log('Trying with external data:', externalDataUrl);
-        
-        this.session = await ort.InferenceSession.create(this.modelUrl, {
+
+      // Try to load the model with different configurations
+      let session = null;
+      const configs = [
+        // Try with external data first
+        {
           executionProviders: ['wasm'],
+          graphOptimizationLevel: 'all',
           externalData: [{
             path: 'alphazero-network-model.onnx.data',
-            data: externalDataUrl
+            data: `${this.modelUrl}.data`
           }]
-        });
-      } catch (externalDataError) {
-        console.log('External data approach failed, trying without:', externalDataError.message);
-        
-        // Fallback: try without external data
-        this.session = await ort.InferenceSession.create(this.modelUrl, {
+        },
+        // Fallback without external data
+        {
+          executionProviders: ['wasm'],
+          graphOptimizationLevel: 'all'
+        },
+        // Minimal config
+        {
           executionProviders: ['wasm']
-        });
+        }
+      ];
+
+      for (let i = 0; i < configs.length; i++) {
+        try {
+          console.log(`Trying ONNX config ${i + 1}/${configs.length}...`);
+          session = await ort.InferenceSession.create(this.modelUrl, configs[i]);
+          console.log(`Successfully loaded with config ${i + 1}`);
+          break;
+        } catch (configError) {
+          console.log(`Config ${i + 1} failed:`, configError.message);
+          if (i === configs.length - 1) {
+            throw configError; // Re-throw the last error
+          }
+        }
       }
-      
-      console.log('Model loaded successfully!');
-      console.log('Input names:', this.session.inputNames);
-      console.log('Output names:', this.session.outputNames);
-      
+
+      if (!session) {
+        throw new Error('All ONNX loading configurations failed');
+      }
+
+      this.session = session;
       this.inputName = this.session.inputNames[0];
-      this.outputName = this.session.outputNames[0];
+      this.outputNames = this.session.outputNames;
+      this.outputName = this.outputNames[0];
       
       console.log('AI initialization complete');
+      console.log('Input names:', this.session.inputNames);
+      console.log('Output names:', this.session.outputNames);
     } catch (error) {
       console.error('AI initialization failed:', error);
       throw error;
@@ -73,73 +93,116 @@ class ConnectFourAI {
    * Convert your 6x7 board to the 3-channel format the model expects
    * board: 2D array 6 rows x 7 columns
    */
-  encodeBoard(board) {
-    const channels = 3; // player1, empty, player2 (matching Python order)
+  encodeBoard(board, currentPlayer) {
+    const channels = 3; // current player, empty, opponent (matching Python order)
     const height = 6;
     const width = 7;
     const tensorData = new Float32Array(channels * height * width);
 
+    const opponentPlayer = currentPlayer === 1 ? 2 : 1;
+
     for (let r = 0; r < height; r++) {
       for (let c = 0; c < width; c++) {
         const idx = r * width + c;
-        const cell = board[r][c] || 0; // Convert null to 0
-        
-        // Match Python encode_state: (state == 1, state == 0, state == -1)
-        // Channel 0: player 1 positions (cell === 1)
-        tensorData[idx] = cell === 1 ? 1 : 0;
-        
-        // Channel 1: empty positions (cell === 0 or null)  
-        tensorData[width*height + idx] = (cell === 0 || cell === null) ? 1 : 0;
-        
-        // Channel 2: player 2 positions (cell === 2, but Python uses -1)
-        tensorData[2*width*height + idx] = cell === 2 ? 1 : 0;
+        const cell = board[r][c];
+
+        const isEmpty = cell === null || cell === 0 || cell === undefined;
+        const isCurrent = cell === currentPlayer;
+        const isOpponent = cell === opponentPlayer;
+
+        // Channel 0: current player positions (maps to Python state == 1)
+        tensorData[idx] = isCurrent ? 1 : 0;
+        // Channel 1: empty positions (maps to Python state == 0)
+        tensorData[width * height + idx] = isEmpty ? 1 : 0;
+        // Channel 2: opponent positions (maps to Python state == -1)
+        tensorData[2 * width * height + idx] = isOpponent ? 1 : 0;
       }
     }
-    
-    // Debug: Print the actual board values
-    console.log("Board values:", board.map(row => row.map(cell => cell || 0)));
-    
     return tensorData;
   }
 
-  async getMove(board) {
+  async getMove(board, currentPlayer) {
     try {
-      // The inputData should be a Flat32Array or similar typed array
-      const inputData = this.encodeBoard(board);
-
-      // inputShape should be an array representing the dimensions of the input
-      const inputShape = [1, 3, 6, 7];
-
-      // 2. Prepare the input tensor
-      const inputTensor = new ort.Tensor('float32', new Float32Array(inputData), inputShape);
-  
-      // 3. Create the feeds object
-      // The key (inputName) must match the input name defined in your ONNX model
-      const feeds = { [this.inputName]: inputTensor };
-  
-      const results = await this.session.run(feeds);
-
-      console.log('*********** Results:', results); // Log the actual results
-  
-      // Assume 'linear_1' (valueOutput) is the policy head because it has the correct shape.
-      // And 'output' (policyOutput) is the value head.
-      const policyOutput = results['207']; //results.linear_1;
-      const valueOutput = results.output; 
-
-      // Validate the policy output's shape before proceeding.
-      // For a 7-column board, the policy should be a 1D tensor of size 7.
-      if (!policyOutput || policyOutput.dims[1] !== 7) {
-        throw new Error(`Policy output not found or has wrong shape. Found shape: ${policyOutput.dims}`);
+      if (!this.session) {
+        throw new Error('AI session not initialized');
       }
 
-      const policyData = policyOutput.data;
-      const bestMove = this.getBestMoveFromPolicy(policyData);
+      const inputData = this.encodeBoard(board, currentPlayer);
+      const inputShape = [1, 3, 6, 7];
+      const inputTensor = new ort.Tensor('float32', inputData, inputShape);
+      const feeds = { [this.inputName]: inputTensor };
+
+      const results = await this.session.run(feeds);
+
+      // Identify policy and value outputs by shape
+      let policyTensor = null;
+      let valueTensor = null;
+      for (const tensor of Object.values(results)) {
+        const dims = tensor.dims || [];
+        if (dims.length === 2 && dims[1] === 7) {
+          policyTensor = tensor;
+        } else if (dims.length === 2 && dims[1] === 1) {
+          valueTensor = tensor;
+        }
+      }
+
+      if (!policyTensor) {
+        throw new Error('Policy output not found');
+      }
+
+      const logits = policyTensor.data; // Float32Array length 7
+
+      // Mask invalid moves, then softmax
+      const validColumns = this.getValidColumns(board);
+      const masked = new Float32Array(7);
+      for (let i = 0; i < 7; i++) {
+        masked[i] = validColumns.includes(i) ? logits[i] : -1e9;
+      }
+      const probs = this.softmax(masked);
+
+      // Choose argmax over valid columns
+      let bestMove = -1;
+      let bestProb = -1;
+      for (let i = 0; i < 7; i++) {
+        if (probs[i] > bestProb) {
+          bestProb = probs[i];
+          bestMove = i;
+        }
+      }
+
+      // Fallback if all invalid (shouldn't happen)
+      if (bestMove === -1) {
+        bestMove = validColumns.length > 0 ? validColumns[0] : -1;
+      }
 
       return bestMove;
     } catch (e) {
       console.error('Failed to inference ONNX model:', e);
       throw e;
     }
+  }
+
+  getValidColumns(board) {
+    const cols = [];
+    for (let c = 0; c < 7; c++) {
+      const top = board[0][c];
+      if (top === null || top === 0 || top === undefined) cols.push(c);
+    }
+    return cols;
+  }
+
+  softmax(arr) {
+    let max = -Infinity;
+    for (let i = 0; i < arr.length; i++) max = Math.max(max, arr[i]);
+    let sum = 0;
+    const exps = new Float32Array(arr.length);
+    for (let i = 0; i < arr.length; i++) {
+      const v = Math.exp(arr[i] - max);
+      exps[i] = v;
+      sum += v;
+    }
+    for (let i = 0; i < arr.length; i++) exps[i] = exps[i] / (sum || 1);
+    return exps;
   }
 
   getBestMoveFromPolicy(policyData) {

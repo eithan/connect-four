@@ -47,6 +47,9 @@ class Evaluator:
 
     def generate_examples(self) -> None:
         """Generate and prepare example states and actions for evaluation."""
+        if self.verbose:
+            logger.info(f"Generating {2 * self.num_examples} examples for evaluation...")
+            
         winning_examples = self.generate_examples_for_condition('win')
         blocking_examples = self.generate_examples_for_condition('block')
 
