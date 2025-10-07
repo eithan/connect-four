@@ -1,4 +1,4 @@
-import * as ort from "onnxruntime-web";
+//import * as ort from "onnxruntime-web";
 
 /**
  * ONNX Connect Four AI
