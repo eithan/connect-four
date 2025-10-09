@@ -1,11 +1,11 @@
 AlphaZero Training Summary
 ==========================
-Total Training Time (includes prior training runs, if any): 00:44:43
-Total Games Trained: 2,000
+Total Training Time (includes prior training runs, if any): 51:55:56
+Total Games Trained: 32,050
 
-Start (UTC): 2025-10-06T19:04:43.380277Z
-End   (UTC): 2025-10-06T19:16:32.498181Z
-Elapsed Time: 709.118s (11.82m) (0.20h)
+Start (UTC): 2025-10-07T12:05:05.005109Z
+End   (UTC): 2025-10-09T15:11:20.408210Z
+Elapsed Time: 183975.403s (3066.26m) (51.10h)
 
 Outputs:
 - Weights: /Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-weights.pth
@@ -22,8 +22,8 @@ Config 1:
   - dirichlet_alpha: 1.0
   - dirichlet_eps: 0.25
   - learning_rate: 0.001
-  - training_epochs: 10
-  - games_per_epoch: 100
+  - training_epochs: 1
+  - games_per_epoch: 50
   - minibatch_size: 128
   - n_minibatches: 4
   - mcts_start_search_iter: 30
@@ -41,7 +41,25 @@ Config 2:
   - dirichlet_eps: 0.25
   - learning_rate: 0.001
   - training_epochs: 10
-  - games_per_epoch: 100
+  - games_per_epoch: 200
+  - minibatch_size: 128
+  - n_minibatches: 4
+  - mcts_start_search_iter: 30
+  - mcts_max_search_iter: 150
+  - mcts_search_increment: 1
+  - seed: None
+  - device: cpu
+
+Config 3:
+  - n_filters: 128
+  - n_res_blocks: 8
+  - exploration_constant: 2
+  - temperature: 1.25
+  - dirichlet_alpha: 1.0
+  - dirichlet_eps: 0.25
+  - learning_rate: 0.001
+  - training_epochs: 120
+  - games_per_epoch: 250
   - minibatch_size: 128
   - n_minibatches: 4
   - mcts_start_search_iter: 30
@@ -52,12 +70,12 @@ Config 2:
 
 JSON:
 {
-  "total_training_time_seconds": 2683.371,
-  "total_training_time_formatted": "00:44:43",
-  "total_games_trained": 2000,
-  "start_utc": "2025-10-06T19:04:43.380277Z",
-  "end_utc": "2025-10-06T19:16:32.498181Z",
-  "elapsed_seconds": 709.118,
+  "total_training_time_seconds": 186956.821,
+  "total_training_time_formatted": "51:55:56",
+  "total_games_trained": 32050,
+  "start_utc": "2025-10-07T12:05:05.005109Z",
+  "end_utc": "2025-10-09T15:11:20.408210Z",
+  "elapsed_seconds": 183975.403,
   "outputs": {
     "weights_path": "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-weights.pth",
     "torchscript_path": "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/models/alphazero-network-model-ts.pt",
@@ -72,8 +90,8 @@ JSON:
       "dirichlet_alpha": 1.0,
       "dirichlet_eps": 0.25,
       "learning_rate": 0.001,
-      "training_epochs": 10,
-      "games_per_epoch": 100,
+      "training_epochs": 1,
+      "games_per_epoch": 50,
       "minibatch_size": 128,
       "n_minibatches": 4,
       "mcts_start_search_iter": 30,
@@ -91,7 +109,25 @@ JSON:
       "dirichlet_eps": 0.25,
       "learning_rate": 0.001,
       "training_epochs": 10,
-      "games_per_epoch": 100,
+      "games_per_epoch": 200,
+      "minibatch_size": 128,
+      "n_minibatches": 4,
+      "mcts_start_search_iter": 30,
+      "mcts_max_search_iter": 150,
+      "mcts_search_increment": 1,
+      "seed": null,
+      "device": "cpu"
+    },
+    {
+      "n_filters": 128,
+      "n_res_blocks": 8,
+      "exploration_constant": 2,
+      "temperature": 1.25,
+      "dirichlet_alpha": 1.0,
+      "dirichlet_eps": 0.25,
+      "learning_rate": 0.001,
+      "training_epochs": 120,
+      "games_per_epoch": 250,
       "minibatch_size": 128,
       "n_minibatches": 4,
       "mcts_start_search_iter": 30,

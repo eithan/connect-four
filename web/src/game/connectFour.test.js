@@ -130,6 +130,62 @@ describe('ConnectFourGame', () => {
     });
   });
 
+  describe('draw detection', () => {
+    test('detects draw when board is full', () => {
+      // Create a specific pattern that fills the board without creating 4 in a row
+      // Use a checkerboard-like pattern to prevent wins
+      const moves = [
+        // Fill in a pattern that prevents any 4-in-a-row
+        0, 2, 4, 6, 1, 3, 5, // Row 5
+        0, 2, 4, 6, 1, 3, 5, // Row 4  
+        0, 2, 4, 6, 1, 3, 5, // Row 3
+        0, 2, 4, 6, 1, 3, 5, // Row 2
+        0, 2, 4, 6, 1, 3, 5, // Row 1
+        0, 2, 4, 6, 1, 3, 5  // Row 0
+      ];
+      
+      // Make all moves except the last one
+      for (let i = 0; i < moves.length - 1; i++) {
+        game.makeMove(moves[i]);
+      }
+      
+      // The last move should result in a draw
+      game.makeMove(moves[moves.length - 1]);
+      
+      expect(game.getState().winner).toBe('draw');
+    });
+
+    test('isBoardFull returns true when board is full', () => {
+      // Fill the board in a pattern that avoids 4-in-a-row
+      // Use a checkerboard-like pattern to prevent wins
+      const moves = [
+        // Fill in a pattern that prevents any 4-in-a-row
+        0, 2, 4, 6, 1, 3, 5, // Row 5
+        0, 2, 4, 6, 1, 3, 5, // Row 4  
+        0, 2, 4, 6, 1, 3, 5, // Row 3
+        0, 2, 4, 6, 1, 3, 5, // Row 2
+        0, 2, 4, 6, 1, 3, 5, // Row 1
+        0, 2, 4, 6, 1, 3, 5  // Row 0
+      ];
+      
+      // Make all moves
+      for (let i = 0; i < moves.length; i++) {
+        game.makeMove(moves[i]);
+      }
+      
+      expect(game.isBoardFull()).toBe(true);
+    });
+
+    test('isBoardFull returns false when board has empty spaces', () => {
+      // Make a few moves but don't fill the board
+      game.makeMove(0);
+      game.makeMove(1);
+      game.makeMove(2);
+      
+      expect(game.isBoardFull()).toBe(false);
+    });
+  });
+
   describe('reset', () => {
     test('clears board', () => {
       game.makeMove(0);

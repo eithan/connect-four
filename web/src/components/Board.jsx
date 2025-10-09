@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Cell from './Cell';
 import { ConnectFourGame } from '../game/connectFour.js';
 import './Board.css';
 
 // WinningLine component to draw a continuous line through winning cells
-const WinningLine = ({ cells }) => {
+const WinningLine = ({ cells, boardRef }) => {
   if (cells.length < 2) return null;
 
   // Sort cells to determine line direction
@@ -21,25 +21,47 @@ const WinningLine = ({ cells }) => {
   const isVertical = firstCell.column === lastCell.column;
   const isDiagonal = !isHorizontal && !isVertical;
 
-  // Calculate positions as percentages of the board
-  const cellWidth = 100 / 7; // 7 columns
-  const cellHeight = 100 / 6; // 6 rows
-  // Board has aspect-ratio 7/6 → height = width * (6/7)
-  // Use this to convert height-percentage into width-percentage units for diagonal math
-  const heightToWidthRatio = 6 / 7;
+  // Compute exact pixel positions based on the board's real layout (padding + gaps)
+  const boardEl = boardRef?.current;
+  if (!boardEl) return null;
+
+  const computed = getComputedStyle(boardEl);
+  const paddingLeft = parseFloat(computed.paddingLeft) || 0;
+  const paddingRight = parseFloat(computed.paddingRight) || 0;
+  const paddingTop = parseFloat(computed.paddingTop) || 0;
+  const paddingBottom = parseFloat(computed.paddingBottom) || 0;
+  const columnGap = parseFloat(computed.columnGap || computed.gap) || 0;
+  const rowGap = parseFloat(computed.rowGap || computed.gap) || 0;
+
+  const columns = 7;
+  const rows = 6;
+
+  const contentWidth = boardEl.clientWidth - paddingLeft - paddingRight;
+  const contentHeight = boardEl.clientHeight - paddingTop - paddingBottom;
+
+  const cellWidthPx = (contentWidth - (columns - 1) * columnGap) / columns;
+  const cellHeightPx = (contentHeight - (rows - 1) * rowGap) / rows;
+
+  const centerOf = (row, col) => ({
+    x: paddingLeft + col * (cellWidthPx + columnGap) + cellWidthPx / 2,
+    y: paddingTop + row * (cellHeightPx + rowGap) + cellHeightPx / 2,
+  });
+
+  const startCenter = centerOf(firstCell.row, firstCell.column);
+  const endCenter = centerOf(lastCell.row, lastCell.column);
 
   let lineStyle = {};
 
   if (isHorizontal) {
-    const startX = firstCell.column * cellWidth + cellWidth / 2;
-    const endX = lastCell.column * cellWidth + cellWidth / 2;
-    const y = firstCell.row * cellHeight + cellHeight / 2;
+    const startX = startCenter.x;
+    const endX = endCenter.x;
+    const y = startCenter.y;
 
     lineStyle = {
       position: 'absolute',
-      left: `${startX}%`,
-      top: `${y}%`,
-      width: `${endX - startX}%`,
+      left: `${startX}px`,
+      top: `${y}px`,
+      width: `${endX - startX}px`,
       height: '6px',
       transform: 'translateY(-50%)',
       zIndex: 10,
@@ -51,16 +73,16 @@ const WinningLine = ({ cells }) => {
       </div>
     );
   } else if (isVertical) {
-    const x = firstCell.column * cellWidth + cellWidth / 2;
-    const startY = firstCell.row * cellHeight + cellHeight / 2;
-    const endY = lastCell.row * cellHeight + cellHeight / 2;
+    const x = startCenter.x;
+    const startY = startCenter.y;
+    const endY = endCenter.y;
 
     lineStyle = {
       position: 'absolute',
-      left: `${x}%`,
-      top: `${startY}%`,
+      left: `${x}px`,
+      top: `${startY}px`,
       width: '6px',
-      height: `${endY - startY}%`,
+      height: `${endY - startY}px`,
       transform: 'translateX(-50%)',
       zIndex: 10,
     };
@@ -71,26 +93,25 @@ const WinningLine = ({ cells }) => {
       </div>
     );
   } else {
-    // Diagonal: compute angle using width units for both axes to respect aspect ratio
-    const startX = firstCell.column * cellWidth + cellWidth / 2;
-    const endX = lastCell.column * cellWidth + cellWidth / 2;
-    const startY = firstCell.row * cellHeight + cellHeight / 2;
-    const endY = lastCell.row * cellHeight + cellHeight / 2;
+    // Diagonal in pixel space
+    const startX = startCenter.x;
+    const startY = startCenter.y;
+    const endX = endCenter.x;
+    const endY = endCenter.y;
 
-    const deltaX = endX - startX; // percent of board width
-    const deltaYHeightPct = endY - startY; // percent of board height
-    const deltaYWidthPct = deltaYHeightPct * heightToWidthRatio; // convert to width-relative percent
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
 
-    const lengthWidthPct = Math.sqrt(deltaX * deltaX + deltaYWidthPct * deltaYWidthPct);
-    const angle = Math.atan2(deltaYWidthPct, deltaX) * (180 / Math.PI);
+    const lengthPx = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
 
     lineStyle = {
       position: 'absolute',
-      left: `${startX}%`,
-      top: `${startY}%`,
-      width: `${lengthWidthPct}%`,
+      left: `${startX}px`,
+      top: `${startY}px`,
+      width: `${lengthPx}px`,
       height: '6px',
-      transform: `translateY(-50%) rotate(${angle}deg)` ,
+      transform: `translateY(-50%) rotate(${angle}deg)`,
       transformOrigin: '0 50%',
       zIndex: 10,
     };
@@ -111,6 +132,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
   const [lastMove, setLastMove] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [winningCells, setWinningCells] = useState([]);
+  const boardRef = useRef(null);
 
   const getRandomMove = async () => {
     // Check if AI is loading or has error
@@ -152,10 +174,16 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
       newBoard[move.row][move.column] = currentPlayer;
       setBoard(newBoard);
       setLastMove({ row: move.row, column: move.column });
-      
-      if (game.checkWin(move.row, move.column)) {
-        setWinner(currentPlayer);
-        setWinningCells(game.winningCells);
+
+      // Trust the game engine to determine outcome (win or draw)
+      const state = game.getState();
+      if (state.winner) {
+        if (state.winner === 'draw') {
+          setWinner('draw');
+        } else {
+          setWinner(state.winner === 'red' ? 1 : 2);
+        }
+        setWinningCells(state.winningCells || []);
       } else {
         setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
       }
@@ -295,6 +323,9 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
       return "Select players and start!";
     }
     if (winner) {
+      if (winner === 'draw') {
+        return "It's a draw!";
+      }
       return `${winner === 1 ? 'Red' : 'Yellow'} wins!`;
     }
     const currentPlayerType = currentPlayer === 1 ? playerTypes.red : playerTypes.yellow;
@@ -318,10 +349,10 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
 
   return (
     <div className="game-container">
-      <div data-testid="game-status" className={`status ${winner ? `winner-${winner === 1 ? 'red' : 'yellow'}` : ''}`}>
+      <div data-testid="game-status" className={`status ${winner ? (winner === 'draw' ? 'winner-draw' : `winner-${winner === 1 ? 'red' : 'yellow'}`) : ''}`}>
         {renderStatus()}
       </div>
-      <div className="board">
+      <div className="board" ref={boardRef}>
         {board.flatMap((row, rowIndex) => 
           row.map((cell, colIndex) => (
             <Cell
@@ -334,7 +365,7 @@ function Board({ playerTypes = { red: 'human', yellow: 'human' }, onPlayersChang
           ))
         )}
         {winningCells.length > 0 && (
-          <WinningLine cells={winningCells} />
+          <WinningLine cells={winningCells} boardRef={boardRef} />
         )}
       </div>
       <div className="player-selection">

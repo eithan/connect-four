@@ -70,25 +70,40 @@ class Evaluator:
         while len(examples) < self.num_examples:
             state = self.game.reset()
             while True:
+                # For blocking: if opponent has an immediate winning move next, the
+                # correct action for the current player is to play that column now.
+                if condition == 'block':
+                    valid_actions = self.game.get_valid_actions(state)
+                    for action in valid_actions:
+                        _, reward, _ = self.game.step(state, action, to_play=-1)
+                        if reward == -1:
+                            examples.append((state, action))
+                            break
+                    if len(examples) >= self.num_examples:
+                        break
+
+                # For winning: if current player can win immediately, label that move
+                if condition == 'win':
+                    valid_actions = self.game.get_valid_actions(state)
+                    for action in valid_actions:
+                        _, reward, _ = self.game.step(state, action, to_play=1)
+                        if reward == 1:
+                            examples.append((state, action))
+                            break
+                    if len(examples) >= self.num_examples:
+                        break
+
                 action = self.select_action(state)
                 next_state, reward, done = self.game.step(state, action, to_play=1)
-                
-                if condition == 'win' and reward == 1:
-                    examples.append((state, action))
-                    break
                 
                 if done:
                     break
                 
                 state = next_state
 
-                # Flipping the board for opponent's perspective
+                # Opponent move (random/heuristic) to explore more states
                 action = self.select_action(-state)
                 next_state, reward, done = self.game.step(state, action, to_play=-1)
-                
-                if condition == 'block' and reward == -1:
-                    examples.append((-state, action))
-                    break
                 
                 if done:
                     break

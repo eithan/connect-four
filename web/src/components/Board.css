@@ -54,6 +54,12 @@
   border: 1px solid #ccaa00;
 }
 
+.status.winner-draw {
+  background: #888888;
+  color: #ffffff;
+  border: 1px solid #666666;
+}
+
 /* Winning line styles and animations */
 .winning-line {
   position: absolute;
@@ -231,7 +237,7 @@
   }
   
   .board {
-    padding: 8px;
+    padding: 0;
   }
   
   .player-selection {
@@ -257,7 +263,7 @@
   }
   
   .board {
-    padding: 6px;
+    padding: 0;
   }
   
   .player-select {

@@ -90,32 +90,45 @@ class AlphaZeroTrainer:
         """Perform one episode of self-play."""
         state = self.game.reset()
         done = False
+        trajectory = []  # list of (state, visits)
+        final_reward = 0
         while not done:
             # Search for a move
             action, root = self.mcts.search(state, self.search_iterations, use_root_dirichlet_noise=True)
-
-            # Value target is the value of the MCTS root node
-            value = root.get_value()
 
             # Visit counts used to compute policy target
             visits = np.zeros(self.game.cols)
             for child_action, child in root.children.items():
                 visits[child_action] = child.n_visits
-            # Softmax so distribution sums to 1
-            visits /= np.sum(visits)
+            # Normalize so distribution sums to 1
+            total_visits = np.sum(visits)
+            if total_visits > 0:
+                visits /= total_visits
 
-            # Append state + value & policy targets to memory
-            self.append_to_memory(state, value, visits)
+            # Record the state and policy target; value targets assigned after game ends
+            trajectory.append((state.copy(), visits))
+
+            # Perform action in game
+            state, reward, done = self.game.step(state, action)
+            if done:
+                final_reward = reward
+                break
+
+            # Flip the board for the next player's perspective
+            state = -state
+
+        # Assign value targets from final outcome, alternating perspective back through the trajectory
+        num_moves = len(trajectory)
+        for i, (s, v) in enumerate(trajectory):
+            # If the final reward is from the perspective of the player who made the last move,
+            # then from the perspective of state i (current player at that time), the value alternates.
+            parity = (num_moves - 1 - i) % 2
+            value = final_reward if parity == 0 else -final_reward
+            self.append_to_memory(s, value, v)
 
             # If memory is full, perform a learning step
             if self.memory_full:
                 self.learn()
-
-            # Perform action in game
-            state, _, done = self.game.step(state, action)
-
-            # Flip the board
-            state = -state
 
         # Increment total games played
         self.total_games += 1

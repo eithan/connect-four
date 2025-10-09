@@ -757,18 +757,17 @@ main_graph*q€Bbase.conv.0.weightj-
 length512p*u €Bpolicy_head.0.weightj-
 location!alphazero-network-model.onnx.dataj
 offset79264j
-length147456p*› Bpolicy_head.0.biasJ€‡Ğ ¿¿÷>êI>>—gQ?_kÇ>_8?ù<?Œû>K‚ş¾JG?ÊÂ?&y‚?®û¶¾ŸŞ‰?Üùf?®.?ı~?/ä?O5?A˜¾ÉÍ@?ò4?’M°>-T?ªéì>J%e?Ã?ì˜>*÷=¬ù¾üù>?ªD?*pÀ
+length147456p*› Bpolicy_head.0.biasJ€VgÍ¾q¾cO?D	Õ=—<¼¾4(>>X¿œk¾˜`¼°cÀ¼düÄ½Ğ(O=Åï¿ğe¢<Š>4¦ê=v¸°½ˆ€x> 6<€¦³»PŠû< „Ù<l-›=C¬I¾ØX>®Õ¾Ğ¼½ ˜Y=Ğ4¾Dx½¬½”= ¢›=*pÀ
 Bpolicy_head.4.weightj-
 location!alphazero-network-model.onnx.dataj
 offset41632j
-length37632p*6Bpolicy_head.4.biasJÁ¨<{a½»X>m<ïà&<Id¼T\Ò<›;*s€Bvalue_head.0.weightj-
+length37632p*6Bpolicy_head.4.biasJËM½a‡›¼7vœ<VÚÁ=’Œ<B+¼êÌ5½*s€Bvalue_head.0.weightj-
 location!alphazero-network-model.onnx.dataj
 offset23200j
-length18432p*)Bvalue_head.0.biasJI
-ê½äŸw¾¬ã¾›?*l¨Bvalue_head.4.weightj-
+length18432p*)Bvalue_head.0.biasJgpˆ>ò|ª=N1¿ô»>*l¨Bvalue_head.4.weightj-
 location!alphazero-network-model.onnx.dataj
 offset8704j
-length672p*Bvalue_head.4.biasJï}J=*Bval_57J       ¨       *Bval_64J       @      ZÅ
+length672p*Bvalue_head.4.biasJ~ğÿ¼*Bval_57J       ¨       *Bval_64J       @      ZÅ
 input
 
 

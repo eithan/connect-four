@@ -19,7 +19,7 @@ class MCTS:
 
     def search(self, state, total_iterations, temperature=None, use_root_dirichlet_noise: bool = True):
         """Performs a search for the desired number of iterations, returns an action and the tree root."""
-        # Create the root
+        # Create the root (state is always from the perspective of the player to move)
         root = TreeNode(None, state, 1, self.game, self.config)
 
         # Expand the root, adding noise to each action
@@ -54,8 +54,11 @@ class MCTS:
 
         # Create a child for each possible valid action
         for action in valid_actions:
+            # Always place the piece for the current perspective (to_play=1),
+            # then flip the board so the child is from the next player's perspective
             child_state = -self.game.get_next_state(state, action, to_play=1)
-            root.children[action] = TreeNode(root, child_state, -1, self.game, self.config)
+            # to_play remains 1 because states are always stored from the perspective of the player to move
+            root.children[action] = TreeNode(root, child_state, 1, self.game, self.config)
             root.children[action].prob = float(priors[action])
 
         # Since we're not backpropagating, manually increase visits
@@ -150,9 +153,11 @@ class TreeNode:
 
         # Create a child for each possible action
         for action in valid_actions:
-            # Make move, then flip board to perspective of next player
-            child_state = -self.game.get_next_state(self.state, action, to_play=self.to_play)
-            self.children[action] = TreeNode(self, child_state, -self.to_play, self.game, self.config)
+            # Always make move as current perspective player (to_play=1), then flip
+            # so the child state is from the next player's perspective. Keep to_play=1
+            # because we always store states from the perspective of the player to move.
+            child_state = -self.game.get_next_state(self.state, action, to_play=1)
+            self.children[action] = TreeNode(self, child_state, 1, self.game, self.config)
 
     def select_child(self):
         """Select the child node with the highest PUCT score."""
@@ -167,9 +172,9 @@ class TreeNode:
 
     def calculate_puct(self, child):
         """Calculate the PUCT score for a given child node."""
-        # Scale Q(s,a) so it's between 0 and 1 so it's comparable to a probability
-        # Using 1 - Q(s,a) because it's from the perspectve of the child – the opposite of the parent
-        exploitation_term = 1 - (child.get_value() + 1) / 2
+        # Use Q from the parent's perspective (child stores values from its own perspective)
+        # Parent-perspective Q(s,a) = -child.get_value()
+        exploitation_term = -child.get_value()
         exploration_term = child.prob * math.sqrt(self.n_visits) / (child.n_visits + 1)
         return exploitation_term + self.config.exploration_constant * exploration_term
 

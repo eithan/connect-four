@@ -29,6 +29,8 @@ export class ConnectFourGame {
     
     if (this.checkWin(row, column)) {
       this.winner = this.currentPlayer;
+    } else if (this.isBoardFull()) {
+      this.winner = 'draw';
     } else {
       this.currentPlayer = this.currentPlayer === 'red' ? 'yellow' : 'red';
     }
@@ -52,6 +54,16 @@ export class ConnectFourGame {
       }
     }
     return availableColumns;
+  }
+
+  isBoardFull() {
+    // Check if all columns are full (top row has no empty spaces)
+    for (let col = 0; col < 7; col++) {
+      if (this.board[0][col] === null || this.board[0][col] === undefined) {
+        return false;
+      }
+    }
+    return true;
   }
 
   checkWin(row, column) {
