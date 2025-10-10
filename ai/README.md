@@ -1,33 +1,48 @@
-To train:
-poetry run python train.py --action train --verbose --resume --epochs 10 --games_per_epoch 100
-This will resume from its last checkpoint, if any. Recommended training size >= 100 epochs x 200 games/epoch = 20000 games.
-Training summary is recorded in models/results_summary.txt.
-Models are placed inside the models folder. There will be one regular pytorch model, one Torchscript model, and one ONNX model.
-There will be a checkpoint model used only for training purposes, in case you want to train the same model iteratively.
+### AlphaZero training (short guide)
 
-To test:
-poetry run python train.py --action play --play_mode weights
-poetry run python train.py --action play --play_mode torchscript
-poetry run python train.py --action play --play_mode onnx
+#### 1) Environment setup
 
-----
+```bash
+poetry install
+```
 
-Notes:
+#### 2) Train (resumable)
 
-Connect 4 in Javascript -- contains all game logic; only server call needed is for AI moves
-AI in Python --
-  * Using AlphaZero code from https://www.kaggle.com/code/auxeno/alphazero-connect-4-rl/notebook
-  * Trained the model locally with 50 epochs and 100 games/epoch (doesn't seem to play too well yet)
-  * Trained the model locally with 100 epochs and 200 games/epoch (plays better but not perfectly)
-    ** Took 23 hours on a Mac Pro M4 Max with 16 Core CPU, 40 Core GPU, and 64 GB of unified memory
-  * Converted to TorchScript for faster loading (converts into a static graph that loads faster, doesn't need full Python model)
-    ** This would be used on Google Cloud if I build a Python server for the AI player
-  * Converted to Onnx model and implemented some javascript to load it
-    ** TODO: Confirm whether the javascript is correct
-    ** TODO: make sure to set a cache policy on the public model file
-    ** TODO: See whether this is a sustainable method for browser-only playing (load-time, etc)
-    ** TODO: Fully implement this in the game as an AI player
-    ** TODO: unit tests!
+```bash
+poetry run python -m connect_four_ai.train --action train --verbose --resume --epochs 10 --games_per_epoch 100
+```
 
-  * TODO: Clean up the python code, remove all the cruft from Cursor (cli, game, play, etc)
-  * TODO: stream-line the AI Python library to just build the Onnx file and copy it appropriately/etc if using Onnx in game
+- Outputs land in `src/connect_four_ai/models/`:
+  - `alphazero-network-weights.pth` (PyTorch weights)
+  - `alphazero-network-model-ts.pt` (TorchScript)
+  - `alphazero-network-model.onnx` (+ `.onnx.data` if emitted)
+  - `alphazero-checkpoint.pt` (resume + total time/config history)
+  - `results_summary.txt` (aggregated metrics and paths)
+
+Recommended for better play: ≥ 100 epochs × ≥ 200 games/epoch.
+
+#### 3) Test Python-side inference
+
+```bash
+poetry run python -m connect_four_ai.train --action play --play_mode weights
+poetry run python -m connect_four_ai.train --action play --play_mode torchscript
+poetry run python -m connect_four_ai.train --action play --play_mode onnx
+```
+
+#### 4) Use the model in the web app
+
+Copy the ONNX artifacts into the web app `public` folder, then run the site.
+
+```bash
+cp src/connect_four_ai/models/alphazero-network-model.onnx ../web/public/
+cp src/connect_four_ai/models/alphazero-network-model.onnx.data ../web/public/  # if present
+cd ../web && npm run dev
+```
+
+#### Credits:
+- AlphaZero adapted from an amazing write-up and implementation by Kaggle user auxeno at https://www.kaggle.com/code/auxeno/alphazero-connect-4-rl/notebook
+
+#### Notes:
+- The shipped browser model (in `web/public`) was trained for 67 hours on a 16‑core M4 Max MacBook Pro with 64 GB RAM and a 40‑core GPU.
+- ONNX is used for cross‑platform, serverless inference via `onnxruntime‑web`.
+- TorchScript is useful for Python server deployments.
