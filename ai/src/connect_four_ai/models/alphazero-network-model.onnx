@@ -1,1455 +1,0 @@
-
-pytorch2.8.0:µ®
-®
-input
-base.conv.0.weight
-base.conv.0.biasgetitemnode_Conv_29"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-ó
-getitemrelu	node_relu"ReluJ‡
-	namespace“: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.conv: torch.nn.modules.container.Sequential/base.conv.2: torch.nn.modules.activation.ReLU/relu: aten.relu.defaultJﬂ
-pkg.torch.onnx.class_hierarchyº['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
-pkg.torch.onnx.fx_nodej%relu : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%getitem,), kwargs = {})JN
-pkg.torch.onnx.name_scopes0['', 'base', 'base.conv', 'base.conv.2', 'relu']Jÿ
-pkg.torch.onnx.stack_traceπFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 71, in forward
-    x = self.conv(x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
-    input = module(input)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-√
-relu
-base.res_blocks.0.conv_1.weight
-base.res_blocks.0.conv_1.bias	getitem_3node_Conv_30"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-«
-	getitem_3relu_1node_relu_1"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.0: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.0.relu: torch.nn.modules.activation.ReLU/relu_1: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jà
-pkg.torch.onnx.fx_noden%relu_1 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_3,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.0', 'base.res_blocks.0.relu', 'relu_1']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
-    output = self.relu(self.batch_norm_1(self.conv_1(x)))
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-≈
-relu_1
-base.res_blocks.0.conv_2.weight
-base.res_blocks.0.conv_2.bias	getitem_6node_Conv_31"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-—
-	getitem_6
-reluaddnode_add"AddJ¡
-	namespace≥: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.0: connect_four_ai.alphazero.network.ResidualBlock/add: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jâ
-pkg.torch.onnx.fx_nodeo%add : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_6, %relu), kwargs = {})JF
-pkg.torch.onnx.name_scopes(['', 'base', 'base.res_blocks.0', 'add']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-¢
-addrelu_2node_relu_2"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.0: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.0.relu: torch.nn.modules.activation.ReLU/relu_2: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÇ
-pkg.torch.onnx.fx_nodeh%relu_2 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.0', 'base.res_blocks.0.relu', 'relu_2']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-≈
-relu_2
-base.res_blocks.1.conv_1.weight
-base.res_blocks.1.conv_1.bias	getitem_9node_Conv_32"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-«
-	getitem_9relu_3node_relu_3"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.1: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.1.relu: torch.nn.modules.activation.ReLU/relu_3: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jà
-pkg.torch.onnx.fx_noden%relu_3 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_9,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.1', 'base.res_blocks.1.relu', 'relu_3']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
-    output = self.relu(self.batch_norm_1(self.conv_1(x)))
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-∆
-relu_3
-base.res_blocks.1.conv_2.weight
-base.res_blocks.1.conv_2.bias
-getitem_12node_Conv_33"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-·
-
-getitem_12
-relu_2add_1
-node_add_1"AddJ√
-	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.1: connect_four_ai.alphazero.network.ResidualBlock/add_1: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jé
-pkg.torch.onnx.fx_nodet%add_1 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_12, %relu_2), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.1', 'add_1']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-¶
-add_1relu_4node_relu_4"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.1: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.1.relu: torch.nn.modules.activation.ReLU/relu_4: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
-pkg.torch.onnx.fx_nodej%relu_4 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_1,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.1', 'base.res_blocks.1.relu', 'relu_4']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-∆
-relu_4
-base.res_blocks.2.conv_1.weight
-base.res_blocks.2.conv_1.bias
-getitem_15node_Conv_34"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-…
-
-getitem_15relu_5node_relu_5"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.2: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.2.relu: torch.nn.modules.activation.ReLU/relu_5: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jâ
-pkg.torch.onnx.fx_nodeo%relu_5 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_15,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.2', 'base.res_blocks.2.relu', 'relu_5']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
-    output = self.relu(self.batch_norm_1(self.conv_1(x)))
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-∆
-relu_5
-base.res_blocks.2.conv_2.weight
-base.res_blocks.2.conv_2.bias
-getitem_18node_Conv_35"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-·
-
-getitem_18
-relu_4add_2
-node_add_2"AddJ√
-	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.2: connect_four_ai.alphazero.network.ResidualBlock/add_2: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jé
-pkg.torch.onnx.fx_nodet%add_2 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_18, %relu_4), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.2', 'add_2']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-¶
-add_2relu_6node_relu_6"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.2: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.2.relu: torch.nn.modules.activation.ReLU/relu_6: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
-pkg.torch.onnx.fx_nodej%relu_6 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_2,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.2', 'base.res_blocks.2.relu', 'relu_6']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-∆
-relu_6
-base.res_blocks.3.conv_1.weight
-base.res_blocks.3.conv_1.bias
-getitem_21node_Conv_36"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-…
-
-getitem_21relu_7node_relu_7"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.3: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.3.relu: torch.nn.modules.activation.ReLU/relu_7: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jâ
-pkg.torch.onnx.fx_nodeo%relu_7 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_21,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.3', 'base.res_blocks.3.relu', 'relu_7']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
-    output = self.relu(self.batch_norm_1(self.conv_1(x)))
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-∆
-relu_7
-base.res_blocks.3.conv_2.weight
-base.res_blocks.3.conv_2.bias
-getitem_24node_Conv_37"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-·
-
-getitem_24
-relu_6add_3
-node_add_3"AddJ√
-	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.3: connect_four_ai.alphazero.network.ResidualBlock/add_3: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jé
-pkg.torch.onnx.fx_nodet%add_3 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_24, %relu_6), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.3', 'add_3']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-¶
-add_3relu_8node_relu_8"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.3: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.3.relu: torch.nn.modules.activation.ReLU/relu_8: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÑ
-pkg.torch.onnx.fx_nodej%relu_8 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_3,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.3', 'base.res_blocks.3.relu', 'relu_8']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-∆
-relu_8
-base.res_blocks.4.conv_1.weight
-base.res_blocks.4.conv_1.bias
-getitem_27node_Conv_38"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-…
-
-getitem_27relu_9node_relu_9"ReluJˇ
-	namespaceÒ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.4: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.4.relu: torch.nn.modules.activation.ReLU/relu_9: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jâ
-pkg.torch.onnx.fx_nodeo%relu_9 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_27,), kwargs = {})Jc
-pkg.torch.onnx.name_scopesE['', 'base', 'base.res_blocks.4', 'base.res_blocks.4.relu', 'relu_9']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
-    output = self.relu(self.batch_norm_1(self.conv_1(x)))
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-∆
-relu_9
-base.res_blocks.4.conv_2.weight
-base.res_blocks.4.conv_2.bias
-getitem_30node_Conv_39"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-·
-
-getitem_30
-relu_8add_4
-node_add_4"AddJ√
-	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.4: connect_four_ai.alphazero.network.ResidualBlock/add_4: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jé
-pkg.torch.onnx.fx_nodet%add_4 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_30, %relu_8), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.4', 'add_4']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-´
-add_4relu_10node_relu_10"ReluJÄ
-	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.4: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.4.relu: torch.nn.modules.activation.ReLU/relu_10: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
-pkg.torch.onnx.fx_nodek%relu_10 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_4,), kwargs = {})Jd
-pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.4', 'base.res_blocks.4.relu', 'relu_10']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-«
-relu_10
-base.res_blocks.5.conv_1.weight
-base.res_blocks.5.conv_1.bias
-getitem_33node_Conv_40"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-Œ
-
-getitem_33relu_11node_relu_11"ReluJÄ
-	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.5: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.5.relu: torch.nn.modules.activation.ReLU/relu_11: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_11 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_33,), kwargs = {})Jd
-pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.5', 'base.res_blocks.5.relu', 'relu_11']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
-    output = self.relu(self.batch_norm_1(self.conv_1(x)))
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-«
-relu_11
-base.res_blocks.5.conv_2.weight
-base.res_blocks.5.conv_2.bias
-getitem_36node_Conv_41"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-„
-
-getitem_36
-relu_10add_5
-node_add_5"AddJ√
-	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.5: connect_four_ai.alphazero.network.ResidualBlock/add_5: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%add_5 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_36, %relu_10), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.5', 'add_5']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-´
-add_5relu_12node_relu_12"ReluJÄ
-	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.5: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.5.relu: torch.nn.modules.activation.ReLU/relu_12: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
-pkg.torch.onnx.fx_nodek%relu_12 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_5,), kwargs = {})Jd
-pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.5', 'base.res_blocks.5.relu', 'relu_12']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-«
-relu_12
-base.res_blocks.6.conv_1.weight
-base.res_blocks.6.conv_1.bias
-getitem_39node_Conv_42"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-Œ
-
-getitem_39relu_13node_relu_13"ReluJÄ
-	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.6: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.6.relu: torch.nn.modules.activation.ReLU/relu_13: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_13 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_39,), kwargs = {})Jd
-pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.6', 'base.res_blocks.6.relu', 'relu_13']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
-    output = self.relu(self.batch_norm_1(self.conv_1(x)))
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-«
-relu_13
-base.res_blocks.6.conv_2.weight
-base.res_blocks.6.conv_2.bias
-getitem_42node_Conv_43"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-„
-
-getitem_42
-relu_12add_6
-node_add_6"AddJ√
-	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.6: connect_four_ai.alphazero.network.ResidualBlock/add_6: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%add_6 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_42, %relu_12), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.6', 'add_6']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-´
-add_6relu_14node_relu_14"ReluJÄ
-	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.6: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.6.relu: torch.nn.modules.activation.ReLU/relu_14: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
-pkg.torch.onnx.fx_nodek%relu_14 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_6,), kwargs = {})Jd
-pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.6', 'base.res_blocks.6.relu', 'relu_14']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-«
-relu_14
-base.res_blocks.7.conv_1.weight
-base.res_blocks.7.conv_1.bias
-getitem_45node_Conv_44"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-Œ
-
-getitem_45relu_15node_relu_15"ReluJÄ
-	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.7: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.7.relu: torch.nn.modules.activation.ReLU/relu_15: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_15 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_45,), kwargs = {})Jd
-pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.7', 'base.res_blocks.7.relu', 'relu_15']J¿
-pkg.torch.onnx.stack_trace°File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 92, in forward
-    output = self.relu(self.batch_norm_1(self.conv_1(x)))
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-«
-relu_15
-base.res_blocks.7.conv_2.weight
-base.res_blocks.7.conv_2.bias
-getitem_48node_Conv_45"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-„
-
-getitem_48
-relu_14add_7
-node_add_7"AddJ√
-	namespaceµ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.7: connect_four_ai.alphazero.network.ResidualBlock/add_7: aten.add.TensorJ√
-pkg.torch.onnx.class_hierarchy†['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'aten.add.Tensor']Jè
-pkg.torch.onnx.fx_nodeu%add_7 : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%getitem_48, %relu_14), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'base', 'base.res_blocks.7', 'add_7']JÀ
-pkg.torch.onnx.stack_trace¨File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-´
-add_7relu_16node_relu_16"ReluJÄ
-	namespaceÚ: connect_four_ai.alphazero.network.ResNet/base: connect_four_ai.alphazero.network.ConvBase/base.res_blocks.7: connect_four_ai.alphazero.network.ResidualBlock/base.res_blocks.7.relu: torch.nn.modules.activation.ReLU/relu_16: aten.relu.defaultJÈ
-pkg.torch.onnx.class_hierarchy∆['connect_four_ai.alphazero.network.ResNet', 'connect_four_ai.alphazero.network.ConvBase', 'connect_four_ai.alphazero.network.ResidualBlock', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']JÖ
-pkg.torch.onnx.fx_nodek%relu_16 : [num_users=2] = call_function[target=torch.ops.aten.relu.default](args = (%add_7,), kwargs = {})Jd
-pkg.torch.onnx.name_scopesF['', 'base', 'base.res_blocks.7', 'base.res_blocks.7.relu', 'relu_16']Jß
-pkg.torch.onnx.stack_traceàFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 43, in forward
-    x = self.base(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 73, in forward
-    x = block(x)
-  File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 94, in forward
-    return self.relu(output + x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-Ø
-relu_16
-value_head.0.weight
-value_head.0.bias
-getitem_51node_Conv_46"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-»	
-
-getitem_51relu_17node_relu_17"ReluJ¥
-	namespace¶: connect_four_ai.alphazero.network.ResNet/value_head: torch.nn.modules.container.Sequential/value_head.2: torch.nn.modules.activation.ReLU/relu_17: aten.relu.defaultJ±
-pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_17 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_51,), kwargs = {})JK
-pkg.torch.onnx.name_scopes-['', 'value_head', 'value_head.2', 'relu_17']J◊
-pkg.torch.onnx.stack_trace∏File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
-    x_value = self.value_head(x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
-    input = module(input)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-›	
-relu_17
-val_57view	node_view"Reshape*
-	allowzero†J±
-	namespace£: connect_four_ai.alphazero.network.ResNet/value_head: torch.nn.modules.container.Sequential/value_head.3: torch.nn.modules.flatten.Flatten/view: aten.view.defaultJ±
-pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.flatten.Flatten', 'aten.view.default']Jç
-pkg.torch.onnx.fx_nodes%view : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%relu_17, [1, 168]), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'value_head', 'value_head.3', 'view']J€
-pkg.torch.onnx.stack_traceºFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
-    x_value = self.value_head(x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
-    input = module(input)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/flatten.py", line 53, in forward
-    return input.flatten(self.start_dim, self.end_dim)
-Œ
-
-view
-value_head.4.weight
-value_head.4.biaslinearnode_linear"Gemm*
-beta  Ä?†*
-transB†*
-alpha  Ä?†*
-transA †J≥
-	namespace•: connect_four_ai.alphazero.network.ResNet/value_head: torch.nn.modules.container.Sequential/value_head.4: torch.nn.modules.linear.Linear/linear: aten.linear.defaultJ±
-pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.linear.Linear', 'aten.linear.default']J≥
-pkg.torch.onnx.fx_nodeò%linear : [num_users=1] = call_function[target=torch.ops.aten.linear.default](args = (%view, %p_value_head_4_weight, %p_value_head_4_bias), kwargs = {})JJ
-pkg.torch.onnx.name_scopes,['', 'value_head', 'value_head.4', 'linear']J◊
-pkg.torch.onnx.stack_trace∏File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
-    x_value = self.value_head(x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
-    input = module(input)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/linear.py", line 125, in forward
-    return F.linear(input, self.weight, self.bias)
-†	
-linearvalue	node_tanh"TanhJ±
-	namespace£: connect_four_ai.alphazero.network.ResNet/value_head: torch.nn.modules.container.Sequential/value_head.5: torch.nn.modules.activation.Tanh/tanh: aten.tanh.defaultJ±
-pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.Tanh', 'aten.tanh.default']JÉ
-pkg.torch.onnx.fx_nodei%tanh : [num_users=1] = call_function[target=torch.ops.aten.tanh.default](args = (%linear,), kwargs = {})JH
-pkg.torch.onnx.name_scopes*['', 'value_head', 'value_head.5', 'tanh']J≈
-pkg.torch.onnx.stack_trace¶File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 44, in forward
-    x_value = self.value_head(x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
-    input = module(input)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 394, in forward
-    return torch.tanh(input)
-±
-relu_16
-policy_head.0.weight
-policy_head.0.bias
-getitem_54node_Conv_47"Conv*
-group†*
-pads@@@@†*
-strides@@†*
-auto_pad"NOTSET†*
-	dilations@@†
-Œ	
-
-getitem_54relu_18node_relu_18"ReluJ∂
-	namespace®: connect_four_ai.alphazero.network.ResNet/policy_head: torch.nn.modules.container.Sequential/policy_head.2: torch.nn.modules.activation.ReLU/relu_18: aten.relu.defaultJ±
-pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.activation.ReLU', 'aten.relu.default']Jä
-pkg.torch.onnx.fx_nodep%relu_18 : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%getitem_54,), kwargs = {})JM
-pkg.torch.onnx.name_scopes/['', 'policy_head', 'policy_head.2', 'relu_18']JŸ
-pkg.torch.onnx.stack_trace∫File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 45, in forward
-    x_policy = self.policy_head(x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
-    input = module(input)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/activation.py", line 135, in forward
-    return F.relu(input, inplace=self.inplace)
-Ó	
-relu_18
-val_64view_1node_view_1"Reshape*
-	allowzero†Jµ
-	namespaceß: connect_four_ai.alphazero.network.ResNet/policy_head: torch.nn.modules.container.Sequential/policy_head.3: torch.nn.modules.flatten.Flatten/view_1: aten.view.defaultJ±
-pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.flatten.Flatten', 'aten.view.default']Jê
-pkg.torch.onnx.fx_nodev%view_1 : [num_users=1] = call_function[target=torch.ops.aten.view.default](args = (%relu_18, [1, 1344]), kwargs = {})JL
-pkg.torch.onnx.name_scopes.['', 'policy_head', 'policy_head.3', 'view_1']J›
-pkg.torch.onnx.stack_traceæFile "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 45, in forward
-    x_policy = self.policy_head(x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
-    input = module(input)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/flatten.py", line 53, in forward
-    return input.flatten(self.start_dim, self.end_dim)
-Î
-
-view_1
-policy_head.4.weight
-policy_head.4.biaspolicy_logitsnode_linear_1"Gemm*
-beta  Ä?†*
-transB†*
-alpha  Ä?†*
-transA †J∑
-	namespace©: connect_four_ai.alphazero.network.ResNet/policy_head: torch.nn.modules.container.Sequential/policy_head.4: torch.nn.modules.linear.Linear/linear_1: aten.linear.defaultJ±
-pkg.torch.onnx.class_hierarchyé['connect_four_ai.alphazero.network.ResNet', 'torch.nn.modules.container.Sequential', 'torch.nn.modules.linear.Linear', 'aten.linear.default']Jπ
-pkg.torch.onnx.fx_nodeû%linear_1 : [num_users=1] = call_function[target=torch.ops.aten.linear.default](args = (%view_1, %p_policy_head_4_weight, %p_policy_head_4_bias), kwargs = {})JN
-pkg.torch.onnx.name_scopes0['', 'policy_head', 'policy_head.4', 'linear_1']JŸ
-pkg.torch.onnx.stack_trace∫File "/Users/eithan/development/cursor/connect-four/ai/src/connect_four_ai/alphazero/network.py", line 45, in forward
-    x_policy = self.policy_head(x)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/container.py", line 244, in forward
-    input = module(input)
-  File "/Users/eithan/Library/Caches/pypoetry/virtualenvs/connect-four-ai-6X4jT3Yc-py3.12/lib/python3.12/site-packages/torch/nn/modules/linear.py", line 125, in forward
-    return F.linear(input, self.weight, self.bias)
-main_graph*qÄBbase.conv.0.weightj-
-location!alphazero-network-model.onnx.dataj
-offset9376j
-length13824p*dÄBbase.conv.0.biasj-
-location!alphazero-network-model.onnx.dataj
-offset0j
-length512p*ÇÄÄBbase.res_blocks.0.conv_1.weightj-
-location!alphazero-network-model.onnx.dataj
-offset226720j
-length589824p*sÄBbase.res_blocks.0.conv_1.biasj-
-location!alphazero-network-model.onnx.dataj
-offset512j
-length512p*ÇÄÄBbase.res_blocks.0.conv_2.weightj-
-location!alphazero-network-model.onnx.dataj
-offset816544j
-length589824p*tÄBbase.res_blocks.0.conv_2.biasj-
-location!alphazero-network-model.onnx.dataj
-offset1024j
-length512p*ÉÄÄBbase.res_blocks.1.conv_1.weightj-
-location!alphazero-network-model.onnx.dataj
-offset1406368j
-length589824p*tÄBbase.res_blocks.1.conv_1.biasj-
-location!alphazero-network-model.onnx.dataj
-offset1536j
-length512p*ÉÄÄBbase.res_blocks.1.conv_2.weightj-
-location!alphazero-network-model.onnx.dataj
-offset1996192j
-length589824p*tÄBbase.res_blocks.1.conv_2.biasj-
-location!alphazero-network-model.onnx.dataj
-offset2048j
-length512p*ÉÄÄBbase.res_blocks.2.conv_1.weightj-
-location!alphazero-network-model.onnx.dataj
-offset2586016j
-length589824p*tÄBbase.res_blocks.2.conv_1.biasj-
-location!alphazero-network-model.onnx.dataj
-offset2560j
-length512p*ÉÄÄBbase.res_blocks.2.conv_2.weightj-
-location!alphazero-network-model.onnx.dataj
-offset3175840j
-length589824p*tÄBbase.res_blocks.2.conv_2.biasj-
-location!alphazero-network-model.onnx.dataj
-offset3072j
-length512p*ÉÄÄBbase.res_blocks.3.conv_1.weightj-
-location!alphazero-network-model.onnx.dataj
-offset3765664j
-length589824p*tÄBbase.res_blocks.3.conv_1.biasj-
-location!alphazero-network-model.onnx.dataj
-offset3584j
-length512p*ÉÄÄBbase.res_blocks.3.conv_2.weightj-
-location!alphazero-network-model.onnx.dataj
-offset4355488j
-length589824p*tÄBbase.res_blocks.3.conv_2.biasj-
-location!alphazero-network-model.onnx.dataj
-offset4096j
-length512p*ÉÄÄBbase.res_blocks.4.conv_1.weightj-
-location!alphazero-network-model.onnx.dataj
-offset4945312j
-length589824p*tÄBbase.res_blocks.4.conv_1.biasj-
-location!alphazero-network-model.onnx.dataj
-offset4608j
-length512p*ÉÄÄBbase.res_blocks.4.conv_2.weightj-
-location!alphazero-network-model.onnx.dataj
-offset5535136j
-length589824p*tÄBbase.res_blocks.4.conv_2.biasj-
-location!alphazero-network-model.onnx.dataj
-offset5120j
-length512p*ÉÄÄBbase.res_blocks.5.conv_1.weightj-
-location!alphazero-network-model.onnx.dataj
-offset6124960j
-length589824p*tÄBbase.res_blocks.5.conv_1.biasj-
-location!alphazero-network-model.onnx.dataj
-offset5632j
-length512p*ÉÄÄBbase.res_blocks.5.conv_2.weightj-
-location!alphazero-network-model.onnx.dataj
-offset6714784j
-length589824p*tÄBbase.res_blocks.5.conv_2.biasj-
-location!alphazero-network-model.onnx.dataj
-offset6144j
-length512p*ÉÄÄBbase.res_blocks.6.conv_1.weightj-
-location!alphazero-network-model.onnx.dataj
-offset7304608j
-length589824p*tÄBbase.res_blocks.6.conv_1.biasj-
-location!alphazero-network-model.onnx.dataj
-offset6656j
-length512p*ÉÄÄBbase.res_blocks.6.conv_2.weightj-
-location!alphazero-network-model.onnx.dataj
-offset7894432j
-length589824p*tÄBbase.res_blocks.6.conv_2.biasj-
-location!alphazero-network-model.onnx.dataj
-offset7168j
-length512p*ÉÄÄBbase.res_blocks.7.conv_1.weightj-
-location!alphazero-network-model.onnx.dataj
-offset8484256j
-length589824p*tÄBbase.res_blocks.7.conv_1.biasj-
-location!alphazero-network-model.onnx.dataj
-offset7680j
-length512p*ÉÄÄBbase.res_blocks.7.conv_2.weightj-
-location!alphazero-network-model.onnx.dataj
-offset9074080j
-length589824p*tÄBbase.res_blocks.7.conv_2.biasj-
-location!alphazero-network-model.onnx.dataj
-offset8192j
-length512p*u ÄBpolicy_head.0.weightj-
-location!alphazero-network-model.onnx.dataj
-offset79264j
-length147456p*õ Bpolicy_head.0.biasJÄVgÕæqêæcO?D	’=ó<ºæ4(>>Xøúkæò`º∞c¿ºd¸ƒΩ–(O=≈Ôøe¢<ä>4¶Í=v∏∞ΩàÄx>†6ù<Ä¶≥ªPä˚<†ÑŸ<l-õ=C¨IæÿX>Æ’æ–ºΩ òY=–4æDxêΩ¨Ωî= ¢õ=*p¿
-Bpolicy_head.4.weightj-
-location!alphazero-network-model.onnx.dataj
-offset41632j
-length37632p*6Bpolicy_head.4.biasJÀMΩaáõº7vú<V⁄¡=íå<B+ºÍÃ5Ω*sÄBvalue_head.0.weightj-
-location!alphazero-network-model.onnx.dataj
-offset23200j
-length18432p*)Bvalue_head.0.biasJgpà>Ú|™=N1øÙªè>*l®Bvalue_head.4.weightj-
-location!alphazero-network-model.onnx.dataj
-offset8704j
-length672p*Bvalue_head.4.biasJ~ˇº*Bval_57J       ®       *Bval_64J       @      Z≈
-input
-
-
-
-
-"=
-/pkg.torch.export.graph_signature.InputSpec.kind
-USER_INPUT"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone"&
-!pkg.torch.onnx.original_node_namexbÉ
-value
-
-
-"?
-0pkg.torch.export.graph_signature.OutputSpec.kindUSER_OUTPUT")
-!pkg.torch.onnx.original_node_nametanhbè
-policy_logits
-
-
-"?
-0pkg.torch.export.graph_signature.OutputSpec.kindUSER_OUTPUT"-
-!pkg.torch.onnx.original_node_namelinear_1j-
-base.conv.0.weight
-
-Ä
-
-
-j
-base.conv.0.bias
-	
-Äj;
-base.res_blocks.0.conv_1.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.0.conv_1.bias
-	
-Äj;
-base.res_blocks.0.conv_2.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.0.conv_2.bias
-	
-Äj;
-base.res_blocks.1.conv_1.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.1.conv_1.bias
-	
-Äj;
-base.res_blocks.1.conv_2.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.1.conv_2.bias
-	
-Äj;
-base.res_blocks.2.conv_1.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.2.conv_1.bias
-	
-Äj;
-base.res_blocks.2.conv_2.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.2.conv_2.bias
-	
-Äj;
-base.res_blocks.3.conv_1.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.3.conv_1.bias
-	
-Äj;
-base.res_blocks.3.conv_2.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.3.conv_2.bias
-	
-Äj;
-base.res_blocks.4.conv_1.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.4.conv_1.bias
-	
-Äj;
-base.res_blocks.4.conv_2.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.4.conv_2.bias
-	
-Äj;
-base.res_blocks.5.conv_1.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.5.conv_1.bias
-	
-Äj;
-base.res_blocks.5.conv_2.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.5.conv_2.bias
-	
-Äj;
-base.res_blocks.6.conv_1.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.6.conv_1.bias
-	
-Äj;
-base.res_blocks.6.conv_2.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.6.conv_2.bias
-	
-Äj;
-base.res_blocks.7.conv_1.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.7.conv_1.bias
-	
-Äj;
-base.res_blocks.7.conv_2.weight
-
-Ä
-Ä
-
-j,
-base.res_blocks.7.conv_2.bias
-	
-Äj/
-policy_head.0.weight
-
- 
-Ä
-
-j 
-policy_head.0.bias
-
-
- j·
-policy_head.4.weight
-	
-
-¿
-"<
-/pkg.torch.export.graph_signature.InputSpec.kind	PARAMETER"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone";
-!pkg.torch.onnx.original_node_namep_policy_head_4_weightjÿ
-policy_head.4.bias
-
-
-"<
-/pkg.torch.export.graph_signature.InputSpec.kind	PARAMETER"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone"9
-!pkg.torch.onnx.original_node_namep_policy_head_4_biasj.
-value_head.0.weight
-
-
-Ä
-
-j
-value_head.0.bias
-
-
-jﬂ
-value_head.4.weight
-	
-
-®"<
-/pkg.torch.export.graph_signature.InputSpec.kind	PARAMETER"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone":
-!pkg.torch.onnx.original_node_namep_value_head_4_weightj÷
-value_head.4.bias
-
-
-"<
-/pkg.torch.export.graph_signature.InputSpec.kind	PARAMETER"=
-5pkg.torch.export.graph_signature.InputSpec.persistentNone"8
-!pkg.torch.onnx.original_node_namep_value_head_4_biasjR
-val_57
-
-
-"<
-$pkg.onnxscript.optimizer.folded_from['val_55', 'val_56']jR
-val_64
-
-
-"<
-$pkg.onnxscript.optimizer.folded_from['val_62', 'val_63']j"
-getitem
-
-
-Ä
-
-j
-relu
-
-
-Ä
-
-j$
-	getitem_3
-
-
-Ä
-
-j!
-relu_1
-
-
-Ä
-
-j$
-	getitem_6
-
-
-Ä
-
-j
-add
-
-
-Ä
-
-j!
-relu_2
-
-
-Ä
-
-j$
-	getitem_9
-
-
-Ä
-
-j!
-relu_3
-
-
-Ä
-
-j%
-
-getitem_12
-
-
-Ä
-
-j 
-add_1
-
-
-Ä
-
-j!
-relu_4
-
-
-Ä
-
-j%
-
-getitem_15
-
-
-Ä
-
-j!
-relu_5
-
-
-Ä
-
-j%
-
-getitem_18
-
-
-Ä
-
-j 
-add_2
-
-
-Ä
-
-j!
-relu_6
-
-
-Ä
-
-j%
-
-getitem_21
-
-
-Ä
-
-j!
-relu_7
-
-
-Ä
-
-j%
-
-getitem_24
-
-
-Ä
-
-j 
-add_3
-
-
-Ä
-
-j!
-relu_8
-
-
-Ä
-
-j%
-
-getitem_27
-
-
-Ä
-
-j!
-relu_9
-
-
-Ä
-
-j%
-
-getitem_30
-
-
-Ä
-
-j 
-add_4
-
-
-Ä
-
-j"
-relu_10
-
-
-Ä
-
-j%
-
-getitem_33
-
-
-Ä
-
-j"
-relu_11
-
-
-Ä
-
-j%
-
-getitem_36
-
-
-Ä
-
-j 
-add_5
-
-
-Ä
-
-j"
-relu_12
-
-
-Ä
-
-j%
-
-getitem_39
-
-
-Ä
-
-j"
-relu_13
-
-
-Ä
-
-j%
-
-getitem_42
-
-
-Ä
-
-j 
-add_6
-
-
-Ä
-
-j"
-relu_14
-
-
-Ä
-
-j%
-
-getitem_45
-
-
-Ä
-
-j"
-relu_15
-
-
-Ä
-
-j%
-
-getitem_48
-
-
-Ä
-
-j 
-add_7
-
-
-Ä
-
-j"
-relu_16
-
-
-Ä
-
-j$
-
-getitem_51
-
-
-
-
-j!
-relu_17
-
-
-
-
-j
-view
-	
-
-®j
-linear
-
-
-j$
-
-getitem_54
-
-
- 
-
-j!
-relu_18
-
-
- 
-
-j
-view_1
-	
-
-¿
-Ç«k
-0pkg.torch.export.ExportedProgram.graph_signatureík
-# inputs
-p_base_conv_0_weight: PARAMETER target='base.conv.0.weight'
-p_base_conv_0_bias: PARAMETER target='base.conv.0.bias'
-p_base_conv_1_weight: PARAMETER target='base.conv.1.weight'
-p_base_conv_1_bias: PARAMETER target='base.conv.1.bias'
-p_base_res_blocks_0_conv_1_weight: PARAMETER target='base.res_blocks.0.conv_1.weight'
-p_base_res_blocks_0_conv_1_bias: PARAMETER target='base.res_blocks.0.conv_1.bias'
-p_base_res_blocks_0_batch_norm_1_weight: PARAMETER target='base.res_blocks.0.batch_norm_1.weight'
-p_base_res_blocks_0_batch_norm_1_bias: PARAMETER target='base.res_blocks.0.batch_norm_1.bias'
-p_base_res_blocks_0_conv_2_weight: PARAMETER target='base.res_blocks.0.conv_2.weight'
-p_base_res_blocks_0_conv_2_bias: PARAMETER target='base.res_blocks.0.conv_2.bias'
-p_base_res_blocks_0_batch_norm_2_weight: PARAMETER target='base.res_blocks.0.batch_norm_2.weight'
-p_base_res_blocks_0_batch_norm_2_bias: PARAMETER target='base.res_blocks.0.batch_norm_2.bias'
-p_base_res_blocks_1_conv_1_weight: PARAMETER target='base.res_blocks.1.conv_1.weight'
-p_base_res_blocks_1_conv_1_bias: PARAMETER target='base.res_blocks.1.conv_1.bias'
-p_base_res_blocks_1_batch_norm_1_weight: PARAMETER target='base.res_blocks.1.batch_norm_1.weight'
-p_base_res_blocks_1_batch_norm_1_bias: PARAMETER target='base.res_blocks.1.batch_norm_1.bias'
-p_base_res_blocks_1_conv_2_weight: PARAMETER target='base.res_blocks.1.conv_2.weight'
-p_base_res_blocks_1_conv_2_bias: PARAMETER target='base.res_blocks.1.conv_2.bias'
-p_base_res_blocks_1_batch_norm_2_weight: PARAMETER target='base.res_blocks.1.batch_norm_2.weight'
-p_base_res_blocks_1_batch_norm_2_bias: PARAMETER target='base.res_blocks.1.batch_norm_2.bias'
-p_base_res_blocks_2_conv_1_weight: PARAMETER target='base.res_blocks.2.conv_1.weight'
-p_base_res_blocks_2_conv_1_bias: PARAMETER target='base.res_blocks.2.conv_1.bias'
-p_base_res_blocks_2_batch_norm_1_weight: PARAMETER target='base.res_blocks.2.batch_norm_1.weight'
-p_base_res_blocks_2_batch_norm_1_bias: PARAMETER target='base.res_blocks.2.batch_norm_1.bias'
-p_base_res_blocks_2_conv_2_weight: PARAMETER target='base.res_blocks.2.conv_2.weight'
-p_base_res_blocks_2_conv_2_bias: PARAMETER target='base.res_blocks.2.conv_2.bias'
-p_base_res_blocks_2_batch_norm_2_weight: PARAMETER target='base.res_blocks.2.batch_norm_2.weight'
-p_base_res_blocks_2_batch_norm_2_bias: PARAMETER target='base.res_blocks.2.batch_norm_2.bias'
-p_base_res_blocks_3_conv_1_weight: PARAMETER target='base.res_blocks.3.conv_1.weight'
-p_base_res_blocks_3_conv_1_bias: PARAMETER target='base.res_blocks.3.conv_1.bias'
-p_base_res_blocks_3_batch_norm_1_weight: PARAMETER target='base.res_blocks.3.batch_norm_1.weight'
-p_base_res_blocks_3_batch_norm_1_bias: PARAMETER target='base.res_blocks.3.batch_norm_1.bias'
-p_base_res_blocks_3_conv_2_weight: PARAMETER target='base.res_blocks.3.conv_2.weight'
-p_base_res_blocks_3_conv_2_bias: PARAMETER target='base.res_blocks.3.conv_2.bias'
-p_base_res_blocks_3_batch_norm_2_weight: PARAMETER target='base.res_blocks.3.batch_norm_2.weight'
-p_base_res_blocks_3_batch_norm_2_bias: PARAMETER target='base.res_blocks.3.batch_norm_2.bias'
-p_base_res_blocks_4_conv_1_weight: PARAMETER target='base.res_blocks.4.conv_1.weight'
-p_base_res_blocks_4_conv_1_bias: PARAMETER target='base.res_blocks.4.conv_1.bias'
-p_base_res_blocks_4_batch_norm_1_weight: PARAMETER target='base.res_blocks.4.batch_norm_1.weight'
-p_base_res_blocks_4_batch_norm_1_bias: PARAMETER target='base.res_blocks.4.batch_norm_1.bias'
-p_base_res_blocks_4_conv_2_weight: PARAMETER target='base.res_blocks.4.conv_2.weight'
-p_base_res_blocks_4_conv_2_bias: PARAMETER target='base.res_blocks.4.conv_2.bias'
-p_base_res_blocks_4_batch_norm_2_weight: PARAMETER target='base.res_blocks.4.batch_norm_2.weight'
-p_base_res_blocks_4_batch_norm_2_bias: PARAMETER target='base.res_blocks.4.batch_norm_2.bias'
-p_base_res_blocks_5_conv_1_weight: PARAMETER target='base.res_blocks.5.conv_1.weight'
-p_base_res_blocks_5_conv_1_bias: PARAMETER target='base.res_blocks.5.conv_1.bias'
-p_base_res_blocks_5_batch_norm_1_weight: PARAMETER target='base.res_blocks.5.batch_norm_1.weight'
-p_base_res_blocks_5_batch_norm_1_bias: PARAMETER target='base.res_blocks.5.batch_norm_1.bias'
-p_base_res_blocks_5_conv_2_weight: PARAMETER target='base.res_blocks.5.conv_2.weight'
-p_base_res_blocks_5_conv_2_bias: PARAMETER target='base.res_blocks.5.conv_2.bias'
-p_base_res_blocks_5_batch_norm_2_weight: PARAMETER target='base.res_blocks.5.batch_norm_2.weight'
-p_base_res_blocks_5_batch_norm_2_bias: PARAMETER target='base.res_blocks.5.batch_norm_2.bias'
-p_base_res_blocks_6_conv_1_weight: PARAMETER target='base.res_blocks.6.conv_1.weight'
-p_base_res_blocks_6_conv_1_bias: PARAMETER target='base.res_blocks.6.conv_1.bias'
-p_base_res_blocks_6_batch_norm_1_weight: PARAMETER target='base.res_blocks.6.batch_norm_1.weight'
-p_base_res_blocks_6_batch_norm_1_bias: PARAMETER target='base.res_blocks.6.batch_norm_1.bias'
-p_base_res_blocks_6_conv_2_weight: PARAMETER target='base.res_blocks.6.conv_2.weight'
-p_base_res_blocks_6_conv_2_bias: PARAMETER target='base.res_blocks.6.conv_2.bias'
-p_base_res_blocks_6_batch_norm_2_weight: PARAMETER target='base.res_blocks.6.batch_norm_2.weight'
-p_base_res_blocks_6_batch_norm_2_bias: PARAMETER target='base.res_blocks.6.batch_norm_2.bias'
-p_base_res_blocks_7_conv_1_weight: PARAMETER target='base.res_blocks.7.conv_1.weight'
-p_base_res_blocks_7_conv_1_bias: PARAMETER target='base.res_blocks.7.conv_1.bias'
-p_base_res_blocks_7_batch_norm_1_weight: PARAMETER target='base.res_blocks.7.batch_norm_1.weight'
-p_base_res_blocks_7_batch_norm_1_bias: PARAMETER target='base.res_blocks.7.batch_norm_1.bias'
-p_base_res_blocks_7_conv_2_weight: PARAMETER target='base.res_blocks.7.conv_2.weight'
-p_base_res_blocks_7_conv_2_bias: PARAMETER target='base.res_blocks.7.conv_2.bias'
-p_base_res_blocks_7_batch_norm_2_weight: PARAMETER target='base.res_blocks.7.batch_norm_2.weight'
-p_base_res_blocks_7_batch_norm_2_bias: PARAMETER target='base.res_blocks.7.batch_norm_2.bias'
-p_policy_head_0_weight: PARAMETER target='policy_head.0.weight'
-p_policy_head_0_bias: PARAMETER target='policy_head.0.bias'
-p_policy_head_1_weight: PARAMETER target='policy_head.1.weight'
-p_policy_head_1_bias: PARAMETER target='policy_head.1.bias'
-p_policy_head_4_weight: PARAMETER target='policy_head.4.weight'
-p_policy_head_4_bias: PARAMETER target='policy_head.4.bias'
-p_value_head_0_weight: PARAMETER target='value_head.0.weight'
-p_value_head_0_bias: PARAMETER target='value_head.0.bias'
-p_value_head_1_weight: PARAMETER target='value_head.1.weight'
-p_value_head_1_bias: PARAMETER target='value_head.1.bias'
-p_value_head_4_weight: PARAMETER target='value_head.4.weight'
-p_value_head_4_bias: PARAMETER target='value_head.4.bias'
-b_base_conv_1_running_mean: BUFFER target='base.conv.1.running_mean' persistent=True
-b_base_conv_1_running_var: BUFFER target='base.conv.1.running_var' persistent=True
-b_base_conv_1_num_batches_tracked: BUFFER target='base.conv.1.num_batches_tracked' persistent=True
-b_base_res_blocks_0_batch_norm_1_running_mean: BUFFER target='base.res_blocks.0.batch_norm_1.running_mean' persistent=True
-b_base_res_blocks_0_batch_norm_1_running_var: BUFFER target='base.res_blocks.0.batch_norm_1.running_var' persistent=True
-b_base_res_blocks_0_batch_norm_1_num_batches_tracked: BUFFER target='base.res_blocks.0.batch_norm_1.num_batches_tracked' persistent=True
-b_base_res_blocks_0_batch_norm_2_running_mean: BUFFER target='base.res_blocks.0.batch_norm_2.running_mean' persistent=True
-b_base_res_blocks_0_batch_norm_2_running_var: BUFFER target='base.res_blocks.0.batch_norm_2.running_var' persistent=True
-b_base_res_blocks_0_batch_norm_2_num_batches_tracked: BUFFER target='base.res_blocks.0.batch_norm_2.num_batches_tracked' persistent=True
-b_base_res_blocks_1_batch_norm_1_running_mean: BUFFER target='base.res_blocks.1.batch_norm_1.running_mean' persistent=True
-b_base_res_blocks_1_batch_norm_1_running_var: BUFFER target='base.res_blocks.1.batch_norm_1.running_var' persistent=True
-b_base_res_blocks_1_batch_norm_1_num_batches_tracked: BUFFER target='base.res_blocks.1.batch_norm_1.num_batches_tracked' persistent=True
-b_base_res_blocks_1_batch_norm_2_running_mean: BUFFER target='base.res_blocks.1.batch_norm_2.running_mean' persistent=True
-b_base_res_blocks_1_batch_norm_2_running_var: BUFFER target='base.res_blocks.1.batch_norm_2.running_var' persistent=True
-b_base_res_blocks_1_batch_norm_2_num_batches_tracked: BUFFER target='base.res_blocks.1.batch_norm_2.num_batches_tracked' persistent=True
-b_base_res_blocks_2_batch_norm_1_running_mean: BUFFER target='base.res_blocks.2.batch_norm_1.running_mean' persistent=True
-b_base_res_blocks_2_batch_norm_1_running_var: BUFFER target='base.res_blocks.2.batch_norm_1.running_var' persistent=True
-b_base_res_blocks_2_batch_norm_1_num_batches_tracked: BUFFER target='base.res_blocks.2.batch_norm_1.num_batches_tracked' persistent=True
-b_base_res_blocks_2_batch_norm_2_running_mean: BUFFER target='base.res_blocks.2.batch_norm_2.running_mean' persistent=True
-b_base_res_blocks_2_batch_norm_2_running_var: BUFFER target='base.res_blocks.2.batch_norm_2.running_var' persistent=True
-b_base_res_blocks_2_batch_norm_2_num_batches_tracked: BUFFER target='base.res_blocks.2.batch_norm_2.num_batches_tracked' persistent=True
-b_base_res_blocks_3_batch_norm_1_running_mean: BUFFER target='base.res_blocks.3.batch_norm_1.running_mean' persistent=True
-b_base_res_blocks_3_batch_norm_1_running_var: BUFFER target='base.res_blocks.3.batch_norm_1.running_var' persistent=True
-b_base_res_blocks_3_batch_norm_1_num_batches_tracked: BUFFER target='base.res_blocks.3.batch_norm_1.num_batches_tracked' persistent=True
-b_base_res_blocks_3_batch_norm_2_running_mean: BUFFER target='base.res_blocks.3.batch_norm_2.running_mean' persistent=True
-b_base_res_blocks_3_batch_norm_2_running_var: BUFFER target='base.res_blocks.3.batch_norm_2.running_var' persistent=True
-b_base_res_blocks_3_batch_norm_2_num_batches_tracked: BUFFER target='base.res_blocks.3.batch_norm_2.num_batches_tracked' persistent=True
-b_base_res_blocks_4_batch_norm_1_running_mean: BUFFER target='base.res_blocks.4.batch_norm_1.running_mean' persistent=True
-b_base_res_blocks_4_batch_norm_1_running_var: BUFFER target='base.res_blocks.4.batch_norm_1.running_var' persistent=True
-b_base_res_blocks_4_batch_norm_1_num_batches_tracked: BUFFER target='base.res_blocks.4.batch_norm_1.num_batches_tracked' persistent=True
-b_base_res_blocks_4_batch_norm_2_running_mean: BUFFER target='base.res_blocks.4.batch_norm_2.running_mean' persistent=True
-b_base_res_blocks_4_batch_norm_2_running_var: BUFFER target='base.res_blocks.4.batch_norm_2.running_var' persistent=True
-b_base_res_blocks_4_batch_norm_2_num_batches_tracked: BUFFER target='base.res_blocks.4.batch_norm_2.num_batches_tracked' persistent=True
-b_base_res_blocks_5_batch_norm_1_running_mean: BUFFER target='base.res_blocks.5.batch_norm_1.running_mean' persistent=True
-b_base_res_blocks_5_batch_norm_1_running_var: BUFFER target='base.res_blocks.5.batch_norm_1.running_var' persistent=True
-b_base_res_blocks_5_batch_norm_1_num_batches_tracked: BUFFER target='base.res_blocks.5.batch_norm_1.num_batches_tracked' persistent=True
-b_base_res_blocks_5_batch_norm_2_running_mean: BUFFER target='base.res_blocks.5.batch_norm_2.running_mean' persistent=True
-b_base_res_blocks_5_batch_norm_2_running_var: BUFFER target='base.res_blocks.5.batch_norm_2.running_var' persistent=True
-b_base_res_blocks_5_batch_norm_2_num_batches_tracked: BUFFER target='base.res_blocks.5.batch_norm_2.num_batches_tracked' persistent=True
-b_base_res_blocks_6_batch_norm_1_running_mean: BUFFER target='base.res_blocks.6.batch_norm_1.running_mean' persistent=True
-b_base_res_blocks_6_batch_norm_1_running_var: BUFFER target='base.res_blocks.6.batch_norm_1.running_var' persistent=True
-b_base_res_blocks_6_batch_norm_1_num_batches_tracked: BUFFER target='base.res_blocks.6.batch_norm_1.num_batches_tracked' persistent=True
-b_base_res_blocks_6_batch_norm_2_running_mean: BUFFER target='base.res_blocks.6.batch_norm_2.running_mean' persistent=True
-b_base_res_blocks_6_batch_norm_2_running_var: BUFFER target='base.res_blocks.6.batch_norm_2.running_var' persistent=True
-b_base_res_blocks_6_batch_norm_2_num_batches_tracked: BUFFER target='base.res_blocks.6.batch_norm_2.num_batches_tracked' persistent=True
-b_base_res_blocks_7_batch_norm_1_running_mean: BUFFER target='base.res_blocks.7.batch_norm_1.running_mean' persistent=True
-b_base_res_blocks_7_batch_norm_1_running_var: BUFFER target='base.res_blocks.7.batch_norm_1.running_var' persistent=True
-b_base_res_blocks_7_batch_norm_1_num_batches_tracked: BUFFER target='base.res_blocks.7.batch_norm_1.num_batches_tracked' persistent=True
-b_base_res_blocks_7_batch_norm_2_running_mean: BUFFER target='base.res_blocks.7.batch_norm_2.running_mean' persistent=True
-b_base_res_blocks_7_batch_norm_2_running_var: BUFFER target='base.res_blocks.7.batch_norm_2.running_var' persistent=True
-b_base_res_blocks_7_batch_norm_2_num_batches_tracked: BUFFER target='base.res_blocks.7.batch_norm_2.num_batches_tracked' persistent=True
-b_policy_head_1_running_mean: BUFFER target='policy_head.1.running_mean' persistent=True
-b_policy_head_1_running_var: BUFFER target='policy_head.1.running_var' persistent=True
-b_policy_head_1_num_batches_tracked: BUFFER target='policy_head.1.num_batches_tracked' persistent=True
-b_value_head_1_running_mean: BUFFER target='value_head.1.running_mean' persistent=True
-b_value_head_1_running_var: BUFFER target='value_head.1.running_var' persistent=True
-b_value_head_1_num_batches_tracked: BUFFER target='value_head.1.num_batches_tracked' persistent=True
-x: USER_INPUT
-
-# outputs
-tanh: USER_OUTPUT
-linear_1: USER_OUTPUT
-Ç8
-2pkg.torch.export.ExportedProgram.range_constraints{}B
- 
