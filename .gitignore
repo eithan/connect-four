@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 ai/src/connect_four_ai/models/alphazero-checkpoint.pt
+
+# Generated models
+models/
