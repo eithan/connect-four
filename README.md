@@ -72,7 +72,7 @@ poetry install
 ```
 
 2) Train (resumable)
-NOTE: Increate the epochs and games_per_epoch to get a "smarter" player. Recommended inputs are at least 20,000 games (e.g. >= 100 epochs and 200 games per epoch).
+NOTE: Increase the epochs and games_per_epoch to get a "smarter" player. Recommended inputs are at least 20,000 games (e.g. >= 100 epochs and 200 games per epoch).
 
 ```bash
 cd ai
