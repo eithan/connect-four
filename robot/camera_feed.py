@@ -24,7 +24,7 @@ import time
 import os
 import sys
 
-from board_detector import BoardDetector, DetectionConfig, SCREEN_CONFIG, board_to_string
+from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, board_to_string
 
 WINDOW_MAIN = "Connect Four - Camera Feed"
 WINDOW_TUNE = "Connect Four - HSV Tuning"
@@ -152,6 +152,8 @@ def draw_overlay(frame: np.ndarray, result, fps: float) -> np.ndarray:
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, conf_color, 2)
     cv2.putText(display, f"FPS: {fps:.1f}", (10, 54),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 180, 180), 1)
+    lock_text  = "LOCKED" if getattr(result, '_locked', False) else ""
+    _ = lock_text  # shown via contour color in debug; kept for reference
 
     for i, err in enumerate(result.errors):
         cv2.putText(display, f"ERR: {err}", (10, 82 + i * 22),
@@ -162,7 +164,7 @@ def draw_overlay(frame: np.ndarray, result, fps: float) -> np.ndarray:
     cv2.putText(display, f"R:{red_n}  Y:{yellow_n}", (w - 130, 28),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 200, 200), 1)
 
-    cv2.putText(display, "q=quit  f=freeze  s=save", (w - 260, h - 10),
+    cv2.putText(display, "q=quit  f=freeze  s=save  l=re-lock", (w - 320, h - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
 
     return display
@@ -195,7 +197,7 @@ def main():
         cfg = load_config(args.config)
         print(f"Loaded config: {args.config}")
 
-    detector = BoardDetector(cfg)
+    detector = LockedBoardDetector(cfg)
 
     print(f"Opening camera {args.camera}...")
     cap = cv2.VideoCapture(args.camera)
@@ -210,7 +212,7 @@ def main():
     print(f"Camera {args.camera} opened: {aw}x{ah}")
     if args.tune:
         print("Tuning mode active — adjust trackbars to match your lighting, press 's' to save")
-    print("Controls: q/ESC=quit  f=freeze  s=save config")
+    print("Controls: q/ESC=quit  f=freeze  s=save config  l=re-lock board")
 
     cv2.namedWindow(WINDOW_MAIN, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(WINDOW_MAIN, min(aw, 960), min(ah, 540))
@@ -252,7 +254,7 @@ def main():
 
             if args.tune:
                 cfg = read_trackbar_config()
-                detector = BoardDetector(cfg)
+                detector.config = cfg   # setter auto-unlocks on config change
 
             if not frozen and (now - last_process) >= frame_interval:
                 last_process = now
@@ -286,6 +288,10 @@ def main():
                 print("Frozen" if frozen else "Resumed")
             elif key == ord("s"):
                 save_config(detector.config, args.save)
+            elif key == ord("l"):
+                detector.unlock()
+                board_buffer.clear()
+                print("Re-locking board...")
 
     finally:
         cap.release()

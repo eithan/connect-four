@@ -31,7 +31,7 @@ import sys
 from enum import Enum
 from typing import Optional
 
-from board_detector import BoardDetector, DetectionConfig, SCREEN_CONFIG, SCREEN_CONFIG
+from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, SCREEN_CONFIG
 from turn_tracker import TurnTracker
 from ai_player import AIPlayer
 
@@ -100,7 +100,7 @@ class GameLoop:
         0: (70, 70, 70),      # Empty
     }
 
-    def __init__(self, detector: BoardDetector, ai: AIPlayer, tracker: TurnTracker,
+    def __init__(self, detector: LockedBoardDetector, ai: AIPlayer, tracker: TurnTracker,
                  human_player: int = 1, stable_frames: int = 5):
         self.detector = detector
         self.ai = ai
@@ -208,8 +208,10 @@ class GameLoop:
         # Top HUD
         conf = result.confidence if result else 0.0
         conf_color = (0, 255, 0) if conf > 0.7 else (0, 165, 255) if conf > 0.4 else (0, 0, 255)
-        cv2.putText(display, f"Conf:{conf:.2f}  FPS:{self.fps_actual:.1f}",
-                    (10, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, conf_color, 1)
+        lock_label = "🔒 LOCKED" if self.detector.is_locked else "searching..."
+        lock_color = (255, 220, 0) if self.detector.is_locked else (0, 165, 255)
+        cv2.putText(display, f"Conf:{conf:.2f}  FPS:{self.fps_actual:.1f}  {lock_label}",
+                    (10, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.55, lock_color, 1)
 
         # Stability progress indicator
         if self.stable.progress > 0:
@@ -220,8 +222,8 @@ class GameLoop:
             cv2.putText(display, "Detecting...", (215, 46),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1)
 
-        cv2.putText(display, "r=reset  f=freeze  q=quit",
-                    (w - 270, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
+        cv2.putText(display, "r=reset  f=freeze  l=re-lock  q=quit",
+                    (w - 360, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
 
         self._draw_status_bar(display, h, w)
         return display
@@ -412,7 +414,7 @@ def main():
         cfg = load_config(args.config)
         print(f"HSV config: {args.config}")
 
-    detector = BoardDetector(cfg)
+    detector = LockedBoardDetector(cfg)
     ai = AIPlayer(model_path=args.model, use_heuristic=(args.model is None))
     tracker = TurnTracker(robot_player=ai_player_num)
     game = GameLoop(detector, ai, tracker,
@@ -465,6 +467,11 @@ def main():
                 break
             elif key == ord("r"):
                 game.reset()
+            elif key == ord("l"):
+                detector.unlock()
+                game._initialized = False
+                game.stable.reset()
+                print("Re-locking board...")
             elif key == ord("f"):
                 game.frozen = not game.frozen
                 print("Frozen" if game.frozen else "Resumed")

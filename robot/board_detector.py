@@ -339,6 +339,114 @@ class BoardDetector:
         return debug
 
 
+class LockedBoardDetector:
+    """
+    Wraps BoardDetector with grid locking.
+
+    Problem: as the phone/camera moves, the board bounding box shifts each
+    frame, causing grid centers to drift and misdetections to accumulate.
+
+    Solution: detect the board frame until we see LOCK_FRAMES consecutive
+    high-confidence frames, then lock the grid centers in place. Subsequent
+    frames skip the expensive board-frame detection and only run piece
+    classification at the fixed grid positions.
+
+    The lock survives phone movement — pieces are classified at the saved
+    positions regardless of where the board *appears* to be in the image.
+
+    Auto-unlock: if classification confidence stays below 0.2 for
+    UNLOCK_FRAMES consecutive frames the board has probably left the view.
+    Press 'l' in the UI to force an immediate re-lock.
+    """
+
+    LOCK_MIN_CONF  = 0.55  # Confidence needed for a frame to count as "good"
+    LOCK_FRAMES    = 3     # Consecutive good frames before locking
+    UNLOCK_FRAMES  = 20    # Bad frames before auto-unlock (~10 s @ 2 fps)
+
+    def __init__(self, config: Optional[DetectionConfig] = None):
+        self.detector = BoardDetector(config)
+        self._locked_centers: Optional[np.ndarray] = None
+        self._locked_contour: Optional[np.ndarray] = None
+        self._good_streak = 0
+        self._bad_streak  = 0
+        self.is_locked    = False
+
+    @property
+    def config(self) -> DetectionConfig:
+        return self.detector.config
+
+    @config.setter
+    def config(self, value: DetectionConfig):
+        self.detector.config = value
+        self.unlock()   # Reset lock when config changes (e.g. tuning mode)
+
+    def unlock(self):
+        """Force the detector to re-find the board frame on the next frame."""
+        self._locked_centers = None
+        self._locked_contour = None
+        self._good_streak = 0
+        self._bad_streak  = 0
+        self.is_locked    = False
+
+    def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        if self.is_locked:
+            return self._detect_locked(image, hsv, debug)
+        return self._detect_full(image, debug)
+
+    # ── Locked fast-path ─────────────────────────────────────────────────────
+
+    def _detect_locked(self, image: np.ndarray, hsv: np.ndarray,
+                       debug: bool) -> DetectionResult:
+        board      = self.detector._classify_cells(hsv, self._locked_centers)
+        confidence = self.detector._compute_confidence(board)
+
+        if confidence < 0.2:
+            self._bad_streak += 1
+            if self._bad_streak >= self.UNLOCK_FRAMES:
+                print("[Board] Lock released — board lost from view")
+                self.unlock()
+        else:
+            self._bad_streak = 0
+
+        debug_img = None
+        if debug:
+            debug_img = self.detector._draw_debug(
+                image, board, self._locked_centers,
+                self._locked_contour, confidence, False)
+            # Cyan border = locked
+            cv2.drawContours(debug_img, [self._locked_contour], -1, (255, 220, 0), 3)
+            cv2.putText(debug_img, "LOCKED", (10, 58),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 220, 0), 2)
+
+        return DetectionResult(
+            board=board,
+            confidence=confidence,
+            grid_centers=self._locked_centers,
+            board_contour=self._locked_contour,
+            debug_image=debug_img,
+        )
+
+    # ── Full detection (pre-lock) ─────────────────────────────────────────────
+
+    def _detect_full(self, image: np.ndarray, debug: bool) -> DetectionResult:
+        result = self.detector.detect(image, debug=debug)
+
+        if result.board_contour is not None and result.confidence >= self.LOCK_MIN_CONF:
+            self._good_streak += 1
+            if self._good_streak >= self.LOCK_FRAMES:
+                self._locked_centers = result.grid_centers.copy()
+                self._locked_contour = result.board_contour.copy()
+                self.is_locked = True
+                self._good_streak = 0
+                print("[Board] Locked ✓")
+        else:
+            self._good_streak = 0
+
+        return result
+
+
 def board_to_string(board: np.ndarray) -> str:
     """Pretty-print a board state."""
     symbols = {0: ".", 1: "R", 2: "Y"}
