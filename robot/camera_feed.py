@@ -24,7 +24,7 @@ import time
 import os
 import sys
 
-from board_detector import BoardDetector, DetectionConfig, board_to_string
+from board_detector import BoardDetector, DetectionConfig, SCREEN_CONFIG, board_to_string
 
 WINDOW_MAIN = "Connect Four - Camera Feed"
 WINDOW_TUNE = "Connect Four - HSV Tuning"
@@ -128,7 +128,8 @@ def draw_overlay(frame: np.ndarray, result, fps: float) -> np.ndarray:
     h, w = display.shape[:2]
 
     if result.board_contour is not None:
-        cv2.drawContours(display, [result.board_contour], -1, (0, 255, 0), 2)
+        outline_color = (0, 165, 255) if result.fallback_used else (0, 255, 0)
+        cv2.drawContours(display, [result.board_contour], -1, outline_color, 2)
 
     if result.grid_centers is not None:
         for row in range(6):
@@ -181,9 +182,15 @@ def main():
     parser.add_argument("--fps", type=float, default=DEFAULT_FPS)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--screen", action="store_true",
+                        help="Use screen-optimized HSV thresholds (phone/monitor display)")
     args = parser.parse_args()
 
-    cfg = DetectionConfig()
+    if args.screen:
+        cfg = SCREEN_CONFIG
+        print("Screen mode: using display-optimized HSV thresholds")
+    else:
+        cfg = DetectionConfig()
     if args.config and os.path.exists(args.config):
         cfg = load_config(args.config)
         print(f"Loaded config: {args.config}")

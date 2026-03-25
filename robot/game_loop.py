@@ -31,7 +31,7 @@ import sys
 from enum import Enum
 from typing import Optional
 
-from board_detector import BoardDetector, DetectionConfig
+from board_detector import BoardDetector, DetectionConfig, SCREEN_CONFIG, SCREEN_CONFIG
 from turn_tracker import TurnTracker
 from ai_player import AIPlayer
 
@@ -115,6 +115,7 @@ class GameLoop:
         self.status_msg = ""
         self.last_result = None
         self.frozen = False
+        self._initialized = False   # True after first stable board observed
 
         self.fps_actual = 0.0
         self._fps_t = time.time()
@@ -131,6 +132,7 @@ class GameLoop:
         self.ai_column = None
         self.ai_policy = None
         self.last_result = None
+        self._initialized = False
         self._set_status_for_phase()
         print("\n" + "=" * 50)
         print("  Game reset — your turn!")
@@ -153,6 +155,27 @@ class GameLoop:
 
         is_stable, stable_board = self.stable.update(result.board, result.confidence)
         if not is_stable:
+            return
+
+        # ── First stable frame: seed tracker with current board state ─────────
+        if not self._initialized:
+            self._initialized = True
+            self.tracker.set_board(stable_board)
+            red_n   = int(np.sum(stable_board == 1))
+            yellow_n = int(np.sum(stable_board == 2))
+            print(f"\nInitial board detected: Red={red_n}, Yellow={yellow_n}")
+            if self.tracker.state.game_over:
+                self._end_game({"game_over": True,
+                                "winner": self.tracker.state.winner,
+                                "winning_cells": self.tracker.state.winning_cells})
+                return
+            # If it's already the AI's turn when we start, compute immediately
+            if self.tracker.state.current_player == self.ai_player_num and red_n + yellow_n > 0:
+                print("AI's turn on startup — computing move...")
+                self.phase = GamePhase.AI_TURN
+                self._run_ai(stable_board)
+            else:
+                self._set_status_for_phase()
             return
 
         if self.phase == GamePhase.HUMAN_TURN:
@@ -365,6 +388,8 @@ def main():
     parser.add_argument("--fps", type=float, default=2.0)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--screen", action="store_true",
+                        help="Use screen-optimized HSV thresholds (phone/monitor display)")
     args = parser.parse_args()
 
     human_player = 1 if args.human_color == "red" else 2
@@ -378,7 +403,11 @@ def main():
     print(f"  Stable frames: {args.stable_frames}")
     print()
 
-    cfg = DetectionConfig()
+    if args.screen:
+        cfg = SCREEN_CONFIG
+        print("Screen mode: using display-optimized HSV thresholds")
+    else:
+        cfg = DetectionConfig()
     if args.config and os.path.exists(args.config):
         cfg = load_config(args.config)
         print(f"HSV config: {args.config}")
