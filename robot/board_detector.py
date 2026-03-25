@@ -257,7 +257,8 @@ class BoardDetector:
         cfg = self.config
         board = np.zeros((6, 7), dtype=np.int8)
         cell_spacing = abs(int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0]))
-        sample_radius = max(int(cell_spacing * 0.30), 6)   # Slightly larger than before
+        # 0.25 keeps sampling well inside each cell, avoiding bleed from neighbours
+        sample_radius = max(int(cell_spacing * 0.25), 5)
 
         red_mask = (cv2.inRange(hsv, np.array(cfg.red_hsv_low1), np.array(cfg.red_hsv_high1)) |
                     cv2.inRange(hsv, np.array(cfg.red_hsv_low2), np.array(cfg.red_hsv_high2)))
@@ -273,11 +274,29 @@ class BoardDetector:
                 total   = cv2.countNonZero(roi)
                 red_r   = cv2.countNonZero(red_mask   & roi) / max(total, 1)
                 yel_r   = cv2.countNonZero(yellow_mask & roi) / max(total, 1)
-                if red_r > 0.12 and red_r > yel_r:
+                if red_r > 0.18 and red_r > yel_r:
                     board[row, col] = 1
-                elif yel_r > 0.12 and yel_r > red_r:
+                elif yel_r > 0.18 and yel_r > red_r:
                     board[row, col] = 2
-        return board
+
+        return self._apply_gravity_filter(board)
+
+    @staticmethod
+    def _apply_gravity_filter(board: np.ndarray) -> np.ndarray:
+        """
+        Remove physically impossible (floating) pieces.
+        In a real game, pieces stack from the bottom of each column.
+        Any piece above an empty slot is a misdetection — strip it out.
+        """
+        filtered = board.copy()
+        for col in range(7):
+            found_empty = False
+            for row in range(5, -1, -1):   # scan bottom → top
+                if filtered[row, col] == 0:
+                    found_empty = True
+                elif found_empty:
+                    filtered[row, col] = 0  # floating piece — remove
+        return filtered
 
     def _compute_confidence(self, board: np.ndarray) -> float:
         confidence = 1.0

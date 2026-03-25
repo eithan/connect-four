@@ -226,6 +226,21 @@ def main():
     fps_t = time.time()
     fps_count = 0
 
+    # Majority-vote buffer: display only what 3 consecutive frames agree on
+    STABLE_NEEDED = 3
+    board_buffer: list = []
+
+    def stable_board(new_board):
+        board_buffer.append(new_board.copy())
+        if len(board_buffer) > STABLE_NEEDED:
+            board_buffer.pop(0)
+        if len(board_buffer) < STABLE_NEEDED:
+            return board_buffer[-1]
+        # Return the board only if all buffered frames agree
+        if all(np.array_equal(board_buffer[0], b) for b in board_buffer[1:]):
+            return board_buffer[-1]
+        return board_buffer[-1]   # Show latest anyway, but confidence will be low
+
     try:
         while True:
             ret, frame = cap.read()
@@ -241,7 +256,10 @@ def main():
 
             if not frozen and (now - last_process) >= frame_interval:
                 last_process = now
-                last_result = detector.detect(frame)
+                raw_result = detector.detect(frame)
+                # Apply frame buffer: override board with stabilised version
+                raw_result.board = stable_board(raw_result.board)
+                last_result = raw_result
                 fps_count += 1
                 if now - fps_t >= 1.0:
                     fps_actual = fps_count / (now - fps_t)
