@@ -407,10 +407,6 @@ def main():
 
     if args.screen:
         cfg = SCREEN_CONFIG
-        print("Screen mode: using display-optimized HSV thresholds")
-    else:
-        if args.screen:
-        cfg = SCREEN_CONFIG
         print("Screen mode: using display-optimised HSV thresholds")
     else:
         cfg = DetectionConfig()
