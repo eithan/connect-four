@@ -382,6 +382,8 @@ def main():
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--model", type=str, help="Path to AlphaZero ONNX model")
     parser.add_argument("--config", type=str, help="HSV config JSON")
+    parser.add_argument("--screen", action="store_true",
+                        help="Use screen-optimised thresholds (phone/monitor display)")
     parser.add_argument("--human-color", choices=["red", "yellow"], default="red")
     parser.add_argument("--stable-frames", type=int, default=5,
                         help="Consecutive frames required to confirm a move (default: 5)")
@@ -406,6 +408,10 @@ def main():
     if args.screen:
         cfg = SCREEN_CONFIG
         print("Screen mode: using display-optimized HSV thresholds")
+    else:
+        if args.screen:
+        cfg = SCREEN_CONFIG
+        print("Screen mode: using display-optimised HSV thresholds")
     else:
         cfg = DetectionConfig()
     if args.config and os.path.exists(args.config):
