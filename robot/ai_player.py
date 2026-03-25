@@ -75,15 +75,27 @@ class AIPlayer:
 
     def _onnx_move(self, board, player, valid_moves):
         opponent = 3 - player
-        inp = np.zeros((1, 2, ROWS, COLS), dtype=np.float32)
-        inp[0, 0] = (board == player).astype(np.float32)
-        inp[0, 1] = (board == opponent).astype(np.float32)
+        inp = np.zeros((1, 3, ROWS, COLS), dtype=np.float32)
+        inp[0, 0] = (board == player).astype(np.float32)    # channel 0: current player
+        inp[0, 1] = (board == 0).astype(np.float32)         # channel 1: empty
+        inp[0, 2] = (board == opponent).astype(np.float32)  # channel 2: opponent
 
         try:
-            output_names = [o.name for o in self.session.get_outputs()]
+            outputs = self.session.get_outputs()
+            output_names = [o.name for o in outputs]
             results = self.session.run(output_names, {self.input_name: inp})
-            logits = results[0].flatten()
-            value = float(results[1].flatten()[0]) if len(results) > 1 else 0.0
+
+            # Find policy (shape [1,7]) and value (shape [1,1]) by size, not position
+            logits = None
+            value = 0.0
+            for i, out in enumerate(outputs):
+                flat = results[i].flatten()
+                if flat.size == COLS:
+                    logits = flat
+                elif flat.size == 1:
+                    value = float(flat[0])
+            if logits is None:
+                raise ValueError("Could not find policy output with 7 values")
 
             policy = np.exp(logits - np.max(logits))
             mask = np.zeros(COLS, dtype=np.float32)
