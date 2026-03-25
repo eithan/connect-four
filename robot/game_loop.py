@@ -390,8 +390,6 @@ def main():
     parser.add_argument("--fps", type=float, default=2.0)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
-    parser.add_argument("--screen", action="store_true",
-                        help="Use screen-optimized HSV thresholds (phone/monitor display)")
     args = parser.parse_args()
 
     human_player = 1 if args.human_color == "red" else 2
