@@ -26,3 +26,7 @@ ai/src/connect_four_ai/models/alphazero-checkpoint.pt
 
 # Generated models
 models/
+robot/__pycache__/ai_player.cpython-312.pyc
+robot/__pycache__/board_detector.cpython-312.pyc
+robot/__pycache__/generate_test_images.cpython-312.pyc
+*.pyc
