@@ -545,6 +545,12 @@ class LockedBoardDetector:
     CANDIDATE_RESET = 20     # Consecutive bad frames to drop candidate entirely
     UNLOCK_FRAMES   = 20     # Consecutive bad locked frames → unlock
 
+    # Piece removal requires this many consecutive absent frames.
+    # Fan/lighting flicker typically lasts 1–3 frames; real removals are
+    # permanent.  5 frames ≈ ~0.5 s at 10 fps — fast enough to track gameplay
+    # while ignoring shadows.
+    REMOVE_THRESHOLD = 5
+
     def __init__(self, config: Optional[DetectionConfig] = None):
         self.detector = BoardDetector(config)
         self._locked_centers: Optional[np.ndarray] = None
@@ -555,7 +561,9 @@ class LockedBoardDetector:
         self._bad_streak  = 0
         self._lock_bad    = 0
         self.is_locked    = False
-        self._last_board: Optional[np.ndarray] = None  # for change detection
+        self._last_board:    Optional[np.ndarray] = None  # for change detection
+        self._stable_board:  Optional[np.ndarray] = None  # temporally-smoothed state
+        self._absent_count:  np.ndarray = np.zeros((6, 7), dtype=np.int32)
 
     @property
     def config(self) -> DetectionConfig:
@@ -576,7 +584,9 @@ class LockedBoardDetector:
         self._bad_streak  = 0
         self._lock_bad    = 0
         self.is_locked    = False
-        self._last_board  = None
+        self._last_board   = None
+        self._stable_board = None
+        self._absent_count = np.zeros((6, 7), dtype=np.int32)
 
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -590,7 +600,8 @@ class LockedBoardDetector:
                         debug: bool) -> DetectionResult:
         board_raw  = self.detector._classify_cells(hsv, self._locked_centers)
         confidence = self.detector._compute_confidence(board_raw)
-        board      = self.detector._apply_gravity_filter(board_raw)
+        board_filt = self.detector._apply_gravity_filter(board_raw)
+        board      = self._temporal_smooth(board_filt)
 
         if confidence < 0.2:
             self._lock_bad += 1
@@ -599,7 +610,7 @@ class LockedBoardDetector:
                 self.unlock()
         else:
             self._lock_bad = 0
-            # Print board if it changed
+            # Print board only when the stable state actually changes
             if self._last_board is None or not np.array_equal(board, self._last_board):
                 self._last_board = board.copy()
                 self._print_board(board)
@@ -678,6 +689,39 @@ class LockedBoardDetector:
         return result
 
     # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _temporal_smooth(self, board: np.ndarray) -> np.ndarray:
+        """
+        Debounce piece removal.
+
+        New pieces are accepted immediately (1 frame).
+        A piece is only removed from the stable state after it has been
+        absent for REMOVE_THRESHOLD consecutive frames — this filters out
+        1–3 frame shadows from a spinning fan or momentary lighting changes.
+        """
+        if self._stable_board is None:
+            self._stable_board = board.copy()
+            self._absent_count = np.zeros((6, 7), dtype=np.int32)
+            return self._stable_board.copy()
+
+        for r in range(6):
+            for c in range(7):
+                detected = board[r, c]
+                stable   = self._stable_board[r, c]
+
+                if detected != 0:
+                    # Piece visible this frame — accept immediately
+                    self._stable_board[r, c] = detected
+                    self._absent_count[r, c] = 0
+                elif stable != 0:
+                    # Piece was there but not seen this frame
+                    self._absent_count[r, c] += 1
+                    if self._absent_count[r, c] >= self.REMOVE_THRESHOLD:
+                        self._stable_board[r, c] = 0   # confirmed gone
+                    # else: keep the piece in the stable state
+                # else: was empty, still empty — nothing to do
+
+        return self._stable_board.copy()
 
     @staticmethod
     def _print_board(board: np.ndarray):
