@@ -266,10 +266,12 @@ class BoardDetector:
         min_area  = np.pi * (cell_est * 0.18) ** 2
         max_area  = np.pi * (cell_est * 0.52) ** 2
 
-        # Edge exclusion zones — guide rail at top (~10%), leg area at bottom (~8%),
-        # thin side borders (~3%).  Circles detected there are noise, not actual holes.
-        margin_top  = bh * 0.10
-        margin_bot  = bh * 0.08
+        # Edge exclusion zones — guide rail at top (~12%), collection tray at
+        # bottom (~20%), thin side borders (~3%).
+        # The tray is the deepest exclusion: it can be ~15-20% of board height
+        # and contains loose pieces / openings that look like holes.
+        margin_top  = bh * 0.12
+        margin_bot  = bh * 0.20
         margin_side = bw * 0.03
         y_lo = by + margin_top
         y_hi = by + bh - margin_bot
@@ -714,7 +716,11 @@ class LockedBoardDetector:
         # Only update the candidate when the fresh detection is itself verified
         # good — this prevents a slightly-wrong bounding box on the next frame
         # from overwriting a good candidate and tanking confidence.
-        if result.board_contour is not None and result.grid_centers is not None:
+        # Also require non-fallback (≥8 actual holes detected) so we don't
+        # accidentally lock on a random blue kitchen object with no real holes.
+        if (result.board_contour is not None
+                and result.grid_centers is not None
+                and not result.fallback_used):
             fresh_raw  = self.detector._classify_cells(hsv, result.grid_centers)
             fresh_conf = self.detector._compute_confidence(fresh_raw)
             if fresh_conf >= self.LOCK_MIN_CONF:

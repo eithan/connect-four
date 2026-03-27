@@ -156,6 +156,7 @@ class GameLoop:
         self.last_result = None
         self.frozen = False
         self._initialized = False   # True after first stable board observed
+        self._prev_locked = False   # track lock→unlock transitions
 
         self.fps_actual = 0.0
         self._fps_t = time.time()
@@ -192,6 +193,13 @@ class GameLoop:
 
         result = self.detector.detect(frame)
         self.last_result = result
+
+        # If the detector dropped its lock (board moved out of view), reset
+        # _initialized so the next lock re-seeds the tracker correctly.
+        if self._prev_locked and not self.detector.is_locked:
+            self._initialized = False
+            self.stable.reset()
+        self._prev_locked = self.detector.is_locked
 
         if self.phase == GamePhase.GAME_OVER:
             return
@@ -288,7 +296,7 @@ class GameLoop:
         ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
         print(f"AI ({info['method'].upper()}) → column {ai_col}")
         print(f"  Policy: {np.array2string(info['policy'], precision=3)}")
-        self.status_msg = f"AI plays col {ai_col} ({ai_color}) ↑ drop the AI's piece there"
+        self.status_msg = f"AI plays col {ai_col} ({ai_color}) - drop the AI's piece there"
         # Announce with column number (1-indexed feels more natural to say aloud)
         self.ann.speak(f"My move: column {ai_col + 1}. "
                        f"Please drop a {ai_color.lower()} piece there.", interrupt=True)
@@ -330,12 +338,12 @@ class GameLoop:
             if self._ai_turn_saved_board is not None:
                 self.tracker.state.board          = self._ai_turn_saved_board.copy()
                 self.tracker.state.current_player = self._ai_turn_saved_player
-            print(f"⚠  Wrong column! Placed col {placed_col}, AI wants col {self.ai_column}")
+            print(f"WRONG COLUMN! Placed col {placed_col}, AI wants col {self.ai_column}")
             print(f"   Remove that piece and drop into column {self.ai_column}")
             self.stable.reset()   # discard this stable snapshot
             ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
-            self.status_msg = (f"⚠ Wrong column! AI wants col {self.ai_column} ({ai_color})"
-                               f" — undo & retry")
+            self.status_msg = (f"WRONG COL! AI wants col {self.ai_column} ({ai_color})"
+                               " - undo & retry")
             self.ann.speak(f"Wrong column. Please undo that and use column "
                            f"{self.ai_column + 1}.", interrupt=True)
             return
@@ -387,7 +395,7 @@ class GameLoop:
 
     def _set_status_for_phase(self):
         human_color = self.COLOR_NAMES.get(self.human_player, "?")
-        self.status_msg = f"Your turn ({human_color}) — drop a piece"
+        self.status_msg = f"Your turn ({human_color}) - drop a piece"
 
     # ── Drawing helpers ───────────────────────────────────────────────────────
 
