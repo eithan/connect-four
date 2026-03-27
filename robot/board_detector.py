@@ -6,8 +6,9 @@ red pieces, yellow pieces, and empty slots.
 
 Returns a 6x7 numpy array: 0=empty, 1=red, 2=yellow
 
-Two built-in configs:
-  DetectionConfig()        — physical board defaults
+Three built-in configs:
+  DetectionConfig()        — physical board defaults (real plastic board)
+  PHYSICAL_CONFIG          — alias for DetectionConfig() with explicit name
   SCREEN_CONFIG            — digital screen / phone display
 
 Fallback detection: when the board frame isn't found via color,
@@ -24,9 +25,10 @@ from typing import Optional, Tuple, List
 class DetectionConfig:
     """HSV color thresholds. Tune these for your lighting / display conditions."""
 
-    # Blue board frame
-    board_hsv_low:  Tuple[int, int, int] = (90,  50,  40)
-    board_hsv_high: Tuple[int, int, int] = (140, 255, 255)   # V→255: covers bright screens
+    # Blue board frame — physical plastic board under typical indoor lighting.
+    # Increase S_low if background blue objects bleed in; decrease if board looks dark.
+    board_hsv_low:  Tuple[int, int, int] = (90,  80,  50)
+    board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
     # Red pieces (two ranges to wrap around the 0/180 boundary)
     red_hsv_low1:  Tuple[int, int, int] = (0,   80, 80)
@@ -45,7 +47,12 @@ class DetectionConfig:
 
 # ── Presets ──────────────────────────────────────────────────────────────────
 
-# Optimised for phone/monitor screens (emitted light, high saturation + brightness)
+# Explicit alias for the physical-board defaults (same as DetectionConfig()).
+# Use this when you want to be unambiguous in code, e.g. config=PHYSICAL_CONFIG.
+PHYSICAL_CONFIG = DetectionConfig()
+
+# Optimised for phone/monitor screens (emitted light, high saturation + brightness).
+# Do NOT use this for a real plastic board — use PHYSICAL_CONFIG or DetectionConfig().
 SCREEN_CONFIG = DetectionConfig(
     board_hsv_low=(85,  80,  80),
     board_hsv_high=(140, 255, 255),
@@ -144,35 +151,57 @@ class BoardDetector:
 
     def _find_board_contour(self, mask: np.ndarray, img_shape) -> Optional[np.ndarray]:
         """
-        Find the board boundary. Rather than just taking the single largest contour,
-        we take the bounding rect of *all* significant blue clusters. This handles
-        cases where the board's white empty circles break up the blue mask.
+        Find the board boundary from the blue-frame mask.
+
+        Strategy: pick the LARGEST single blue blob whose bounding-rect aspect
+        ratio is plausible for a Connect Four board (~7:6 ≈ 1.17, allowing
+        perspective tilt). We do NOT merge all blue blobs — doing so causes any
+        unrelated blue object in the scene (furniture, clothing, walls) to
+        inflate the bounding box wildly.
+
+        The large MORPH_CLOSE in _detect_board_region fills the white hole-circles
+        so the board usually appears as one solid blue blob. If multiple blobs
+        remain, we take the largest one that looks board-shaped.
         """
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return None
 
         img_area = img_shape[0] * img_shape[1]
-        min_cluster = img_area * 0.0005   # Ignore tiny noise blobs
+        noise_threshold = img_area * 0.001   # 0.1% — discard tiny noise blobs
 
-        # Collect all points from meaningful blue clusters
-        all_pts: List = []
-        for cnt in contours:
-            if cv2.contourArea(cnt) > min_cluster:
-                all_pts.extend(cnt.reshape(-1, 2).tolist())
-
-        if not all_pts:
+        # Sort candidates largest-first, drop noise
+        candidates = sorted(
+            [c for c in contours if cv2.contourArea(c) > noise_threshold],
+            key=cv2.contourArea,
+            reverse=True,
+        )
+        if not candidates:
             return None
 
-        pts = np.array(all_pts, dtype=np.int32)
-        x, y, w, h = cv2.boundingRect(pts)
+        # Connect Four board is 7 cols × 6 rows ≈ 1.17:1.
+        # Allow 0.6–2.8 to tolerate tilt/perspective.
+        ASPECT_MIN, ASPECT_MAX = 0.6, 2.8
 
-        if w * h < img_area * self.config.min_board_area_ratio:
-            return None
+        for cnt in candidates:
+            x, y, w, h = cv2.boundingRect(cnt)
+            if h == 0:
+                continue
+            if ASPECT_MIN <= w / h <= ASPECT_MAX:
+                if w * h >= img_area * self.config.min_board_area_ratio:
+                    return np.array(
+                        [[x, y], [x + w, y], [x + w, y + h], [x, y + h]],
+                        dtype=np.int32,
+                    ).reshape(-1, 1, 2)
 
-        # Return as a rectangular contour
-        return np.array([[x, y], [x + w, y], [x + w, y + h], [x, y + h]],
-                        dtype=np.int32).reshape(-1, 1, 2)
+        # Nothing passed the aspect check — fall back to the largest blob.
+        x, y, w, h = cv2.boundingRect(candidates[0])
+        if w * h >= img_area * self.config.min_board_area_ratio:
+            return np.array(
+                [[x, y], [x + w, y], [x + w, y + h], [x, y + h]],
+                dtype=np.int32,
+            ).reshape(-1, 1, 2)
+        return None
 
     # ── Piece-first fallback ──────────────────────────────────────────────────
 

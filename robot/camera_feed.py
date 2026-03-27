@@ -24,7 +24,7 @@ import time
 import os
 import sys
 
-from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, board_to_string
+from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG, board_to_string
 
 WINDOW_MAIN = "Connect Four - Camera Feed"
 WINDOW_TUNE = "Connect Four - HSV Tuning"
@@ -191,8 +191,10 @@ def main():
     if args.screen:
         cfg = SCREEN_CONFIG
         print("Screen mode: using display-optimized HSV thresholds")
+        print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
+        print("      omit --screen and use --config hsv_config.json (or run without flags).")
     else:
-        cfg = DetectionConfig()
+        cfg = PHYSICAL_CONFIG
     if args.config and os.path.exists(args.config):
         cfg = load_config(args.config)
         print(f"Loaded config: {args.config}")

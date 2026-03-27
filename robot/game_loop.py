@@ -31,7 +31,7 @@ import sys
 from enum import Enum
 from typing import Optional
 
-from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, SCREEN_CONFIG
+from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG
 from turn_tracker import TurnTracker
 from ai_player import AIPlayer
 
@@ -408,8 +408,10 @@ def main():
     if args.screen:
         cfg = SCREEN_CONFIG
         print("Screen mode: using display-optimised HSV thresholds")
+        print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
+        print("      omit --screen and use --config hsv_config.json (or run without flags).")
     else:
-        cfg = DetectionConfig()
+        cfg = PHYSICAL_CONFIG
     if args.config and os.path.exists(args.config):
         cfg = load_config(args.config)
         print(f"HSV config: {args.config}")
