@@ -102,7 +102,7 @@ class GameLoop:
     }
 
     def __init__(self, detector: LockedBoardDetector, ai: AIPlayer, tracker: TurnTracker,
-                 human_player: int = 1, stable_frames: int = 5):
+                 human_player: int = 1, stable_frames: int = 3):
         self.detector = detector
         self.ai = ai
         self.tracker = tracker
@@ -113,6 +113,8 @@ class GameLoop:
         self.phase = GamePhase.HUMAN_TURN
         self.ai_column: Optional[int] = None
         self.ai_policy: Optional[np.ndarray] = None
+        self._ai_turn_saved_board:   Optional[np.ndarray] = None  # saved before AI turn
+        self._ai_turn_saved_player:  int = 1
         self.status_msg = ""
         self.last_result = None
         self.frozen = False
@@ -132,6 +134,8 @@ class GameLoop:
         self.phase = GamePhase.HUMAN_TURN
         self.ai_column = None
         self.ai_policy = None
+        self._ai_turn_saved_board  = None
+        self._ai_turn_saved_player = 1
         self.last_result = None
         self._initialized = False
         self._set_status_for_phase()
@@ -231,6 +235,20 @@ class GameLoop:
 
     # ── State handlers ────────────────────────────────────────────────────────
 
+    def _run_ai(self, board: np.ndarray):
+        """Compute AI move and transition to AI_TURN phase."""
+        # Save tracker state before AI turn in case wrong column is placed
+        self._ai_turn_saved_board  = self.tracker.state.board.copy()
+        self._ai_turn_saved_player = self.tracker.state.current_player
+        ai_col, info = self.ai.get_move(board, self.ai_player_num)
+        self.ai_column = ai_col
+        self.ai_policy = info["policy"]
+        self.phase = GamePhase.AI_TURN
+        ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
+        print(f"AI ({info['method'].upper()}) → column {ai_col}")
+        print(f"  Policy: {np.array2string(info['policy'], precision=3)}")
+        self.status_msg = f"AI plays col {ai_col} ({ai_color}) ↑ drop the AI's piece there"
+
     def _handle_human_turn(self, board: np.ndarray):
         update = self.tracker.update(board)
 
@@ -247,34 +265,36 @@ class GameLoop:
             return
 
         # Trigger AI
-        ai_col, info = self.ai.get_move(board, self.ai_player_num)
-        self.ai_column = ai_col
-        self.ai_policy = info["policy"]
-        self.phase = GamePhase.AI_TURN
-        method = info["method"].upper()
-        print(f"AI ({method}) → column {ai_col}")
-        print(f"  Policy: {np.array2string(info['policy'], precision=3)}")
-        self.status_msg = (f"AI plays column {ai_col} "
-                           f"({'Red' if self.ai_player_num == 1 else 'Yellow'}) "
-                           f"— place the AI's piece there")
+        self._run_ai(board)
 
     def _handle_ai_placement(self, board: np.ndarray):
-        update = self.tracker.update(board)
+        # Peek at what changed before letting tracker advance
+        diff = board - self.tracker.state.board
+        new_cells = np.argwhere(diff != 0)
 
+        if len(new_cells) == 0:
+            return
+
+        placed_col = int(new_cells[0][1]) if len(new_cells) == 1 else -1
+
+        if placed_col != self.ai_column:
+            # Wrong column — restore tracker to pre-AI-turn state and warn
+            if self._ai_turn_saved_board is not None:
+                self.tracker.state.board          = self._ai_turn_saved_board.copy()
+                self.tracker.state.current_player = self._ai_turn_saved_player
+            print(f"⚠  Wrong column! Placed col {placed_col}, AI wants col {self.ai_column}")
+            print(f"   Remove that piece and drop into column {self.ai_column}")
+            self.stable.reset()   # discard this stable snapshot
+            ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
+            self.status_msg = (f"⚠ Wrong column! AI wants col {self.ai_column} ({ai_color})"
+                               f" — undo & retry")
+            return
+
+        # Correct column — let tracker accept the move
+        update = self.tracker.update(board)
         if not update["changed"]:
             if update["error"]:
                 print(f"[tracker] {update['error']}")
-            return
-
-        placed_col = update["move_col"]
-
-        if placed_col != self.ai_column:
-            # Wrong column — undo (don't advance tracker; re-detect)
-            print(f"⚠  Wrong column placed ({placed_col}), AI wants {self.ai_column} — undo & retry")
-            self.tracker.reset()
-            # Rebuild tracker state from what we knew before
-            self.status_msg = (f"⚠ Wrong column! AI wants col {self.ai_column} "
-                               f"— please undo that piece and try again")
             return
 
         print(f"AI piece confirmed in column {placed_col} ✓")
@@ -285,6 +305,7 @@ class GameLoop:
 
         self.ai_column = None
         self.ai_policy = None
+        self._ai_turn_saved_board = None
         self.phase = GamePhase.HUMAN_TURN
         self._set_status_for_phase()
 
@@ -390,9 +411,9 @@ def main():
     parser.add_argument("--yolo", type=str, metavar="MODEL",
                         help="Path to YOLOv8 model (.pt or .engine) — uses YOLO detector")
     parser.add_argument("--human-color", choices=["red", "yellow"], default="red")
-    parser.add_argument("--stable-frames", type=int, default=5,
-                        help="Consecutive frames required to confirm a move (default: 5)")
-    parser.add_argument("--fps", type=float, default=2.0)
+    parser.add_argument("--stable-frames", type=int, default=3,
+                        help="Consecutive frames required to confirm a move (default: 3)")
+    parser.add_argument("--fps", type=float, default=8.0)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     args = parser.parse_args()
