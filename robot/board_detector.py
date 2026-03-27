@@ -354,6 +354,10 @@ class BoardDetector:
         col_means = self._cluster_positions(xs, 7, cell_est)
         if row_means is None or col_means is None:
             return None
+        row_means = row_means[:6]   # guard against off-by-one
+        col_means = col_means[:7]
+        if len(row_means) != 6 or len(col_means) != 7:
+            return None
         centers = np.zeros((6, 7, 2), dtype=np.int32)
         for r, y in enumerate(row_means):
             for c, x in enumerate(col_means):
@@ -384,6 +388,13 @@ class BoardDetector:
             return None   # Too noisy or too many holes missing
 
         means: List[float] = sorted(float(np.mean(g)) for g in groups)
+
+        # If one extra group (noise split), merge the two closest adjacent means
+        while len(means) > n_target:
+            diffs = [means[i + 1] - means[i] for i in range(len(means) - 1)]
+            idx = int(np.argmin(diffs))
+            merged = (means[idx] + means[idx + 1]) / 2.0
+            means = means[:idx] + [merged] + means[idx + 2:]
 
         # Extrapolate missing positions
         if len(means) < n_target:
