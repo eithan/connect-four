@@ -25,6 +25,7 @@ import os
 import sys
 
 from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG, board_to_string
+from board_detector_yolo import YOLOBoardDetector
 
 WINDOW_MAIN = "Connect Four - Camera Feed"
 WINDOW_TUNE = "Connect Four - HSV Tuning"
@@ -186,20 +187,25 @@ def main():
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--screen", action="store_true",
                         help="Use screen-optimized HSV thresholds (phone/monitor display)")
+    parser.add_argument("--yolo", type=str, metavar="MODEL",
+                        help="Path to YOLOv8 model (.pt or .engine) — uses YOLO detector")
     args = parser.parse_args()
 
-    if args.screen:
-        cfg = SCREEN_CONFIG
-        print("Screen mode: using display-optimized HSV thresholds")
-        print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
-        print("      omit --screen and use --config hsv_config.json (or run without flags).")
+    if args.yolo:
+        detector = YOLOBoardDetector(model_path=args.yolo)
+        print(f"YOLO mode: {args.yolo}")
     else:
-        cfg = PHYSICAL_CONFIG
-    if args.config and os.path.exists(args.config):
-        cfg = load_config(args.config)
-        print(f"Loaded config: {args.config}")
-
-    detector = LockedBoardDetector(cfg)
+        if args.screen:
+            cfg = SCREEN_CONFIG
+            print("Screen mode: using display-optimized HSV thresholds")
+            print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
+            print("      omit --screen and use --config hsv_config.json (or run without flags).")
+        else:
+            cfg = PHYSICAL_CONFIG
+        if args.config and os.path.exists(args.config):
+            cfg = load_config(args.config)
+            print(f"Loaded config: {args.config}")
+        detector = LockedBoardDetector(cfg)
 
     print(f"Opening camera {args.camera}...")
     cap = cv2.VideoCapture(args.camera)
