@@ -35,6 +35,7 @@ from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, 
 from board_detector_yolo import YOLOBoardDetector
 from turn_tracker import TurnTracker
 from ai_player import AIPlayer
+from tts_announcer import GameAnnouncer
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -135,12 +136,14 @@ class GameLoop:
     }
 
     def __init__(self, detector: LockedBoardDetector, ai: AIPlayer, tracker: TurnTracker,
-                 human_player: int = 1, stable_frames: int = 5):
+                 human_player: int = 1, stable_frames: int = 5,
+                 announcer: Optional["GameAnnouncer"] = None):
         self.detector = detector
         self.ai = ai
         self.tracker = tracker
         self.human_player = human_player
         self.ai_player_num = 3 - human_player
+        self.ann = announcer or GameAnnouncer(enabled=False)   # silent no-op if omitted
 
         self.stable = StableStateDetector(required_frames=stable_frames,
                                           min_confidence=0.75)
@@ -173,6 +176,7 @@ class GameLoop:
         self.last_result = None
         self._initialized = False
         self._set_status_for_phase()
+        self.ann.speak("New game. Your turn.", interrupt=True)
         print("\n" + "=" * 50)
         print("  Game reset — your turn!")
         print("=" * 50 + "\n")
@@ -205,6 +209,7 @@ class GameLoop:
             red_n    = int(np.sum(stable_board == 1))
             yellow_n = int(np.sum(stable_board == 2))
             print(f"\nInitial board detected: Red={red_n}, Yellow={yellow_n}")
+            self.ann.speak("Board locked. Ready to play.")
             if self.tracker.state.game_over:
                 self._end_game({"game_over": True,
                                 "winner": self.tracker.state.winner,
@@ -284,6 +289,9 @@ class GameLoop:
         print(f"AI ({info['method'].upper()}) → column {ai_col}")
         print(f"  Policy: {np.array2string(info['policy'], precision=3)}")
         self.status_msg = f"AI plays col {ai_col} ({ai_color}) ↑ drop the AI's piece there"
+        # Announce with column number (1-indexed feels more natural to say aloud)
+        self.ann.speak(f"My move: column {ai_col + 1}. "
+                       f"Please drop a {ai_color.lower()} piece there.", interrupt=True)
 
     def _handle_human_turn(self, board: np.ndarray):
         update = self.tracker.update(board)
@@ -328,6 +336,8 @@ class GameLoop:
             ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
             self.status_msg = (f"⚠ Wrong column! AI wants col {self.ai_column} ({ai_color})"
                                f" — undo & retry")
+            self.ann.speak(f"Wrong column. Please undo that and use column "
+                           f"{self.ai_column + 1}.", interrupt=True)
             return
 
         # Correct column — let tracker accept the move
@@ -351,6 +361,8 @@ class GameLoop:
         self._ai_turn_saved_board = None
         self.phase = GamePhase.HUMAN_TURN
         self._set_status_for_phase()
+        human_color = self.COLOR_NAMES.get(self.human_player, "").lower()
+        self.ann.speak(f"Your turn. Drop a {human_color} piece.")
 
     def _end_game(self, update: dict):
         self.phase = GamePhase.GAME_OVER
@@ -358,12 +370,18 @@ class GameLoop:
         if winner == 0:
             self.status_msg = "DRAW!  Press 'r' to play again"
             print("Game over: DRAW")
+            self.ann.speak("It's a draw. Well played. Press R to play again.",
+                           interrupt=True)
         elif winner == self.human_player:
-            self.status_msg = "YOU WIN! 🎉  Press 'r' to play again"
+            self.status_msg = "YOU WIN!  Press 'r' to play again"
             print("Game over: Human wins!")
+            self.ann.speak("Congratulations, you win! Press R to play again.",
+                           interrupt=True)
         else:
             self.status_msg = "AI WINS!  Press 'r' to play again"
             print("Game over: AI wins!")
+            self.ann.speak("I win! Good game. Press R to play again.",
+                           interrupt=True)
         if update.get("winning_cells"):
             print(f"  Winning cells: {update['winning_cells']}")
 
@@ -457,6 +475,12 @@ def main():
     parser.add_argument("--stable-frames", type=int, default=3,
                         help="Consecutive frames required to confirm a move (default: 3)")
     parser.add_argument("--fps", type=float, default=8.0)
+    parser.add_argument("--no-tts", action="store_true",
+                        help="Disable text-to-speech announcements")
+    parser.add_argument("--tts-rate", type=int, default=155,
+                        help="TTS speaking rate in words per minute (default: 155)")
+    parser.add_argument("--tts-voice", type=str, default="",
+                        help="pyttsx3 voice ID (leave blank for system default)")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     args = parser.parse_args()
@@ -487,11 +511,17 @@ def main():
             cfg = load_config(args.config)
             print(f"HSV config: {args.config}")
         detector = LockedBoardDetector(cfg)
-    ai = AIPlayer(model_path=args.model, use_heuristic=(args.model is None))
-    tracker = TurnTracker(robot_player=ai_player_num)
+    ai       = AIPlayer(model_path=args.model, use_heuristic=(args.model is None))
+    tracker  = TurnTracker(robot_player=ai_player_num)
+    announcer = GameAnnouncer(
+        rate=args.tts_rate,
+        voice_id=args.tts_voice,
+        enabled=not args.no_tts,
+    )
     game = GameLoop(detector, ai, tracker,
                     human_player=human_player,
-                    stable_frames=args.stable_frames)
+                    stable_frames=args.stable_frames,
+                    announcer=announcer)
 
     print(f"Opening camera {args.camera}...")
     cap = cv2.VideoCapture(args.camera)
@@ -560,6 +590,7 @@ def main():
     finally:
         cap.release()
         cv2.destroyAllWindows()
+        announcer.stop()
         print("Done.")
 
 
