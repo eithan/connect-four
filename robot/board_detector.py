@@ -59,10 +59,13 @@ class DetectionConfig:
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / lime-green pieces
-    # H 15–85 covers standard yellow (H≈20-35) AND lime/chartreuse (H≈40-75)
-    # S≥100 prevents background colours seen through empty holes from matching
-    yellow_hsv_low:  Tuple[int, int, int] = (15, 100, 80)
-    yellow_hsv_high: Tuple[int, int, int] = (85, 255, 255)
+    # H 38–80: covers yellow-green through lime/chartreuse (user's pieces H≈40-75)
+    #           but excludes standard warm yellow (H≈15-35) that overlaps with
+    #           window/incandescent light seen through empty holes.
+    # S≥120: high saturation required — lit background through holes typically
+    #         has S < 80; pieces are fully saturated plastic (S > 150).
+    yellow_hsv_low:  Tuple[int, int, int] = (38, 120, 80)
+    yellow_hsv_high: Tuple[int, int, int] = (80, 255, 255)
 
     # Minimum board area as fraction of image
     min_board_area_ratio: float = 0.02

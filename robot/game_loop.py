@@ -28,8 +28,55 @@ import json
 import time
 import os
 import sys
+import traceback
+from datetime import datetime
 from enum import Enum
 from typing import Optional
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Logging helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _LogTee:
+    """Tee stdout to both console and a log file simultaneously."""
+    def __init__(self, log_path: str):
+        self._term = sys.stdout
+        self._file = open(log_path, "w", buffering=1, encoding="utf-8")
+
+    def write(self, msg: str):
+        self._term.write(msg)
+        self._file.write(msg)
+
+    def flush(self):
+        self._term.flush()
+        self._file.flush()
+
+    def close(self):
+        try:
+            self._file.close()
+        except Exception:
+            pass
+
+
+def setup_logging(log_dir: str = "logs") -> tuple:
+    """
+    Create a timestamped log file and screenshot directory.
+    Redirects stdout so all print() calls are captured automatically.
+
+    Returns (log_path, screenshot_dir, tee_object).
+    Call tee.close() on exit to flush the log.
+    """
+    os.makedirs(log_dir, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(log_dir, f"game_{stamp}.log")
+    ss_dir   = os.path.join(log_dir, f"game_{stamp}_shots")
+    os.makedirs(ss_dir, exist_ok=True)
+    tee = _LogTee(log_path)
+    sys.stdout = tee
+    print(f"Logging to {log_path}")
+    print(f"Screenshots → {ss_dir}")
+    return log_path, ss_dir, tee
+
 
 from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG
 from board_detector_yolo import YOLOBoardDetector
@@ -155,8 +202,12 @@ class GameLoop:
         self.status_msg = ""
         self.last_result = None
         self.frozen = False
-        self._initialized = False   # True after first stable board observed
-        self._prev_locked = False   # track lock→unlock transitions
+        self._initialized = False    # True after first stable board observed
+        self._prev_locked = False    # track lock→unlock transitions
+        self._latest_frame:   Optional[np.ndarray] = None  # raw camera frame
+        self._latest_display: Optional[np.ndarray] = None  # drawn overlay
+        self._ss_dir:  str = ""   # screenshot directory (set via set_screenshot_dir)
+        self._ss_count: int = 0
 
         self.fps_actual = 0.0
         self._fps_t = time.time()
@@ -165,6 +216,20 @@ class GameLoop:
         self._set_status_for_phase()
 
     # ── Public API ────────────────────────────────────────────────────────────
+
+    def set_screenshot_dir(self, path: str):
+        self._ss_dir = path
+
+    def _save_screenshot(self, label: str = "event"):
+        """Save the current overlay frame to the screenshot directory."""
+        if not self._ss_dir:
+            return
+        img = self._latest_display if self._latest_display is not None else self._latest_frame
+        if img is None:
+            return
+        self._ss_count += 1
+        name = f"{self._ss_count:04d}_{label}.jpg"
+        cv2.imwrite(os.path.join(self._ss_dir, name), img)
 
     def reset(self):
         self.tracker.reset()
@@ -184,6 +249,7 @@ class GameLoop:
 
     def process_frame(self, frame: np.ndarray):
         """Run detection + state machine. Call at your desired FPS."""
+        self._latest_frame = frame
         now = time.time()
         self._fps_count += 1
         if now - self._fps_t >= 1.0:
@@ -217,18 +283,32 @@ class GameLoop:
             red_n    = int(np.sum(stable_board == 1))
             yellow_n = int(np.sum(stable_board == 2))
             print(f"\nInitial board detected: Red={red_n}, Yellow={yellow_n}")
+            self._save_screenshot("lock_initial")
             self.ann.speak("Board locked. Ready to play.")
             if self.tracker.state.game_over:
                 self._end_game({"game_over": True,
                                 "winner": self.tracker.state.winner,
                                 "winning_cells": self.tracker.state.winning_cells})
                 return
-            # If it's already the AI's turn when we start, compute immediately
-            if self.tracker.state.current_player == self.ai_player_num and red_n + yellow_n > 0:
+            # If it's already the AI's turn when we start, compute immediately.
+            # Guard: only do this if piece counts are plausible (|R-Y| ≤ 1).
+            # A large imbalance (e.g. Red=0 Yellow=3) means the initial detection
+            # caught phantom pieces — treat it as an empty board and let human go first.
+            counts_balanced = abs(red_n - yellow_n) <= 1
+            if (self.tracker.state.current_player == self.ai_player_num
+                    and red_n + yellow_n > 0
+                    and counts_balanced):
                 print("AI's turn on startup — computing move...")
                 self.phase = GamePhase.AI_TURN
                 self._run_ai(stable_board)
             else:
+                if not counts_balanced and red_n + yellow_n > 0:
+                    print(f"Ignoring unbalanced initial detection (Red={red_n} Yellow={yellow_n})"
+                          f" — treating as empty board, human goes first")
+                    self.tracker.reset()   # discard false-positive initial state
+                    self.stable.reset()    # require another clean stable detection
+                    self._initialized = False
+                    return
                 self._set_status_for_phase()
             return
 
@@ -240,6 +320,7 @@ class GameLoop:
     def draw(self, frame: np.ndarray) -> np.ndarray:
         """Render the full game overlay onto a camera frame."""
         display = frame.copy()
+        self._latest_frame = frame
         h, w = display.shape[:2]
         result = self.last_result
 
@@ -280,6 +361,7 @@ class GameLoop:
                     (w - 360, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
 
         self._draw_status_bar(display, h, w)
+        self._latest_display = display
         return display
 
     # ── State handlers ────────────────────────────────────────────────────────
@@ -311,6 +393,7 @@ class GameLoop:
 
         col = update["move_col"]
         print(f"\nHuman played column {col}")
+        self._save_screenshot(f"human_col{col}")
 
         if update["game_over"]:
             self._end_game(update)
@@ -356,6 +439,7 @@ class GameLoop:
             return
 
         print(f"AI piece confirmed in column {placed_col} ✓")
+        self._save_screenshot(f"ai_col{placed_col}")
 
         if update["game_over"]:
             self._end_game(update)
@@ -374,6 +458,7 @@ class GameLoop:
 
     def _end_game(self, update: dict):
         self.phase = GamePhase.GAME_OVER
+        self._save_screenshot("game_over")
         winner = update.get("winner")
         if winner == 0:
             self.status_msg = "DRAW!  Press 'r' to play again"
@@ -519,6 +604,9 @@ def main():
             cfg = load_config(args.config)
             print(f"HSV config: {args.config}")
         detector = LockedBoardDetector(cfg)
+    # Set up logging (tees all stdout prints to a timestamped log file)
+    _log_path, _ss_dir, _tee = setup_logging("logs")
+
     ai       = AIPlayer(model_path=args.model, use_heuristic=(args.model is None))
     tracker  = TurnTracker(robot_player=ai_player_num)
     announcer = GameAnnouncer(
@@ -530,6 +618,7 @@ def main():
                     human_player=human_player,
                     stable_frames=args.stable_frames,
                     announcer=announcer)
+    game.set_screenshot_dir(_ss_dir)
 
     print(f"Opening camera {args.camera}...")
     cap = cv2.VideoCapture(args.camera)
@@ -570,7 +659,12 @@ def main():
             now = time.time()
             if not game.frozen and (now - last_process) >= frame_interval:
                 last_process = now
-                game.process_frame(frame)
+                try:
+                    game.process_frame(frame)
+                except Exception as exc:
+                    print(f"[ERROR] process_frame exception: {exc}")
+                    traceback.print_exc()
+                    game._save_screenshot("error")
 
             display = game.draw(frame)
 
@@ -599,7 +693,9 @@ def main():
         cap.release()
         cv2.destroyAllWindows()
         announcer.stop()
-        print("Done.")
+        sys.stdout = _tee._term   # restore real stdout before close
+        _tee.close()
+        print("Done. Log saved to:", _log_path)
 
 
 if __name__ == "__main__":
