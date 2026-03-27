@@ -481,16 +481,30 @@ class BoardDetector:
 
     @staticmethod
     def _apply_gravity_filter(board: np.ndarray) -> np.ndarray:
-        """Remove physically impossible floating pieces."""
-        b = board.copy()
+        """
+        Gravity-compress each column: collect all detected pieces regardless
+        of their detected row and stack them from the bottom upward.
+
+        This is better than simply removing floating pieces because:
+        - A real piece detected 1–2 rows too high (grid slightly misaligned)
+          gets repositioned to its correct gravity-valid row instead of deleted.
+        - True false-positive pieces (e.g. from background) are still moved
+          to valid rows, but the confidence score (computed on the raw board
+          BEFORE this step) already penalises them — the quality gate in
+          StableStateDetector will reject high-floating-piece frames.
+
+        Call _compute_confidence on the RAW board BEFORE calling this.
+        """
+        out = np.zeros_like(board)
         for col in range(7):
-            found_empty = False
-            for row in range(5, -1, -1):
-                if b[row, col] == 0:
-                    found_empty = True
-                elif found_empty:
-                    b[row, col] = 0
-        return b
+            # Scan bottom→top so bottom-most detections stay at the bottom
+            pieces = [board[row, col]
+                      for row in range(5, -1, -1)
+                      if board[row, col] != 0]
+            # Re-stack from row 5 upward
+            for i, color in enumerate(pieces):
+                out[5 - i, col] = color
+        return out
 
     def _compute_confidence(self, board: np.ndarray) -> float:
         """
