@@ -547,8 +547,8 @@ class LockedBoardDetector:
     """
 
     LOCK_MIN_CONF   = 0.45   # Min confidence for a frame to count as "good"
-    LOCK_FRAMES     = 4      # Total good frames needed to confirm the lock
-    CANDIDATE_RESET = 6      # Consecutive bad frames to drop the candidate entirely
+    LOCK_FRAMES     = 3      # Total good frames needed to confirm the lock
+    CANDIDATE_RESET = 15     # Consecutive bad frames to drop the candidate entirely
     UNLOCK_FRAMES   = 20     # Bad frames while locked before auto-unlock
     SMOOTH_WINDOW   = 4      # Bounding-box frames to average (reduces jitter)
 
@@ -652,26 +652,45 @@ class LockedBoardDetector:
 
             # Smooth bounding box; recompute grid + board from smoothed position
             smoothed = self._smooth_contour(result.board_contour)
-            result.grid_centers  = self.detector._compute_grid_centers(smoothed, image)
-            result.board         = self.detector._classify_cells(hsv, result.grid_centers)
-            result.board_contour = smoothed
-            result.confidence    = self.detector._compute_confidence(result.board)
+            new_centers = self.detector._compute_grid_centers(smoothed, image)
+            new_board   = self.detector._classify_cells(hsv, new_centers)
+            new_conf    = self.detector._compute_confidence(new_board)
 
-            # Always update candidate with the latest good detection
-            self._cand_centers = result.grid_centers.copy()
-            self._cand_contour = result.board_contour.copy()
+            # Re-validate: smoothing can move the grid to a worse position.
+            # Only count this frame if the post-smoothing result is also good.
+            if new_conf >= self.LOCK_MIN_CONF:
+                result.grid_centers  = new_centers
+                result.board         = new_board
+                result.board_contour = smoothed
+                result.confidence    = new_conf
 
-            self._good_count += 1
-            if self._good_count >= self.LOCK_FRAMES:
-                self._locked_centers = self._cand_centers.copy()
-                self._locked_contour = self._cand_contour.copy()
-                self.is_locked   = True
-                self._good_count = 0
-                self._smooth_buf.clear()
-                print("[Board] Locked ✓")
+                # Always update candidate with the latest verified good detection
+                self._cand_centers = result.grid_centers.copy()
+                self._cand_contour = result.board_contour.copy()
+
+                self._good_count += 1
+                if self._good_count >= self.LOCK_FRAMES:
+                    self._locked_centers = self._cand_centers.copy()
+                    self._locked_contour = self._cand_contour.copy()
+                    self.is_locked   = True
+                    self._good_count = 0
+                    self._smooth_buf.clear()
+                    print("[Board] Locked ✓")
+                else:
+                    print(f"[Board] Good frame {self._good_count}/{self.LOCK_FRAMES} "
+                          f"— conf {result.confidence:.2f}")
             else:
-                print(f"[Board] Good frame {self._good_count}/{self.LOCK_FRAMES} "
-                      f"— conf {result.confidence:.2f}")
+                # Original detection was fine but smoothed grid is bad —
+                # hold the current candidate for display, don't increment count
+                result.grid_centers  = new_centers
+                result.board         = new_board
+                result.board_contour = smoothed
+                result.confidence    = new_conf
+                if self._cand_centers is not None:
+                    result.grid_centers  = self._cand_centers
+                    result.board_contour = self._cand_contour
+                    result.board         = self.detector._classify_cells(hsv, self._cand_centers)
+                    result.confidence    = self.detector._compute_confidence(result.board)
 
         else:
             self._bad_streak += 1
