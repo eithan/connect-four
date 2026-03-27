@@ -264,6 +264,16 @@ class BoardDetector:
         min_area  = np.pi * (cell_est * 0.18) ** 2
         max_area  = np.pi * (cell_est * 0.52) ** 2
 
+        # Edge exclusion zones — guide rail at top (~10%), leg area at bottom (~8%),
+        # thin side borders (~3%).  Circles detected there are noise, not actual holes.
+        margin_top  = bh * 0.10
+        margin_bot  = bh * 0.08
+        margin_side = bw * 0.03
+        y_lo = by + margin_top
+        y_hi = by + bh - margin_bot
+        x_lo = bx + margin_side
+        x_hi = bx + bw - margin_side
+
         contours, _ = cv2.findContours(non_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         holes: List[Tuple[float, float]] = []
@@ -282,6 +292,9 @@ class BoardDetector:
                 continue
             cx = M["m10"] / M["m00"] + bx
             cy = M["m01"] / M["m00"] + by
+            # Discard circles in the edge exclusion zones
+            if not (x_lo < cx < x_hi and y_lo < cy < y_hi):
+                continue
             holes.append((float(cx), float(cy)))
 
         return holes
@@ -304,11 +317,30 @@ class BoardDetector:
         if len(col_means) != 7 or len(row_means) != 6:
             return None
 
+        # Regularise: fit a line through the cluster means so the final grid
+        # is perfectly evenly spaced even when a few means are slightly off.
+        col_means = self._regularize_means(col_means)
+        row_means = self._regularize_means(row_means)
+
         centers = np.zeros((6, 7, 2), dtype=np.int32)
         for r, y in enumerate(row_means):
             for c, x in enumerate(col_means):
-                centers[r, c] = [int(x), int(y)]
+                centers[r, c] = [int(round(x)), int(round(y))]
         return centers
+
+    @staticmethod
+    def _regularize_means(means: List[float]) -> List[float]:
+        """
+        Fit a straight line through cluster means (index → position) and
+        return the perfectly-evenly-spaced positions on that line.
+        Noise in individual cluster means is smoothed out; the overall
+        scale and offset come from all detected positions together.
+        """
+        n   = len(means)
+        idx = np.arange(n, dtype=float)
+        # np.polyfit: degree-1 → [slope, intercept]
+        slope, intercept = np.polyfit(idx, means, 1)
+        return [slope * i + intercept for i in range(n)]
 
     @staticmethod
     def _cluster_1d(values: np.ndarray, n_target: int,
