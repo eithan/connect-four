@@ -370,35 +370,42 @@ class BoardDetector:
 
 class LockedBoardDetector:
     """
-    Wraps BoardDetector with grid locking.
+    Wraps BoardDetector with grid locking and pre-lock smoothing.
 
     Problem: as the phone/camera moves, the board bounding box shifts each
     frame, causing grid centers to drift and misdetections to accumulate.
+    Background motion (fans, shadows, lighting) can also intermittently break
+    detection for a single frame, preventing the streak from ever reaching the
+    lock threshold.
 
-    Solution: detect the board frame until we see LOCK_FRAMES consecutive
-    high-confidence frames, then lock the grid centers in place. Subsequent
-    frames skip the expensive board-frame detection and only run piece
-    classification at the fixed grid positions.
+    Solution:
+    - Smooth the bounding box over a small rolling window of recent detections
+      so the grid centers don't jump around frame-to-frame.
+    - Allow up to SKIP_TOLERANCE bad frames within the lock streak without
+      resetting it — a single shadow flicker won't kill the streak.
+    - Once locked, grid centers are fixed; only piece classification runs.
 
-    The lock survives phone movement — pieces are classified at the saved
-    positions regardless of where the board *appears* to be in the image.
-
-    Auto-unlock: if classification confidence stays below 0.2 for
-    UNLOCK_FRAMES consecutive frames the board has probably left the view.
+    Auto-unlock: classification confidence stays below 0.2 for UNLOCK_FRAMES
+    consecutive frames → the board has probably left the view.
     Press 'l' in the UI to force an immediate re-lock.
     """
 
-    LOCK_MIN_CONF  = 0.55  # Confidence needed for a frame to count as "good"
-    LOCK_FRAMES    = 3     # Consecutive good frames before locking
-    UNLOCK_FRAMES  = 20    # Bad frames before auto-unlock (~10 s @ 2 fps)
+    LOCK_MIN_CONF  = 0.45   # Confidence needed for a frame to count as "good"
+    LOCK_FRAMES    = 4      # Good frames (within window) required to lock
+    UNLOCK_FRAMES  = 20     # Bad frames before auto-unlock (~10 s @ 2 fps)
+    SKIP_TOLERANCE = 1      # Bad frames tolerated inside the lock streak
+    SMOOTH_WINDOW  = 4      # Bounding-box frames to average (reduces jitter)
 
     def __init__(self, config: Optional[DetectionConfig] = None):
         self.detector = BoardDetector(config)
         self._locked_centers: Optional[np.ndarray] = None
         self._locked_contour: Optional[np.ndarray] = None
-        self._good_streak = 0
-        self._bad_streak  = 0
-        self.is_locked    = False
+        self._good_streak  = 0
+        self._bad_in_streak = 0   # Consecutive bad frames inside current streak
+        self._bad_streak   = 0    # Consecutive bad frames while locked (for unlock)
+        self.is_locked     = False
+        # Rolling buffer of recent bounding rects (x, y, w, h) for smoothing
+        self._smooth_buf: List[Tuple[int, int, int, int]] = []
 
     @property
     def config(self) -> DetectionConfig:
@@ -413,16 +420,17 @@ class LockedBoardDetector:
         """Force the detector to re-find the board frame on the next frame."""
         self._locked_centers = None
         self._locked_contour = None
-        self._good_streak = 0
-        self._bad_streak  = 0
-        self.is_locked    = False
+        self._good_streak   = 0
+        self._bad_in_streak = 0
+        self._bad_streak    = 0
+        self.is_locked      = False
+        self._smooth_buf.clear()
 
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
         if self.is_locked:
             return self._detect_locked(image, hsv, debug)
-        return self._detect_full(image, debug)
+        return self._detect_full(image, hsv, debug)
 
     # ── Locked fast-path ─────────────────────────────────────────────────────
 
@@ -444,7 +452,6 @@ class LockedBoardDetector:
             debug_img = self.detector._draw_debug(
                 image, board, self._locked_centers,
                 self._locked_contour, confidence, False)
-            # Cyan border = locked
             cv2.drawContours(debug_img, [self._locked_contour], -1, (255, 220, 0), 3)
             cv2.putText(debug_img, "LOCKED", (10, 58),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 220, 0), 2)
@@ -459,19 +466,61 @@ class LockedBoardDetector:
 
     # ── Full detection (pre-lock) ─────────────────────────────────────────────
 
-    def _detect_full(self, image: np.ndarray, debug: bool) -> DetectionResult:
+    def _smooth_contour(self, contour: np.ndarray) -> np.ndarray:
+        """
+        Average the bounding rect over the last SMOOTH_WINDOW good detections.
+        This prevents the grid from jumping around due to per-frame noise.
+        """
+        x, y, w, h = cv2.boundingRect(contour)
+        self._smooth_buf.append((x, y, w, h))
+        if len(self._smooth_buf) > self.SMOOTH_WINDOW:
+            self._smooth_buf.pop(0)
+        ax = int(np.mean([b[0] for b in self._smooth_buf]))
+        ay = int(np.mean([b[1] for b in self._smooth_buf]))
+        aw = int(np.mean([b[2] for b in self._smooth_buf]))
+        ah = int(np.mean([b[3] for b in self._smooth_buf]))
+        return np.array(
+            [[ax, ay], [ax + aw, ay], [ax + aw, ay + ah], [ax, ay + ah]],
+            dtype=np.int32,
+        ).reshape(-1, 1, 2)
+
+    def _detect_full(self, image: np.ndarray, hsv: np.ndarray,
+                     debug: bool) -> DetectionResult:
         result = self.detector.detect(image, debug=debug)
 
-        if result.board_contour is not None and result.confidence >= self.LOCK_MIN_CONF:
+        is_good = (result.board_contour is not None
+                   and result.confidence >= self.LOCK_MIN_CONF)
+
+        if is_good:
+            self._bad_in_streak = 0
+            # Smooth the bounding box and recompute grid/board from it so the
+            # display is stable even before the lock is achieved.
+            smoothed = self._smooth_contour(result.board_contour)
+            result.grid_centers = self.detector._compute_grid_centers(smoothed)
+            result.board = self.detector._classify_cells(hsv, result.grid_centers)
+            result.board_contour = smoothed
+            result.confidence = self.detector._compute_confidence(result.board)
+
             self._good_streak += 1
             if self._good_streak >= self.LOCK_FRAMES:
                 self._locked_centers = result.grid_centers.copy()
                 self._locked_contour = result.board_contour.copy()
                 self.is_locked = True
-                self._good_streak = 0
+                self._good_streak   = 0
+                self._bad_in_streak = 0
+                self._smooth_buf.clear()
                 print("[Board] Locked ✓")
         else:
-            self._good_streak = 0
+            self._bad_in_streak += 1
+            if self._bad_in_streak > self.SKIP_TOLERANCE:
+                # Too many consecutive bad frames — abandon this streak
+                if self._good_streak > 0:
+                    print(f"[Board] Streak reset after {self._good_streak} good frames "
+                          f"({self._bad_in_streak} bad in a row)")
+                self._good_streak   = 0
+                self._bad_in_streak = 0
+                self._smooth_buf.clear()
+            # else: tolerate this bad frame; streak lives on
 
         return result
 
