@@ -61,13 +61,15 @@ class DetectionConfig:
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / lime-green pieces
-    # H 38–80: covers yellow-green through lime/chartreuse (user's pieces H≈40-75)
-    #           but excludes standard warm yellow (H≈15-35) that overlaps with
-    #           window/incandescent light seen through empty holes.
-    # S≥120: high saturation required — lit background through holes typically
-    #         has S < 80; pieces are fully saturated plastic (S > 150).
-    yellow_hsv_low:  Tuple[int, int, int] = (38, 120, 80)
-    yellow_hsv_high: Tuple[int, int, int] = (80, 255, 255)
+    # H 30–92: broad coverage — user's lime-green pieces have H≈40-75 in normal
+    #           light, but bright/overexposed lighting can shift them slightly.
+    #           Window warm-light false positives (H≈15-35) are now handled by
+    #           the higher S threshold rather than a narrow H range.
+    # S≥90: lower than before (was 120) to catch slightly washed-out pieces
+    #         under bright kitchen light.  Background through empty holes still
+    #         has S<80 in most cases; S≥90 gives a small safety margin.
+    yellow_hsv_low:  Tuple[int, int, int] = (30, 90, 80)
+    yellow_hsv_high: Tuple[int, int, int] = (92, 255, 255)
 
     # Minimum board area as fraction of image
     min_board_area_ratio: float = 0.02
@@ -509,15 +511,21 @@ class BoardDetector:
                 elif yel_r > cfg.piece_threshold and yel_r > red_r:
                     board[r, c] = 2
 
-                # Debug: log cells with notable coverage so phantom sources
-                # can be identified from the log file.
-                if red_r > 0.12 or yel_r > 0.12:
-                    detected = ("R" if board[r, c] == 1
-                                else "Y" if board[r, c] == 2
-                                else ".")
-                    if detected != "." or red_r > 0.20 or yel_r > 0.20:
+                # Debug: log notable cells with HSV stats so we can calibrate ranges.
+                detected = ("R" if board[r, c] == 1
+                            else "Y" if board[r, c] == 2
+                            else ".")
+                notable = (red_r > 0.15 or yel_r > 0.15 or detected != ".")
+                if notable:
+                    # Include mean HSV of the sample area for calibration
+                    roi_pixels = hsv[roi_mask > 0]
+                    if len(roi_pixels) > 0:
+                        h_med = int(np.median(roi_pixels[:, 0]))
+                        s_med = int(np.median(roi_pixels[:, 1]))
+                        v_med = int(np.median(roi_pixels[:, 2]))
                         print(f"  [cell {r},{c}] red={red_r:.2f} yel={yel_r:.2f}"
-                              f"  cx={cx} cy={cy}  -> {detected}")
+                              f"  cx={cx} cy={cy}"
+                              f"  HSV=({h_med},{s_med},{v_med}) -> {detected}")
 
         return board   # raw, un-filtered — caller applies gravity filter
 
@@ -660,7 +668,11 @@ class LockedBoardDetector:
     # VERIFY_WINDOW frames is below VERIFY_MIN_CONF the lock was probably made
     # on poor (e.g. camera still warming up) frames — auto-relock.
     VERIFY_WINDOW   = 20
-    VERIFY_MIN_CONF = 0.55
+    # Lowered 0.55→0.35: boards with manually-placed pieces that violate
+    # gravity (or a slightly-off grid mapping) can legitimately score 0.45-0.55
+    # without being a bad lock.  The old threshold caused infinite relock loops.
+    # False-lock prevention now relies on S-min thresholds and piece_threshold.
+    VERIFY_MIN_CONF = 0.35
 
     def __init__(self, config: Optional[DetectionConfig] = None):
         self.detector = BoardDetector(config)
