@@ -249,7 +249,7 @@ class GameLoop:
         # Top HUD
         conf = result.confidence if result else 0.0
         conf_color = (0, 255, 0) if conf > 0.7 else (0, 165, 255) if conf > 0.4 else (0, 0, 255)
-        lock_label = "🔒 LOCKED" if self.detector.is_locked else "searching..."
+        lock_label = "LOCKED" if self.detector.is_locked else "searching..."
         lock_color = (255, 220, 0) if self.detector.is_locked else (0, 165, 255)
         cv2.putText(display, f"Conf:{conf:.2f}  FPS:{self.fps_actual:.1f}  {lock_label}",
                     (10, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.55, lock_color, 1)
@@ -504,8 +504,17 @@ def main():
     cw = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     ch = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print(f"Camera: {cw}x{ch}  |  AI: {'AlphaZero (ONNX)' if not ai.use_heuristic else 'Heuristic'}")
+
+    # Discard the first 30 frames so the camera's auto-exposure and
+    # auto-white-balance have time to settle before we attempt board detection.
+    print("Camera warming up", end="", flush=True)
+    for _ in range(30):
+        cap.read()
+        print(".", end="", flush=True)
+    print(" ready")
+
     print("\nPoint the camera at your Connect Four board.")
-    print("Controls: r=reset  f=freeze  q=quit\n")
+    print("Controls: r=reset  f=freeze  l=re-lock  q=quit\n")
 
     cv2.namedWindow(GameLoop.WINDOW, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(GameLoop.WINDOW, min(cw, 960), min(ch, 560))

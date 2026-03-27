@@ -589,7 +589,7 @@ class LockedBoardDetector:
     """
 
     LOCK_MIN_CONF   = 0.45   # Classification confidence needed for a "good" frame
-    LOCK_FRAMES     = 3      # Good frames needed to confirm lock
+    LOCK_FRAMES     = 4      # Good frames needed to confirm lock
     CANDIDATE_RESET = 20     # Consecutive bad frames to drop candidate entirely
     UNLOCK_FRAMES   = 20     # Consecutive bad locked frames → unlock
 
@@ -598,6 +598,12 @@ class LockedBoardDetector:
     # permanent.  5 frames ≈ ~0.5 s at 10 fps — fast enough to track gameplay
     # while ignoring shadows.
     REMOVE_THRESHOLD = 5
+
+    # Post-lock quality verification.  If average confidence over the first
+    # VERIFY_WINDOW frames is below VERIFY_MIN_CONF the lock was probably made
+    # on poor (e.g. camera still warming up) frames — auto-relock.
+    VERIFY_WINDOW   = 20
+    VERIFY_MIN_CONF = 0.55
 
     def __init__(self, config: Optional[DetectionConfig] = None):
         self.detector = BoardDetector(config)
@@ -612,6 +618,8 @@ class LockedBoardDetector:
         self._last_board:    Optional[np.ndarray] = None  # for change detection
         self._stable_board:  Optional[np.ndarray] = None  # temporally-smoothed state
         self._absent_count:  np.ndarray = np.zeros((6, 7), dtype=np.int32)
+        self._verify_count: int   = 0
+        self._verify_sum:   float = 0.0
 
     @property
     def config(self) -> DetectionConfig:
@@ -635,6 +643,8 @@ class LockedBoardDetector:
         self._last_board   = None
         self._stable_board = None
         self._absent_count = np.zeros((6, 7), dtype=np.int32)
+        self._verify_count = 0
+        self._verify_sum   = 0.0
 
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -650,6 +660,21 @@ class LockedBoardDetector:
         confidence = self.detector._compute_confidence(board_raw)
         board_filt = self.detector._apply_gravity_filter(board_raw)
         board      = self._temporal_smooth(board_filt)
+
+        # ── Post-lock quality verification (first VERIFY_WINDOW frames) ─────
+        if self._verify_count < self.VERIFY_WINDOW:
+            self._verify_count += 1
+            self._verify_sum   += confidence
+            if self._verify_count == self.VERIFY_WINDOW:
+                avg = self._verify_sum / self.VERIFY_WINDOW
+                if avg < self.VERIFY_MIN_CONF:
+                    print(f"[Board] Poor initial lock (avg conf {avg:.2f}) — auto-relocking")
+                    self.unlock()
+                    return DetectionResult(
+                        board=np.zeros((6, 7), dtype=np.int8),
+                        confidence=0.0,
+                        errors=["Auto-relocking: poor lock quality"],
+                    )
 
         if confidence < 0.2:
             self._lock_bad += 1
