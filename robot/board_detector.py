@@ -1,129 +1,167 @@
 """
-Board Detector - Extracts Connect Four board state from an image.
+Board Detector — Connect Four
+==============================
 
-Uses OpenCV color segmentation to detect the blue board frame,
-red pieces, yellow pieces, and empty slots.
+Pipeline
+--------
+1. Locate the blue board frame (HSV mask → largest well-shaped blue blob).
+2. Within the board, find hole circles by detecting non-blue circular regions
+   (contour analysis — more reliable than HoughCircles).
+3. Cluster hole centres into a 6×7 grid (gap-based 1D clustering with
+   bound-constrained extrapolation for partially-visible holes).
+4. Classify each cell as red / yellow-green / empty by sampling HSV at
+   the hole centre.
 
-Returns a 6x7 numpy array: 0=empty, 1=red, 2=yellow
+Key design notes
+----------------
+- "Yellow" range covers H 15–85 to capture both standard yellow AND the
+  lime-green / chartreuse pieces common on cheaper boards.
+- Empty holes show through to background (gray, not white) — we classify
+  by positive evidence of red or yellow-green, not by absence of background.
+- Contour-based hole detection works inside a blue mask inversion; no
+  HoughCircles parameter tuning required.
+- LockedBoardDetector wraps BoardDetector with two-stage locking:
+    Stage 1 (Candidate) — first good detection shown immediately.
+    Stage 2 (Locked)    — confirmed after LOCK_FRAMES good detections.
+  Bad frames hold the last candidate; only 15+ consecutive bad frames
+  (board truly gone) clear the state.
 
-Three built-in configs:
-  DetectionConfig()        — physical board defaults (real plastic board)
-  PHYSICAL_CONFIG          — alias for DetectionConfig() with explicit name
-  SCREEN_CONFIG            — digital screen / phone display
-
-Fallback detection: when the board frame isn't found via color,
-the detector tries to infer the grid from piece positions directly.
+External API (unchanged from previous versions)
+-----------------------------------------------
+  DetectionConfig, DetectionResult, BoardDetector, LockedBoardDetector,
+  PHYSICAL_CONFIG, SCREEN_CONFIG, board_to_string
 """
 
 import cv2
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class DetectionConfig:
-    """HSV color thresholds. Tune these for your lighting / display conditions."""
+    """HSV colour thresholds and detection parameters."""
 
-    # Blue board frame — physical plastic board under typical indoor lighting.
-    # Increase S_low if background blue objects bleed in; decrease if board looks dark.
-    board_hsv_low:  Tuple[int, int, int] = (90,  80,  50)
+    # Blue board frame
+    board_hsv_low:  Tuple[int, int, int] = (90,  80, 50)
     board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
-    # Red pieces (two ranges to wrap around the 0/180 boundary)
+    # Red pieces (two ranges to wrap the 0/180 hue boundary)
     red_hsv_low1:  Tuple[int, int, int] = (0,   80, 80)
     red_hsv_high1: Tuple[int, int, int] = (12,  255, 255)
     red_hsv_low2:  Tuple[int, int, int] = (163, 80, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
-    # Yellow pieces
+    # Yellow / lime-green pieces
+    # H 15–85 covers standard yellow (H≈20-35) AND lime/chartreuse (H≈40-75)
     yellow_hsv_low:  Tuple[int, int, int] = (15, 80, 80)
-    yellow_hsv_high: Tuple[int, int, int] = (40, 255, 255)
+    yellow_hsv_high: Tuple[int, int, int] = (85, 255, 255)
 
-    # Detection behaviour
-    min_board_area_ratio: float = 0.02   # Minimum board area as fraction of image
-    piece_fallback: bool = True          # Try piece-based detection if board frame not found
+    # Minimum board area as fraction of image
+    min_board_area_ratio: float = 0.02
+
+    # Fraction of a cell that must be piece-colour to count as a piece
+    piece_threshold: float = 0.18
+
+    # Hole circularity minimum (0–1; 1 = perfect circle)
+    min_circularity: float = 0.40
 
 
-# ── Presets ──────────────────────────────────────────────────────────────────
-
-# Explicit alias for the physical-board defaults (same as DetectionConfig()).
-# Use this when you want to be unambiguous in code, e.g. config=PHYSICAL_CONFIG.
+# Physical board preset (default)
 PHYSICAL_CONFIG = DetectionConfig()
 
-# Optimised for phone/monitor screens (emitted light, high saturation + brightness).
-# Do NOT use this for a real plastic board — use PHYSICAL_CONFIG or DetectionConfig().
+# Screen/phone display preset (emitted light — higher saturation)
 SCREEN_CONFIG = DetectionConfig(
-    board_hsv_low=(85,  80,  80),
+    board_hsv_low=(85,  80, 80),
     board_hsv_high=(140, 255, 255),
     red_hsv_low1=(0,   120, 100),
     red_hsv_high1=(12,  255, 255),
     red_hsv_low2=(163, 120, 100),
     red_hsv_high2=(180, 255, 255),
     yellow_hsv_low=(15, 120, 100),
-    yellow_hsv_high=(40, 255, 255),
+    yellow_hsv_high=(85, 255, 255),
     min_board_area_ratio=0.01,
-    piece_fallback=True,
 )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Result container
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class DetectionResult:
-    """Result of board detection."""
-    board:         np.ndarray
-    confidence:    float
-    grid_centers:  Optional[np.ndarray] = None
-    board_contour: Optional[np.ndarray] = None
-    debug_image:   Optional[np.ndarray] = None
-    fallback_used: bool = False
-    errors:        List[str] = field(default_factory=list)
+    board:          np.ndarray                    # (6, 7) int8: 0=empty 1=red 2=yellow
+    confidence:     float                         # 0.0 – 1.0
+    grid_centers:   Optional[np.ndarray] = None   # (6, 7, 2) int32
+    board_contour:  Optional[np.ndarray] = None   # for display
+    debug_image:    Optional[np.ndarray] = None
+    fallback_used:  bool = False
+    errors:         List[str] = field(default_factory=list)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Core detector
+# ─────────────────────────────────────────────────────────────────────────────
 
 class BoardDetector:
-    """Detects Connect Four board state from images."""
+    """Single-frame Connect Four board state extractor."""
 
     def __init__(self, config: Optional[DetectionConfig] = None):
         self.config = config or DetectionConfig()
 
+    # ── Public entry point ────────────────────────────────────────────────────
+
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         errors: List[str] = []
-        fallback_used = False
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-        # ── Primary: find board frame by color ───────────────────────────────
-        board_mask = self._detect_board_region(hsv)
-        board_contour = self._find_board_contour(board_mask, image.shape)
-
-        # ── Fallback: infer board bounds from piece positions ─────────────────
-        if board_contour is None and self.config.piece_fallback:
-            board_contour = self._piece_fallback_contour(hsv, image.shape)
-            if board_contour is not None:
-                fallback_used = True
-                errors.append("Board frame not found — using piece-fallback detection")
-
-        if board_contour is None:
-            errors.append("Board not found (no blue frame, no visible pieces)")
+        # ── 1. Locate board ───────────────────────────────────────────────────
+        bbox = self._find_board_bbox(hsv, image.shape)
+        if bbox is None:
             return DetectionResult(
                 board=np.zeros((6, 7), dtype=np.int8),
                 confidence=0.0,
-                errors=errors,
+                errors=["Board not found — no blue frame detected"],
             )
+        bx, by, bw, bh = bbox
 
-        grid_centers = self._compute_grid_centers(board_contour, image)
-        board        = self._classify_cells(hsv, grid_centers)
-        confidence   = self._compute_confidence(board)
+        # ── 2. Detect holes ───────────────────────────────────────────────────
+        holes = self._find_holes(hsv, bx, by, bw, bh)
 
-        # Penalise fallback detections slightly — they may be less accurate
+        # ── 3. Fit 6×7 grid ───────────────────────────────────────────────────
+        cell_est = bw / 7.0
+        fallback_used = False
+        grid_centers = None
+
+        if len(holes) >= 8:
+            grid_centers = self._fit_grid(holes, cell_est, bx, bx + bw, by, by + bh)
+
+        if grid_centers is None:
+            grid_centers = self._grid_from_bounds(bx, by, bw, bh)
+            fallback_used = True
+            errors.append(f"Hole detection found {len(holes)} circles — using padded-bounds grid")
+
+        # ── 4. Classify cells ─────────────────────────────────────────────────
+        board      = self._classify_cells(hsv, grid_centers)
+        confidence = self._compute_confidence(board)
         if fallback_used:
             confidence = min(confidence, 0.65)
 
-        debug_img = (
-            self._draw_debug(image, board, grid_centers, board_contour,
-                             confidence, fallback_used)
-            if debug else None
-        )
+        board_contour = np.array(
+            [[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]],
+            dtype=np.int32,
+        ).reshape(-1, 1, 2)
+
+        debug_img = None
+        if debug:
+            debug_img = self._draw_debug(
+                image, board, grid_centers, board_contour, holes,
+                confidence, fallback_used,
+            )
 
         return DetectionResult(
             board=board,
@@ -135,240 +173,132 @@ class BoardDetector:
             errors=errors,
         )
 
-    # ── Board frame detection ─────────────────────────────────────────────────
+    # ── Step 1: Board bounding box ────────────────────────────────────────────
 
-    def _detect_board_region(self, hsv: np.ndarray) -> np.ndarray:
+    def _find_board_bbox(self, hsv: np.ndarray,
+                          img_shape: Tuple) -> Optional[Tuple[int, int, int, int]]:
+        """
+        Find the blue board frame and return (x, y, w, h).
+        Uses a large MORPH_CLOSE to fill the hole grid, then picks the
+        largest blob with a plausible Connect Four aspect ratio (0.6–2.8).
+        """
         cfg = self.config
-        mask = cv2.inRange(hsv,
-                           np.array(cfg.board_hsv_low),
-                           np.array(cfg.board_hsv_high))
-        # Large close kernel fills the white/empty circles punched through the board
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open)
-        return mask
+        mask = cv2.inRange(hsv, np.array(cfg.board_hsv_low), np.array(cfg.board_hsv_high))
 
-    def _find_board_contour(self, mask: np.ndarray, img_shape) -> Optional[np.ndarray]:
-        """
-        Find the board boundary from the blue-frame mask.
+        # Fill the circular holes so the board reads as a solid blue rectangle
+        k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k_close)
+        k_open  = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k_open)
 
-        Strategy: pick the LARGEST single blue blob whose bounding-rect aspect
-        ratio is plausible for a Connect Four board (~7:6 ≈ 1.17, allowing
-        perspective tilt). We do NOT merge all blue blobs — doing so causes any
-        unrelated blue object in the scene (furniture, clothing, walls) to
-        inflate the bounding box wildly.
-
-        The large MORPH_CLOSE in _detect_board_region fills the white hole-circles
-        so the board usually appears as one solid blue blob. If multiple blobs
-        remain, we take the largest one that looks board-shaped.
-        """
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return None
 
-        img_area = img_shape[0] * img_shape[1]
-        noise_threshold = img_area * 0.001   # 0.1% — discard tiny noise blobs
+        img_area     = img_shape[0] * img_shape[1]
+        noise_thresh = img_area * 0.001
 
-        # Sort candidates largest-first, drop noise
+        # Sort by area largest-first, ignore noise
         candidates = sorted(
-            [c for c in contours if cv2.contourArea(c) > noise_threshold],
-            key=cv2.contourArea,
-            reverse=True,
+            [c for c in contours if cv2.contourArea(c) > noise_thresh],
+            key=cv2.contourArea, reverse=True,
         )
         if not candidates:
             return None
 
-        # Connect Four board is 7 cols × 6 rows ≈ 1.17:1.
-        # Allow 0.6–2.8 to tolerate tilt/perspective.
-        ASPECT_MIN, ASPECT_MAX = 0.6, 2.8
-
+        # Prefer the largest blob with a board-like aspect ratio
         for cnt in candidates:
             x, y, w, h = cv2.boundingRect(cnt)
             if h == 0:
                 continue
-            if ASPECT_MIN <= w / h <= ASPECT_MAX:
-                if w * h >= img_area * self.config.min_board_area_ratio:
-                    return np.array(
-                        [[x, y], [x + w, y], [x + w, y + h], [x, y + h]],
-                        dtype=np.int32,
-                    ).reshape(-1, 1, 2)
+            aspect = w / h
+            if 0.6 <= aspect <= 2.8 and w * h >= img_area * cfg.min_board_area_ratio:
+                return x, y, w, h
 
-        # Nothing passed the aspect check — fall back to the largest blob.
+        # Fallback: just the largest blob
         x, y, w, h = cv2.boundingRect(candidates[0])
-        if w * h >= img_area * self.config.min_board_area_ratio:
-            return np.array(
-                [[x, y], [x + w, y], [x + w, y + h], [x, y + h]],
-                dtype=np.int32,
-            ).reshape(-1, 1, 2)
+        if w * h >= img_area * cfg.min_board_area_ratio:
+            return x, y, w, h
         return None
 
-    # ── Piece-first fallback ──────────────────────────────────────────────────
+    # ── Step 2: Hole detection ────────────────────────────────────────────────
 
-    def _piece_fallback_contour(self, hsv: np.ndarray,
-                                 img_shape) -> Optional[np.ndarray]:
+    def _find_holes(self, hsv: np.ndarray,
+                     bx: int, by: int, bw: int, bh: int) -> List[Tuple[float, float]]:
         """
-        When the board frame can't be found by color, try to locate visible pieces
-        and infer the grid bounding box from their positions.
-        Works even if the board color doesn't match (e.g. non-blue boards).
+        Find hole circles within the board region.
+
+        The board frame is blue.  Holes (empty or containing a piece) appear as
+        non-blue circular regions.  We detect them by:
+          a) Creating a RAW blue mask (no morphology) inside the board ROI so
+             the holes aren't filled in.
+          b) Inverting → non-blue mask.
+          c) Finding contours, filtering by area (expected hole size) and
+             circularity (≥ min_circularity).
+
+        Both empty holes (showing gray background) and filled holes (red/yellow
+        pieces) are captured — piece colour is determined in Step 4.
         """
         cfg = self.config
-        h, w = img_shape[:2]
+        hsv_roi  = hsv[by:by + bh, bx:bx + bw]
 
-        red = (cv2.inRange(hsv, np.array(cfg.red_hsv_low1), np.array(cfg.red_hsv_high1)) |
-               cv2.inRange(hsv, np.array(cfg.red_hsv_low2), np.array(cfg.red_hsv_high2)))
-        yellow = cv2.inRange(hsv,
-                             np.array(cfg.yellow_hsv_low),
-                             np.array(cfg.yellow_hsv_high))
-        mask = red | yellow
+        # Raw blue mask — NOT morphed so hole gaps remain visible
+        raw_blue = cv2.inRange(
+            hsv_roi, np.array(cfg.board_hsv_low), np.array(cfg.board_hsv_high)
+        )
 
-        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k)
+        # Invert: non-blue = holes/pieces
+        non_blue = cv2.bitwise_not(raw_blue)
 
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Small MORPH_OPEN to remove single-pixel noise without closing holes
+        k_noise = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        non_blue = cv2.morphologyEx(non_blue, cv2.MORPH_OPEN, k_noise)
 
-        img_area = h * w
-        blobs: List[Tuple[int, int, int]] = []   # (cx, cy, radius)
+        # Expected hole area based on board width / 7 columns
+        cell_est  = bw / 7.0
+        min_area  = np.pi * (cell_est * 0.18) ** 2
+        max_area  = np.pi * (cell_est * 0.52) ** 2
+
+        contours, _ = cv2.findContours(non_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        holes: List[Tuple[float, float]] = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if not (img_area * 0.0005 < area < img_area * 0.04):
+            if not (min_area < area < max_area):
                 continue
             perim = cv2.arcLength(cnt, True)
-            if perim > 0 and 4 * np.pi * area / perim ** 2 > 0.35:
-                M = cv2.moments(cnt)
-                if M["m00"] > 0:
-                    blobs.append((
-                        int(M["m10"] / M["m00"]),
-                        int(M["m01"] / M["m00"]),
-                        int(np.sqrt(area / np.pi)),
-                    ))
+            if perim == 0:
+                continue
+            circularity = 4 * np.pi * area / (perim ** 2)
+            if circularity < cfg.min_circularity:
+                continue
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+            cx = M["m10"] / M["m00"] + bx
+            cy = M["m01"] / M["m00"] + by
+            holes.append((float(cx), float(cy)))
 
-        if len(blobs) < 2:
+        return holes
+
+    # ── Step 3: Grid fitting ──────────────────────────────────────────────────
+
+    def _fit_grid(self, holes: List[Tuple[float, float]],
+                   cell_est: float,
+                   min_x: float, max_x: float,
+                   min_y: float, max_y: float) -> Optional[np.ndarray]:
+        """Cluster hole centres into 6 rows × 7 columns."""
+        xs = np.array([h[0] for h in holes])
+        ys = np.array([h[1] for h in holes])
+
+        col_means = self._cluster_1d(xs, 7, cell_est, min_x, max_x)
+        row_means = self._cluster_1d(ys, 6, cell_est, min_y, max_y)
+
+        if col_means is None or row_means is None:
+            return None
+        if len(col_means) != 7 or len(row_means) != 6:
             return None
 
-        xs = [b[0] for b in blobs]
-        ys = [b[1] for b in blobs]
-        med_r = float(np.median([b[2] for b in blobs]))
-        cell_size = med_r * 2.6   # Typical piece-radius to cell-size ratio
-
-        # Pad outward to cover empty cells beyond the detected pieces
-        pad = int(cell_size * 1.5)
-        x1 = max(0, min(xs) - pad)
-        y1 = max(0, min(ys) - pad)
-        x2 = min(w - 1, max(xs) + pad)
-        y2 = min(h - 1, max(ys) + pad)
-
-        if (x2 - x1) < cell_size * 2 or (y2 - y1) < cell_size * 2:
-            return None
-
-        return np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]],
-                        dtype=np.int32).reshape(-1, 1, 2)
-
-    # ── Grid + classification ────────────────────────────────────────────────
-
-    def _compute_grid_centers(self, board_contour: np.ndarray,
-                               image: Optional[np.ndarray] = None) -> np.ndarray:
-        """
-        Compute the 6×7 grid cell centres.
-
-        Primary path: detect the dark hole-circles within the board region
-        (HoughCircles) and fit a grid to their actual positions. This is immune
-        to the bounding-box being taller/wider than just the hole area (due to
-        the board's guide rail, legs, etc.).
-
-        Fallback: pad the bounding rect with a generous margin that accounts for
-        the typical Connect Four board structure (15% top guide, 7% bottom base,
-        7% side borders).
-        """
-        bx, by, bw, bh = cv2.boundingRect(board_contour)
-
-        if image is not None:
-            centers = self._grid_from_holes(image, bx, by, bw, bh)
-            if centers is not None:
-                return centers
-
-        # Fallback: padding-based estimation.
-        # Real boards: holes fill ~85% of width, ~68% of height;
-        # the top guide rail adds ~15% and the base/legs add ~7%.
-        pad_x     = int(bw * 0.07)
-        pad_y_top = int(bh * 0.15)
-        pad_y_bot = int(bh * 0.07)
-        x = bx + pad_x
-        y = by + pad_y_top
-        w = bw - 2 * pad_x
-        h = bh - pad_y_top - pad_y_bot
-        cell_w, cell_h = w / 7, h / 6
-        centers = np.zeros((6, 7, 2), dtype=np.int32)
-        for row in range(6):
-            for col in range(7):
-                centers[row, col] = [
-                    int(x + col * cell_w + cell_w / 2),
-                    int(y + row * cell_h + cell_h / 2),
-                ]
-        return centers
-
-    def _grid_from_holes(self, image: np.ndarray,
-                          bx: int, by: int, bw: int, bh: int) -> Optional[np.ndarray]:
-        """
-        Find dark hole-circles inside the board region using HoughCircles,
-        then cluster them into a 6×7 grid.
-
-        Returns None if too few circles are found or clustering fails.
-        """
-        buf = max(10, int(min(bw, bh) * 0.03))
-        x1 = max(0, bx - buf);  y1 = max(0, by - buf)
-        x2 = min(image.shape[1], bx + bw + buf)
-        y2 = min(image.shape[0], by + bh + buf)
-        roi = image[y1:y2, x1:x2]
-
-        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (5, 5), 1.5)
-
-        # Expected size: cells are ~board_width/7; holes are ~30-42% of cell_size
-        cell_est  = bw / 7.0
-        min_r     = max(int(cell_est * 0.22), 8)
-        max_r     = int(cell_est * 0.46)
-        min_dist  = int(cell_est * 0.65)
-
-        circles = cv2.HoughCircles(
-            gray, cv2.HOUGH_GRADIENT,
-            dp=1.2, minDist=min_dist,
-            param1=50, param2=18,
-            minRadius=min_r, maxRadius=max_r,
-        )
-        if circles is None or len(circles[0]) < 8:
-            return None
-
-        pts = np.round(circles[0]).astype(int)
-        cx = (pts[:, 0] + x1).astype(float)
-        cy = (pts[:, 1] + y1).astype(float)
-
-        # Filter circles to those that actually fall inside the board bounding box
-        inside = ((cx >= bx) & (cx <= bx + bw) & (cy >= by) & (cy <= by + bh))
-        cx, cy = cx[inside], cy[inside]
-        if len(cx) < 8:
-            return None
-
-        return self._fit_6x7_grid(cx, cy, cell_est, bx, bx + bw, by, by + bh)
-
-    def _fit_6x7_grid(self, xs: np.ndarray, ys: np.ndarray,
-                       cell_est: float,
-                       min_x: Optional[float] = None, max_x: Optional[float] = None,
-                       min_y: Optional[float] = None, max_y: Optional[float] = None,
-                       ) -> Optional[np.ndarray]:
-        """
-        Cluster hole centres into 6 rows × 7 columns and return a (6,7,2) grid.
-        Board bounds are used to constrain extrapolated positions so the grid
-        never extends outside the detected board region.
-        """
-        row_means = self._cluster_positions(ys, 6, cell_est, min_y, max_y)
-        col_means = self._cluster_positions(xs, 7, cell_est, min_x, max_x)
-        if row_means is None or col_means is None:
-            return None
-        row_means = row_means[:6]   # guard against off-by-one
-        col_means = col_means[:7]
-        if len(row_means) != 6 or len(col_means) != 7:
-            return None
         centers = np.zeros((6, 7, 2), dtype=np.int32)
         for r, y in enumerate(row_means):
             for c, x in enumerate(col_means):
@@ -376,16 +306,16 @@ class BoardDetector:
         return centers
 
     @staticmethod
-    def _cluster_positions(values: np.ndarray, n_target: int,
-                            cell_size: float,
-                            lo_bound: Optional[float] = None,
-                            hi_bound: Optional[float] = None,
-                            ) -> Optional[List[float]]:
+    def _cluster_1d(values: np.ndarray, n_target: int,
+                     cell_size: float,
+                     lo: Optional[float] = None,
+                     hi: Optional[float] = None) -> Optional[List[float]]:
         """
-        Gap-cluster 1D hole positions into n_target groups.
-        Consecutive sorted values separated by > 50% of cell_size start a new group.
-        Missing groups are extrapolated from the median spacing.
-        Returns sorted group means, or None if grouping is incoherent.
+        Gap-based 1D clustering into n_target groups.
+
+        Consecutive sorted values separated by > 50% of cell_size start a new
+        group.  Missing groups are extrapolated from median spacing, clamped to
+        [lo, hi] so the grid never extends outside the board boundary.
         """
         if len(values) < max(n_target - 2, 3):
             return None
@@ -399,18 +329,17 @@ class BoardDetector:
 
         n_found = len(groups)
         if n_found > n_target + 1 or n_found < n_target - 2:
-            return None   # Too noisy or too many holes missing
+            return None
 
         means: List[float] = sorted(float(np.mean(g)) for g in groups)
 
-        # If one extra group (noise split), merge the two closest adjacent means
+        # Merge if one extra group (noise split)
         while len(means) > n_target:
             diffs = [means[i + 1] - means[i] for i in range(len(means) - 1)]
-            idx = int(np.argmin(diffs))
-            merged = (means[idx] + means[idx + 1]) / 2.0
-            means = means[:idx] + [merged] + means[idx + 2:]
+            idx   = int(np.argmin(diffs))
+            means = means[:idx] + [(means[idx] + means[idx + 1]) / 2] + means[idx + 2:]
 
-        # Extrapolate missing positions
+        # Extrapolate missing positions, constrained to board bounds
         if len(means) < n_target:
             spacing = (
                 float(np.median([means[i + 1] - means[i]
@@ -418,70 +347,111 @@ class BoardDetector:
                 if len(means) > 1 else cell_size
             )
             while len(means) < n_target:
-                expected_span = n_target * spacing
-                current_span  = means[-1] - means[0]
-                if current_span + spacing <= expected_span:
-                    candidate = means[-1] + spacing
-                    # Don't extrapolate past the board boundary
-                    if hi_bound is not None and candidate > hi_bound + cell_size * 0.4:
-                        means.insert(0, means[0] - spacing)
-                    else:
-                        means.append(candidate)
+                right = means[-1] + spacing
+                left  = means[0]  - spacing
+                go_right = (hi is None or right <= hi + cell_size * 0.4)
+                go_left  = (lo is None or left  >= lo - cell_size * 0.4)
+                span = means[-1] - means[0]
+                if span + spacing <= n_target * spacing and go_right:
+                    means.append(right)
+                elif go_left:
+                    means.insert(0, left)
+                elif go_right:
+                    means.append(right)
                 else:
-                    candidate = means[0] - spacing
-                    if lo_bound is not None and candidate < lo_bound - cell_size * 0.4:
-                        means.append(means[-1] + spacing)
-                    else:
-                        means.insert(0, candidate)
+                    break
             means = sorted(means)[:n_target]
 
+        if len(means) != n_target:
+            return None
         return means
 
+    def _grid_from_bounds(self, bx: int, by: int,
+                           bw: int, bh: int) -> np.ndarray:
+        """
+        Fallback grid when hole detection fails.
+        Pads the bounding box to account for the board's guide rail (top),
+        base legs (bottom), and side borders.
+        """
+        pad_x     = int(bw * 0.07)
+        pad_y_top = int(bh * 0.15)
+        pad_y_bot = int(bh * 0.07)
+        x = bx + pad_x
+        y = by + pad_y_top
+        w = bw - 2 * pad_x
+        h = bh - pad_y_top - pad_y_bot
+        cw, ch = w / 7, h / 6
+        centers = np.zeros((6, 7, 2), dtype=np.int32)
+        for r in range(6):
+            for c in range(7):
+                centers[r, c] = [
+                    int(x + c * cw + cw / 2),
+                    int(y + r * ch + ch / 2),
+                ]
+        return centers
+
+    # ── Step 4: Cell classification ───────────────────────────────────────────
+
     def _classify_cells(self, hsv: np.ndarray,
-                        grid_centers: np.ndarray) -> np.ndarray:
+                         grid_centers: np.ndarray) -> np.ndarray:
+        """
+        For each grid cell, sample a circle around the centre and measure the
+        fraction of red and yellow-green pixels.  The dominant colour wins if
+        it exceeds piece_threshold.
+        """
         cfg = self.config
         board = np.zeros((6, 7), dtype=np.int8)
-        cell_spacing = abs(int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0]))
-        # 0.25 keeps sampling well inside each cell, avoiding bleed from neighbours
-        sample_radius = max(int(cell_spacing * 0.25), 5)
 
-        red_mask = (cv2.inRange(hsv, np.array(cfg.red_hsv_low1), np.array(cfg.red_hsv_high1)) |
-                    cv2.inRange(hsv, np.array(cfg.red_hsv_low2), np.array(cfg.red_hsv_high2)))
-        yellow_mask = cv2.inRange(hsv,
-                                  np.array(cfg.yellow_hsv_low),
-                                  np.array(cfg.yellow_hsv_high))
+        cell_spacing  = abs(int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0]))
+        sample_radius = max(int(cell_spacing * 0.28), 6)
 
-        for row in range(6):
-            for col in range(7):
-                cx, cy = int(grid_centers[row, col, 0]), int(grid_centers[row, col, 1])
-                roi = np.zeros(hsv.shape[:2], dtype=np.uint8)
-                cv2.circle(roi, (cx, cy), sample_radius, 255, -1)
-                total   = cv2.countNonZero(roi)
-                red_r   = cv2.countNonZero(red_mask   & roi) / max(total, 1)
-                yel_r   = cv2.countNonZero(yellow_mask & roi) / max(total, 1)
-                if red_r > 0.18 and red_r > yel_r:
-                    board[row, col] = 1
-                elif yel_r > 0.18 and yel_r > red_r:
-                    board[row, col] = 2
+        h_img, w_img = hsv.shape[:2]
+
+        red_mask = (
+            cv2.inRange(hsv, np.array(cfg.red_hsv_low1),  np.array(cfg.red_hsv_high1)) |
+            cv2.inRange(hsv, np.array(cfg.red_hsv_low2),  np.array(cfg.red_hsv_high2))
+        )
+        yellow_mask = cv2.inRange(
+            hsv, np.array(cfg.yellow_hsv_low), np.array(cfg.yellow_hsv_high)
+        )
+
+        for r in range(6):
+            for c in range(7):
+                cx = int(grid_centers[r, c, 0])
+                cy = int(grid_centers[r, c, 1])
+                if not (0 <= cx < w_img and 0 <= cy < h_img):
+                    continue
+
+                roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                cv2.circle(roi_mask, (cx, cy), sample_radius, 255, -1)
+                total = cv2.countNonZero(roi_mask)
+                if total == 0:
+                    continue
+
+                red_r = cv2.countNonZero(red_mask    & roi_mask) / total
+                yel_r = cv2.countNonZero(yellow_mask & roi_mask) / total
+
+                if red_r > cfg.piece_threshold and red_r > yel_r:
+                    board[r, c] = 1
+                elif yel_r > cfg.piece_threshold and yel_r > red_r:
+                    board[r, c] = 2
 
         return self._apply_gravity_filter(board)
 
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
     @staticmethod
     def _apply_gravity_filter(board: np.ndarray) -> np.ndarray:
-        """
-        Remove physically impossible (floating) pieces.
-        In a real game, pieces stack from the bottom of each column.
-        Any piece above an empty slot is a misdetection — strip it out.
-        """
-        filtered = board.copy()
+        """Remove physically impossible floating pieces."""
+        b = board.copy()
         for col in range(7):
             found_empty = False
-            for row in range(5, -1, -1):   # scan bottom → top
-                if filtered[row, col] == 0:
+            for row in range(5, -1, -1):
+                if b[row, col] == 0:
                     found_empty = True
                 elif found_empty:
-                    filtered[row, col] = 0  # floating piece — remove
-        return filtered
+                    b[row, col] = 0
+        return b
 
     def _compute_confidence(self, board: np.ndarray) -> float:
         confidence = 1.0
@@ -491,79 +461,76 @@ class BoardDetector:
                 if board[row, col] == 0:
                     found_empty = True
                 elif found_empty:
-                    confidence -= 0.15   # Floating piece — gravity violation
-        red_count    = int(np.sum(board == 1))
-        yellow_count = int(np.sum(board == 2))
-        if abs(red_count - yellow_count) > 1:
+                    confidence -= 0.15
+        red    = int(np.sum(board == 1))
+        yellow = int(np.sum(board == 2))
+        if abs(red - yellow) > 1:
             confidence -= 0.2
         return max(0.0, min(1.0, confidence))
 
-    # ── Debug overlay ────────────────────────────────────────────────────────
-
     def _draw_debug(self, image: np.ndarray, board: np.ndarray,
-                    grid_centers: np.ndarray, board_contour: np.ndarray,
-                    confidence: float, fallback_used: bool) -> np.ndarray:
-        debug = image.copy()
+                     grid_centers: np.ndarray, board_contour: np.ndarray,
+                     holes: List, confidence: float,
+                     fallback_used: bool) -> np.ndarray:
+        dbg = image.copy()
         color = (0, 165, 255) if fallback_used else (0, 255, 0)
-        cv2.drawContours(debug, [board_contour], -1, color, 2)
+        cv2.drawContours(dbg, [board_contour], -1, color, 2)
 
-        for row in range(6):
-            for col in range(7):
-                cx, cy = int(grid_centers[row, col, 0]), int(grid_centers[row, col, 1])
-                cell = board[row, col]
-                c = (200, 200, 200) if cell == 0 else ((0, 0, 255) if cell == 1 else (0, 255, 255))
-                label = "." if cell == 0 else ("R" if cell == 1 else "Y")
-                cv2.circle(debug, (cx, cy), 5, c, -1)
-                cv2.putText(debug, label, (cx - 6, cy + 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 2)
+        # Detected holes in cyan (before grid fitting)
+        for hx, hy in holes:
+            cv2.circle(dbg, (int(hx), int(hy)), 4, (255, 255, 0), 1)
 
-        status = f"{'FALLBACK ' if fallback_used else ''}Confidence: {confidence:.2f}"
-        cv2.putText(debug, status, (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                    (0, 255, 0) if confidence > 0.8 else (0, 0, 255), 2)
-        return debug
+        # Grid cells
+        for r in range(6):
+            for c in range(7):
+                cx, cy = int(grid_centers[r, c, 0]), int(grid_centers[r, c, 1])
+                cell   = board[r, c]
+                col    = (90, 90, 90) if cell == 0 else ((0, 0, 255) if cell == 1 else (0, 220, 255))
+                label  = "." if cell == 0 else ("R" if cell == 1 else "Y")
+                cv2.circle(dbg, (cx, cy), 6, col, -1)
+                cv2.putText(dbg, label, (cx - 6, cy + 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, col, 2)
 
+        tag = "FALLBACK " if fallback_used else ""
+        cv2.putText(dbg,
+                    f"{tag}Conf:{confidence:.2f}  holes:{len(holes)}",
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                    (0, 255, 0) if confidence > 0.8 else (0, 165, 255), 2)
+        return dbg
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Locking wrapper
+# ─────────────────────────────────────────────────────────────────────────────
 
 class LockedBoardDetector:
     """
-    Wraps BoardDetector with two-stage locking.
+    Two-stage locking wrapper around BoardDetector.
 
-    Stage 1 — Candidate: the first good detection stores a candidate grid that
-    is immediately used for display (no more jumping between unrelated frames).
-    Bad frames reuse the last candidate instead of showing garbage.
+    Stage 1 — Candidate: first confident detection stored immediately;
+              used for display while building toward full lock.
+    Stage 2 — Locked: after LOCK_FRAMES good detections the grid is frozen.
+              Only cell classification runs per-frame (fast path).
 
-    Stage 2 — Confirmed lock: after LOCK_FRAMES *total* good detections the
-    grid is confirmed and frozen. Bad frames no longer count against the
-    good-frame total — only CANDIDATE_RESET consecutive bad frames (i.e. the
-    board has genuinely left the view) reset everything.
-
-    This tolerates noisy real-world scenes (fan shadows, variable lighting)
-    that intermittently break detection for a frame or two without preventing
-    the lock from ever being reached.
-
-    Auto-unlock: while locked, UNLOCK_FRAMES consecutive low-confidence frames
-    triggers a re-lock cycle.
-    Press 'l' in the UI to force an immediate re-lock.
+    Bad frames hold the last candidate for display; CANDIDATE_RESET (15)
+    consecutive bad frames drop the candidate entirely (board out of view).
     """
 
-    LOCK_MIN_CONF   = 0.45   # Min confidence for a frame to count as "good"
-    LOCK_FRAMES     = 3      # Total good frames needed to confirm the lock
-    CANDIDATE_RESET = 15     # Consecutive bad frames to drop the candidate entirely
-    UNLOCK_FRAMES   = 20     # Bad frames while locked before auto-unlock
-    SMOOTH_WINDOW   = 4      # Bounding-box frames to average (reduces jitter)
+    LOCK_MIN_CONF   = 0.45   # Min confidence to count as a "good" frame
+    LOCK_FRAMES     = 3      # Good frames needed to confirm lock
+    CANDIDATE_RESET = 15     # Consecutive bad frames before dropping candidate
+    UNLOCK_FRAMES   = 20     # Consecutive bad frames while locked → unlock
 
     def __init__(self, config: Optional[DetectionConfig] = None):
         self.detector = BoardDetector(config)
         self._locked_centers: Optional[np.ndarray] = None
         self._locked_contour: Optional[np.ndarray] = None
-        # Candidate: first good detection; used for stable display pre-lock
         self._cand_centers:   Optional[np.ndarray] = None
         self._cand_contour:   Optional[np.ndarray] = None
-        self._good_count  = 0   # Cumulative good frames since candidate set
-        self._bad_streak  = 0   # Consecutive bad frames (for candidate reset)
-        self._lock_bad    = 0   # Consecutive bad frames while locked (for unlock)
+        self._good_count  = 0
+        self._bad_streak  = 0
+        self._lock_bad    = 0
         self.is_locked    = False
-        self._smooth_buf: List[Tuple[int, int, int, int]] = []
 
     @property
     def config(self) -> DetectionConfig:
@@ -575,7 +542,7 @@ class LockedBoardDetector:
         self.unlock()
 
     def unlock(self):
-        """Force the detector to re-find the board frame on the next frame."""
+        """Force re-detection on the next frame."""
         self._locked_centers = None
         self._locked_contour = None
         self._cand_centers   = None
@@ -584,18 +551,17 @@ class LockedBoardDetector:
         self._bad_streak  = 0
         self._lock_bad    = 0
         self.is_locked    = False
-        self._smooth_buf.clear()
 
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         if self.is_locked:
             return self._detect_locked(image, hsv, debug)
-        return self._detect_full(image, hsv, debug)
+        return self._detect_unlocked(image, hsv, debug)
 
-    # ── Confirmed-lock fast-path ──────────────────────────────────────────────
+    # ── Locked fast path ─────────────────────────────────────────────────────
 
     def _detect_locked(self, image: np.ndarray, hsv: np.ndarray,
-                       debug: bool) -> DetectionResult:
+                        debug: bool) -> DetectionResult:
         board      = self.detector._classify_cells(hsv, self._locked_centers)
         confidence = self.detector._compute_confidence(board)
 
@@ -611,14 +577,14 @@ class LockedBoardDetector:
         if debug:
             debug_img = self.detector._draw_debug(
                 image, board, self._locked_centers,
-                self._locked_contour, confidence, False)
+                self._locked_contour, [], confidence, False,
+            )
             cv2.drawContours(debug_img, [self._locked_contour], -1, (255, 220, 0), 3)
             cv2.putText(debug_img, "LOCKED", (10, 58),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 220, 0), 2)
 
         return DetectionResult(
-            board=board,
-            confidence=confidence,
+            board=board, confidence=confidence,
             grid_centers=self._locked_centers,
             board_contour=self._locked_contour,
             debug_image=debug_img,
@@ -626,22 +592,8 @@ class LockedBoardDetector:
 
     # ── Pre-lock detection ────────────────────────────────────────────────────
 
-    def _smooth_contour(self, contour: np.ndarray) -> np.ndarray:
-        x, y, w, h = cv2.boundingRect(contour)
-        self._smooth_buf.append((x, y, w, h))
-        if len(self._smooth_buf) > self.SMOOTH_WINDOW:
-            self._smooth_buf.pop(0)
-        ax = int(np.mean([b[0] for b in self._smooth_buf]))
-        ay = int(np.mean([b[1] for b in self._smooth_buf]))
-        aw = int(np.mean([b[2] for b in self._smooth_buf]))
-        ah = int(np.mean([b[3] for b in self._smooth_buf]))
-        return np.array(
-            [[ax, ay], [ax + aw, ay], [ax + aw, ay + ah], [ax, ay + ah]],
-            dtype=np.int32,
-        ).reshape(-1, 1, 2)
-
-    def _detect_full(self, image: np.ndarray, hsv: np.ndarray,
-                     debug: bool) -> DetectionResult:
+    def _detect_unlocked(self, image: np.ndarray, hsv: np.ndarray,
+                          debug: bool) -> DetectionResult:
         result = self.detector.detect(image, debug=debug)
 
         is_good = (result.board_contour is not None
@@ -649,63 +601,32 @@ class LockedBoardDetector:
 
         if is_good:
             self._bad_streak = 0
+            self._cand_centers = result.grid_centers.copy()
+            self._cand_contour = result.board_contour.copy()
 
-            # Smooth bounding box; recompute grid + board from smoothed position
-            smoothed = self._smooth_contour(result.board_contour)
-            new_centers = self.detector._compute_grid_centers(smoothed, image)
-            new_board   = self.detector._classify_cells(hsv, new_centers)
-            new_conf    = self.detector._compute_confidence(new_board)
-
-            # Re-validate: smoothing can move the grid to a worse position.
-            # Only count this frame if the post-smoothing result is also good.
-            if new_conf >= self.LOCK_MIN_CONF:
-                result.grid_centers  = new_centers
-                result.board         = new_board
-                result.board_contour = smoothed
-                result.confidence    = new_conf
-
-                # Always update candidate with the latest verified good detection
-                self._cand_centers = result.grid_centers.copy()
-                self._cand_contour = result.board_contour.copy()
-
-                self._good_count += 1
-                if self._good_count >= self.LOCK_FRAMES:
-                    self._locked_centers = self._cand_centers.copy()
-                    self._locked_contour = self._cand_contour.copy()
-                    self.is_locked   = True
-                    self._good_count = 0
-                    self._smooth_buf.clear()
-                    print("[Board] Locked ✓")
-                else:
-                    print(f"[Board] Good frame {self._good_count}/{self.LOCK_FRAMES} "
-                          f"— conf {result.confidence:.2f}")
+            self._good_count += 1
+            if self._good_count >= self.LOCK_FRAMES:
+                self._locked_centers = self._cand_centers.copy()
+                self._locked_contour = self._cand_contour.copy()
+                self.is_locked    = True
+                self._good_count  = 0
+                print("[Board] Locked ✓")
             else:
-                # Original detection was fine but smoothed grid is bad —
-                # hold the current candidate for display, don't increment count
-                result.grid_centers  = new_centers
-                result.board         = new_board
-                result.board_contour = smoothed
-                result.confidence    = new_conf
-                if self._cand_centers is not None:
-                    result.grid_centers  = self._cand_centers
-                    result.board_contour = self._cand_contour
-                    result.board         = self.detector._classify_cells(hsv, self._cand_centers)
-                    result.confidence    = self.detector._compute_confidence(result.board)
+                print(f"[Board] Good frame {self._good_count}/{self.LOCK_FRAMES} "
+                      f"— conf {result.confidence:.2f}")
 
         else:
             self._bad_streak += 1
 
             if self._bad_streak >= self.CANDIDATE_RESET:
-                # Genuinely lost — drop candidate and start over
                 print(f"[Board] Candidate dropped ({self._bad_streak} bad frames in a row)")
                 self._cand_centers = None
                 self._cand_contour = None
                 self._good_count   = 0
-                self._smooth_buf.clear()
                 self._bad_streak   = 0
 
             elif self._cand_centers is not None:
-                # Board temporarily lost — hold the last candidate for display
+                # Board temporarily lost — show last known good grid
                 result.grid_centers  = self._cand_centers
                 result.board_contour = self._cand_contour
                 result.board         = self.detector._classify_cells(hsv, self._cand_centers)
@@ -714,11 +635,14 @@ class LockedBoardDetector:
         return result
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────────────────────────────────────
+
 def board_to_string(board: np.ndarray) -> str:
-    """Pretty-print a board state."""
     symbols = {0: ".", 1: "R", 2: "Y"}
     lines = ["  " + " ".join(str(i) for i in range(7)), "  " + "-" * 13]
     for row in range(6):
-        lines.append(f"{row}|" + " ".join(symbols[board[row, col]] for col in range(7)) + "|")
+        lines.append(f"{row}|" + " ".join(symbols[board[row, c]] for c in range(7)) + "|")
     lines.append("  " + "-" * 13)
     return "\n".join(lines)
