@@ -147,10 +147,14 @@ class BoardDetector:
             errors.append(f"Hole detection found {len(holes)} circles — using padded-bounds grid")
 
         # ── 4. Classify cells ─────────────────────────────────────────────────
-        board      = self._classify_cells(hsv, grid_centers)
-        confidence = self._compute_confidence(board)
+        # Compute confidence on the raw (unfiltered) board — floating pieces
+        # in the raw detection mean the grid is misaligned, which is the
+        # signal we want.  Apply the gravity filter afterwards for the result.
+        board_raw  = self._classify_cells(hsv, grid_centers)
+        confidence = self._compute_confidence(board_raw)
         if fallback_used:
             confidence = min(confidence, 0.65)
+        board = self._apply_gravity_filter(board_raw)
 
         board_contour = np.array(
             [[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]],
@@ -437,7 +441,7 @@ class BoardDetector:
                 elif yel_r > cfg.piece_threshold and yel_r > red_r:
                     board[r, c] = 2
 
-        return self._apply_gravity_filter(board)
+        return board   # raw, un-filtered — caller applies gravity filter
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -455,14 +459,25 @@ class BoardDetector:
         return b
 
     def _compute_confidence(self, board: np.ndarray) -> float:
+        """
+        Score the raw (un-gravity-filtered) board.
+
+        Scan each column BOTTOM→TOP.  A piece sitting above an empty cell is
+        physically impossible (floating) and indicates a misdetection.  Each
+        such violation subtracts 0.15.  Piece-count imbalance > 1 subtracts 0.2.
+
+        Note: call this on the RAW board before applying _apply_gravity_filter.
+        After filtering there are no floating pieces, so violations would always
+        be zero and the check would be meaningless.
+        """
         confidence = 1.0
         for col in range(7):
             found_empty = False
-            for row in range(6):
+            for row in range(5, -1, -1):   # bottom → top
                 if board[row, col] == 0:
-                    found_empty = True
+                    found_empty = True      # found empty below
                 elif found_empty:
-                    confidence -= 0.15
+                    confidence -= 0.15      # piece above an empty = floating
         red    = int(np.sum(board == 1))
         yellow = int(np.sum(board == 2))
         if abs(red - yellow) > 1:
@@ -573,8 +588,9 @@ class LockedBoardDetector:
 
     def _detect_locked(self, image: np.ndarray, hsv: np.ndarray,
                         debug: bool) -> DetectionResult:
-        board      = self.detector._classify_cells(hsv, self._locked_centers)
-        confidence = self.detector._compute_confidence(board)
+        board_raw  = self.detector._classify_cells(hsv, self._locked_centers)
+        confidence = self.detector._compute_confidence(board_raw)
+        board      = self.detector._apply_gravity_filter(board_raw)
 
         if confidence < 0.2:
             self._lock_bad += 1
@@ -615,8 +631,8 @@ class LockedBoardDetector:
         # good — this prevents a slightly-wrong bounding box on the next frame
         # from overwriting a good candidate and tanking confidence.
         if result.board_contour is not None and result.grid_centers is not None:
-            fresh_board = self.detector._classify_cells(hsv, result.grid_centers)
-            fresh_conf  = self.detector._compute_confidence(fresh_board)
+            fresh_raw  = self.detector._classify_cells(hsv, result.grid_centers)
+            fresh_conf = self.detector._compute_confidence(fresh_raw)
             if fresh_conf >= self.LOCK_MIN_CONF:
                 self._cand_centers = result.grid_centers.copy()
                 self._cand_contour = result.board_contour.copy()
@@ -624,13 +640,14 @@ class LockedBoardDetector:
         # If we have a candidate, classify at that position regardless of
         # whether the blue frame was detected this frame.
         if self._cand_centers is not None:
-            cand_board = self.detector._classify_cells(hsv, self._cand_centers)
-            cand_conf  = self.detector._compute_confidence(cand_board)
+            cand_raw  = self.detector._classify_cells(hsv, self._cand_centers)
+            cand_conf = self.detector._compute_confidence(cand_raw)
+            cand_board = self.detector._apply_gravity_filter(cand_raw)
 
             # Override result with the candidate-based classification
             result.grid_centers  = self._cand_centers
             result.board_contour = self._cand_contour
-            result.board         = cand_board
+            result.board         = cand_board     # gravity-filtered
             result.confidence    = cand_conf
 
             is_good = cand_conf >= self.LOCK_MIN_CONF
