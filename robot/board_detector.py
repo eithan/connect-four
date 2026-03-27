@@ -343,15 +343,26 @@ class BoardDetector:
         cx = (pts[:, 0] + x1).astype(float)
         cy = (pts[:, 1] + y1).astype(float)
 
-        return self._fit_6x7_grid(cx, cy, cell_est)
+        # Filter circles to those that actually fall inside the board bounding box
+        inside = ((cx >= bx) & (cx <= bx + bw) & (cy >= by) & (cy <= by + bh))
+        cx, cy = cx[inside], cy[inside]
+        if len(cx) < 8:
+            return None
+
+        return self._fit_6x7_grid(cx, cy, cell_est, bx, bx + bw, by, by + bh)
 
     def _fit_6x7_grid(self, xs: np.ndarray, ys: np.ndarray,
-                       cell_est: float) -> Optional[np.ndarray]:
+                       cell_est: float,
+                       min_x: Optional[float] = None, max_x: Optional[float] = None,
+                       min_y: Optional[float] = None, max_y: Optional[float] = None,
+                       ) -> Optional[np.ndarray]:
         """
         Cluster hole centres into 6 rows × 7 columns and return a (6,7,2) grid.
+        Board bounds are used to constrain extrapolated positions so the grid
+        never extends outside the detected board region.
         """
-        row_means = self._cluster_positions(ys, 6, cell_est)
-        col_means = self._cluster_positions(xs, 7, cell_est)
+        row_means = self._cluster_positions(ys, 6, cell_est, min_y, max_y)
+        col_means = self._cluster_positions(xs, 7, cell_est, min_x, max_x)
         if row_means is None or col_means is None:
             return None
         row_means = row_means[:6]   # guard against off-by-one
@@ -366,7 +377,10 @@ class BoardDetector:
 
     @staticmethod
     def _cluster_positions(values: np.ndarray, n_target: int,
-                            cell_size: float) -> Optional[List[float]]:
+                            cell_size: float,
+                            lo_bound: Optional[float] = None,
+                            hi_bound: Optional[float] = None,
+                            ) -> Optional[List[float]]:
         """
         Gap-cluster 1D hole positions into n_target groups.
         Consecutive sorted values separated by > 50% of cell_size start a new group.
@@ -407,9 +421,18 @@ class BoardDetector:
                 expected_span = n_target * spacing
                 current_span  = means[-1] - means[0]
                 if current_span + spacing <= expected_span:
-                    means.append(means[-1] + spacing)
+                    candidate = means[-1] + spacing
+                    # Don't extrapolate past the board boundary
+                    if hi_bound is not None and candidate > hi_bound + cell_size * 0.4:
+                        means.insert(0, means[0] - spacing)
+                    else:
+                        means.append(candidate)
                 else:
-                    means.insert(0, means[0] - spacing)
+                    candidate = means[0] - spacing
+                    if lo_bound is not None and candidate < lo_bound - cell_size * 0.4:
+                        means.append(means[-1] + spacing)
+                    else:
+                        means.insert(0, candidate)
             means = sorted(means)[:n_target]
 
         return means
