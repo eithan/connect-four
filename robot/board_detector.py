@@ -440,7 +440,7 @@ class BoardDetector:
         board = np.zeros((6, 7), dtype=np.int8)
 
         cell_spacing  = abs(int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0]))
-        sample_radius = max(int(cell_spacing * 0.28), 6)
+        sample_radius = max(int(cell_spacing * 0.36), 8)
 
         h_img, w_img = hsv.shape[:2]
 
