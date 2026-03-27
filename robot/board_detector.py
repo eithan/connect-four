@@ -70,8 +70,11 @@ class DetectionConfig:
     # Minimum board area as fraction of image
     min_board_area_ratio: float = 0.02
 
-    # Fraction of a cell that must be piece-colour to count as a piece
-    piece_threshold: float = 0.18
+    # Fraction of the sample circle that must be piece-colour to call it a piece.
+    # 0.18 was too loose — background through empty holes can easily hit 18%.
+    # A real plastic piece fills 70-85% of the inner sample circle; 0.60 ensures
+    # only a solid, dominantly-coloured disc is accepted.
+    piece_threshold: float = 0.60
 
     # Hole circularity minimum (0–1; 1 = perfect circle)
     min_circularity: float = 0.40

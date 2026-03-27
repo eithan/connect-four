@@ -565,8 +565,9 @@ def main():
     parser.add_argument("--yolo", type=str, metavar="MODEL",
                         help="Path to YOLOv8 model (.pt or .engine) — uses YOLO detector")
     parser.add_argument("--human-color", choices=["red", "yellow"], default="red")
-    parser.add_argument("--stable-frames", type=int, default=3,
-                        help="Consecutive frames required to confirm a move (default: 3)")
+    parser.add_argument("--stable-seconds", type=float, default=2.0,
+                        help="Seconds a board state must hold before accepting a move (default: 2.0). "
+                             "Auto-computes from --fps. Use lower (0.5-1.0) for faster play.")
     parser.add_argument("--fps", type=float, default=8.0)
     parser.add_argument("--no-tts", action="store_true",
                         help="Disable text-to-speech announcements")
@@ -604,6 +605,10 @@ def main():
             cfg = load_config(args.config)
             print(f"HSV config: {args.config}")
         detector = LockedBoardDetector(cfg)
+    # Compute stable_frames from seconds × fps (minimum 3 so it never feels broken)
+    stable_frames = max(3, int(round(args.stable_seconds * args.fps)))
+    print(f"Stable detection: {args.stable_seconds}s × {args.fps}fps = {stable_frames} frames")
+
     # Set up logging (tees all stdout prints to a timestamped log file)
     _log_path, _ss_dir, _tee = setup_logging("logs")
 
@@ -616,7 +621,7 @@ def main():
     )
     game = GameLoop(detector, ai, tracker,
                     human_player=human_player,
-                    stable_frames=args.stable_frames,
+                    stable_frames=stable_frames,
                     announcer=announcer)
     game.set_screenshot_dir(_ss_dir)
 
