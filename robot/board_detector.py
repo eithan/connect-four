@@ -71,10 +71,12 @@ class DetectionConfig:
     min_board_area_ratio: float = 0.02
 
     # Fraction of the sample circle that must be piece-colour to call it a piece.
-    # 0.18 was too loose — background through empty holes can easily hit 18%.
-    # A real plastic piece fills 70-85% of the inner sample circle; 0.60 ensures
-    # only a solid, dominantly-coloured disc is accepted.
-    piece_threshold: float = 0.60
+    # 0.18 → too loose (background through empty holes easily hits 18%)
+    # 0.60 → too strict (piece viewed at a slight angle or with minor grid
+    #          offset may only cover 50-55% of the sample circle → missed)
+    # 0.45 → sweet spot: blocks patchy background (≤30%) while catching real
+    #          plastic discs (≥50% even with mild misalignment or angle)
+    piece_threshold: float = 0.45
 
     # Hole circularity minimum (0–1; 1 = perfect circle)
     min_circularity: float = 0.40
@@ -272,12 +274,16 @@ class BoardDetector:
         min_area  = np.pi * (cell_est * 0.18) ** 2
         max_area  = np.pi * (cell_est * 0.52) ** 2
 
-        # Edge exclusion zones — guide rail at top (~12%), collection tray at
-        # bottom (~20%), thin side borders (~3%).
-        # The tray is the deepest exclusion: it can be ~15-20% of board height
-        # and contains loose pieces / openings that look like holes.
+        # Edge exclusion zones.
+        # Top: guide rail (~8% of board height) + small buffer → 12%
+        # Bottom: collection tray (~9% of board height) + small buffer → 12%
+        #   NOTE: 20% was too aggressive — it excluded the actual bottom row
+        #   of holes, causing the grid to extrapolate row 5 BELOW the board.
+        #   12% is just enough to clear the tray.  When the tray still leaks
+        #   an extra cluster, _cluster_1d drops the bottom-most one (see below).
+        # Sides: thin blue rim → 3%
         margin_top  = bh * 0.12
-        margin_bot  = bh * 0.20
+        margin_bot  = bh * 0.12
         margin_side = bw * 0.03
         y_lo = by + margin_top
         y_hi = by + bh - margin_bot
@@ -319,8 +325,10 @@ class BoardDetector:
         xs = np.array([h[0] for h in holes])
         ys = np.array([h[1] for h in holes])
 
-        col_means = self._cluster_1d(xs, 7, cell_est, min_x, max_x)
-        row_means = self._cluster_1d(ys, 6, cell_est, min_y, max_y)
+        col_means = self._cluster_1d(xs, 7, cell_est, min_x, max_x, drop_last=False)
+        # For rows, prefer dropping the bottom-most extra cluster (collection tray)
+        # rather than merging the two closest (which distorts a real row position).
+        row_means = self._cluster_1d(ys, 6, cell_est, min_y, max_y, drop_last=True)
 
         if col_means is None or row_means is None:
             return None
@@ -356,7 +364,8 @@ class BoardDetector:
     def _cluster_1d(values: np.ndarray, n_target: int,
                      cell_size: float,
                      lo: Optional[float] = None,
-                     hi: Optional[float] = None) -> Optional[List[float]]:
+                     hi: Optional[float] = None,
+                     drop_last: bool = False) -> Optional[List[float]]:
         """
         Gap-based 1D clustering into n_target groups.
 
@@ -380,11 +389,23 @@ class BoardDetector:
 
         means: List[float] = sorted(float(np.mean(g)) for g in groups)
 
-        # Merge if one extra group (noise split)
+        # Reduce to n_target clusters
         while len(means) > n_target:
-            diffs = [means[i + 1] - means[i] for i in range(len(means) - 1)]
-            idx   = int(np.argmin(diffs))
-            means = means[:idx] + [(means[idx] + means[idx + 1]) / 2] + means[idx + 2:]
+            if drop_last:
+                # For row clustering: the extra cluster is almost always the
+                # collection tray at the bottom.  Drop the bottom-most cluster
+                # so we keep the real board rows at their true positions.
+                # Merging the two closest (old behaviour) was shifting a real
+                # row centre to a wrong y coordinate.
+                means = means[:-1]
+            else:
+                # For column clustering (or generic): merge the two groups with
+                # the smallest gap between them (noise split).
+                diffs = [means[i + 1] - means[i] for i in range(len(means) - 1)]
+                idx   = int(np.argmin(diffs))
+                means = (means[:idx]
+                         + [(means[idx] + means[idx + 1]) / 2]
+                         + means[idx + 2:])
 
         # Extrapolate missing positions, constrained to board bounds
         if len(means) < n_target:
