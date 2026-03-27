@@ -111,7 +111,7 @@ class BoardDetector:
                 errors=errors,
             )
 
-        grid_centers = self._compute_grid_centers(board_contour)
+        grid_centers = self._compute_grid_centers(board_contour, image)
         board        = self._classify_cells(hsv, grid_centers)
         confidence   = self._compute_confidence(board)
 
@@ -266,11 +266,37 @@ class BoardDetector:
 
     # ── Grid + classification ────────────────────────────────────────────────
 
-    def _compute_grid_centers(self, board_contour: np.ndarray) -> np.ndarray:
-        x, y, w, h = cv2.boundingRect(board_contour)
-        pad_x = int(w * 0.02)
-        pad_y = int(h * 0.02)
-        x += pad_x; y += pad_y; w -= 2 * pad_x; h -= 2 * pad_y
+    def _compute_grid_centers(self, board_contour: np.ndarray,
+                               image: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Compute the 6×7 grid cell centres.
+
+        Primary path: detect the dark hole-circles within the board region
+        (HoughCircles) and fit a grid to their actual positions. This is immune
+        to the bounding-box being taller/wider than just the hole area (due to
+        the board's guide rail, legs, etc.).
+
+        Fallback: pad the bounding rect with a generous margin that accounts for
+        the typical Connect Four board structure (15% top guide, 7% bottom base,
+        7% side borders).
+        """
+        bx, by, bw, bh = cv2.boundingRect(board_contour)
+
+        if image is not None:
+            centers = self._grid_from_holes(image, bx, by, bw, bh)
+            if centers is not None:
+                return centers
+
+        # Fallback: padding-based estimation.
+        # Real boards: holes fill ~85% of width, ~68% of height;
+        # the top guide rail adds ~15% and the base/legs add ~7%.
+        pad_x     = int(bw * 0.07)
+        pad_y_top = int(bh * 0.15)
+        pad_y_bot = int(bh * 0.07)
+        x = bx + pad_x
+        y = by + pad_y_top
+        w = bw - 2 * pad_x
+        h = bh - pad_y_top - pad_y_bot
         cell_w, cell_h = w / 7, h / 6
         centers = np.zeros((6, 7, 2), dtype=np.int32)
         for row in range(6):
@@ -280,6 +306,102 @@ class BoardDetector:
                     int(y + row * cell_h + cell_h / 2),
                 ]
         return centers
+
+    def _grid_from_holes(self, image: np.ndarray,
+                          bx: int, by: int, bw: int, bh: int) -> Optional[np.ndarray]:
+        """
+        Find dark hole-circles inside the board region using HoughCircles,
+        then cluster them into a 6×7 grid.
+
+        Returns None if too few circles are found or clustering fails.
+        """
+        buf = max(10, int(min(bw, bh) * 0.03))
+        x1 = max(0, bx - buf);  y1 = max(0, by - buf)
+        x2 = min(image.shape[1], bx + bw + buf)
+        y2 = min(image.shape[0], by + bh + buf)
+        roi = image[y1:y2, x1:x2]
+
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (5, 5), 1.5)
+
+        # Expected size: cells are ~board_width/7; holes are ~30-42% of cell_size
+        cell_est  = bw / 7.0
+        min_r     = max(int(cell_est * 0.22), 8)
+        max_r     = int(cell_est * 0.46)
+        min_dist  = int(cell_est * 0.65)
+
+        circles = cv2.HoughCircles(
+            gray, cv2.HOUGH_GRADIENT,
+            dp=1.2, minDist=min_dist,
+            param1=60, param2=22,
+            minRadius=min_r, maxRadius=max_r,
+        )
+        if circles is None or len(circles[0]) < 12:
+            return None
+
+        pts = np.round(circles[0]).astype(int)
+        cx = (pts[:, 0] + x1).astype(float)
+        cy = (pts[:, 1] + y1).astype(float)
+
+        return self._fit_6x7_grid(cx, cy, cell_est)
+
+    def _fit_6x7_grid(self, xs: np.ndarray, ys: np.ndarray,
+                       cell_est: float) -> Optional[np.ndarray]:
+        """
+        Cluster hole centres into 6 rows × 7 columns and return a (6,7,2) grid.
+        """
+        row_means = self._cluster_positions(ys, 6, cell_est)
+        col_means = self._cluster_positions(xs, 7, cell_est)
+        if row_means is None or col_means is None:
+            return None
+        centers = np.zeros((6, 7, 2), dtype=np.int32)
+        for r, y in enumerate(row_means):
+            for c, x in enumerate(col_means):
+                centers[r, c] = [int(x), int(y)]
+        return centers
+
+    @staticmethod
+    def _cluster_positions(values: np.ndarray, n_target: int,
+                            cell_size: float) -> Optional[List[float]]:
+        """
+        Gap-cluster 1D hole positions into n_target groups.
+        Consecutive sorted values separated by > 50% of cell_size start a new group.
+        Missing groups are extrapolated from the median spacing.
+        Returns sorted group means, or None if grouping is incoherent.
+        """
+        if len(values) < max(n_target - 2, 3):
+            return None
+
+        sv = np.sort(values)
+        groups: List[List[float]] = [[float(sv[0])]]
+        for v in sv[1:]:
+            if v - groups[-1][-1] > cell_size * 0.5:
+                groups.append([])
+            groups[-1].append(float(v))
+
+        n_found = len(groups)
+        if n_found > n_target + 1 or n_found < n_target - 2:
+            return None   # Too noisy or too many holes missing
+
+        means: List[float] = sorted(float(np.mean(g)) for g in groups)
+
+        # Extrapolate missing positions
+        if len(means) < n_target:
+            spacing = (
+                float(np.median([means[i + 1] - means[i]
+                                  for i in range(len(means) - 1)]))
+                if len(means) > 1 else cell_size
+            )
+            while len(means) < n_target:
+                expected_span = n_target * spacing
+                current_span  = means[-1] - means[0]
+                if current_span + spacing <= expected_span:
+                    means.append(means[-1] + spacing)
+                else:
+                    means.insert(0, means[0] - spacing)
+            means = sorted(means)[:n_target]
+
+        return means
 
     def _classify_cells(self, hsv: np.ndarray,
                         grid_centers: np.ndarray) -> np.ndarray:
@@ -496,7 +618,7 @@ class LockedBoardDetector:
             # Smooth the bounding box and recompute grid/board from it so the
             # display is stable even before the lock is achieved.
             smoothed = self._smooth_contour(result.board_contour)
-            result.grid_centers = self.detector._compute_grid_centers(smoothed)
+            result.grid_centers = self.detector._compute_grid_centers(smoothed, image)
             result.board = self.detector._classify_cells(hsv, result.grid_centers)
             result.board_contour = smoothed
             result.confidence = self.detector._compute_confidence(result.board)
