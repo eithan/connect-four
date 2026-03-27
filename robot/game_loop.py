@@ -587,7 +587,7 @@ def main():
     print("=" * 50)
     print(f"  You:  {GameLoop.COLOR_NAMES[human_player]} (player {human_player})")
     print(f"  AI:   {GameLoop.COLOR_NAMES[ai_player_num]} (player {ai_player_num})")
-    print(f"  Stable frames: {args.stable_frames}")
+    print(f"  Settle time:   {args.stable_seconds}s")
     print()
 
     if args.yolo:
@@ -645,11 +645,41 @@ def main():
         print(".", end="", flush=True)
     print(" ready")
 
-    print("\nPoint the camera at your Connect Four board.")
-    print("Controls: r=reset  f=freeze  l=re-lock  q=quit\n")
+    print("\nControls: r=reset  f=freeze  l=re-lock  SPACE=start  q=quit")
+    print("Aim the camera at the board, then press SPACE to begin detection.\n")
 
     cv2.namedWindow(GameLoop.WINDOW, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(GameLoop.WINDOW, min(cw, 960), min(ch, 560))
+
+    # ── Orientation hold: show live feed until user presses SPACE ────────────
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        orient_display = frame.copy()
+        h_o, w_o = orient_display.shape[:2]
+        msg1 = "Aim camera at the board"
+        msg2 = "Press SPACE to begin detection"
+        font, scale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.85, 2
+        for i, msg in enumerate([msg1, msg2]):
+            (tw, th), _ = cv2.getTextSize(msg, font, scale, thick)
+            x = (w_o - tw) // 2
+            y = h_o // 2 - 20 + i * 45
+            cv2.rectangle(orient_display, (x - 8, y - th - 6), (x + tw + 8, y + 8),
+                          (0, 0, 0), -1)
+            cv2.putText(orient_display, msg, (x, y), font, scale, (0, 220, 255), thick)
+        cv2.imshow(GameLoop.WINDOW, orient_display)
+        key = cv2.waitKey(30) & 0xFF
+        if key in (ord(' '), ord('q'), 27):
+            if key in (ord('q'), 27):
+                cap.release()
+                cv2.destroyAllWindows()
+                announcer.stop()
+                sys.stdout = _tee._term
+                _tee.close()
+                return
+            break   # SPACE pressed — begin detection
+    print("Starting board detection...")
 
     frame_interval = 1.0 / args.fps
     last_process = 0.0
