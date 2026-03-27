@@ -208,6 +208,7 @@ class GameLoop:
         self._latest_display: Optional[np.ndarray] = None  # drawn overlay
         self._ss_dir:  str = ""   # screenshot directory (set via set_screenshot_dir)
         self._ss_count: int = 0
+        self._last_periodic_ss: float = 0.0   # timestamp of last periodic screenshot
 
         self.fps_actual = 0.0
         self._fps_t = time.time()
@@ -260,12 +261,28 @@ class GameLoop:
         result = self.detector.detect(frame)
         self.last_result = result
 
-        # If the detector dropped its lock (board moved out of view), reset
-        # _initialized so the next lock re-seeds the tracker correctly.
-        if self._prev_locked and not self.detector.is_locked:
+        # Track lock transitions
+        just_locked = not self._prev_locked and self.detector.is_locked
+        just_unlocked = self._prev_locked and not self.detector.is_locked
+        self._prev_locked = self.detector.is_locked
+
+        if just_locked:
+            # Save a diagnostic screenshot immediately on lock so we can see
+            # the grid overlay BEFORE stable detection — useful when phantom
+            # pieces prevent stable detection from ever firing.
+            self._save_screenshot("board_locked")
+            self._last_periodic_ss = time.time()
+
+        # Periodic screenshot every 15s during pre-initialization (diagnostics)
+        if (not self._initialized and self.detector.is_locked
+                and time.time() - self._last_periodic_ss > 15.0):
+            self._save_screenshot("periodic")
+            self._last_periodic_ss = time.time()
+
+        if just_unlocked:
+            # Board was lost — reset so the next lock re-seeds the tracker.
             self._initialized = False
             self.stable.reset()
-        self._prev_locked = self.detector.is_locked
 
         if self.phase == GamePhase.GAME_OVER:
             return

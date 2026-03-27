@@ -51,11 +51,13 @@ class DetectionConfig:
     board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
     # Red pieces (two ranges to wrap the 0/180 hue boundary)
-    # S≥100 prevents skin tone (S typically 30–80 under normal lighting)
-    # from matching the red range, which overlaps with skin hue (H 0–20).
-    red_hsv_low1:  Tuple[int, int, int] = (0,   100, 80)
+    # S raised 100→140: bright red plastic pieces have S≥180.
+    # Board mechanisms (sliders, reset levers), shadows cast into holes, and
+    # reddish objects visible through empty holes read S≈80-120 and would
+    # otherwise create phantom red detections specifically at center/bottom holes.
+    red_hsv_low1:  Tuple[int, int, int] = (0,   140, 80)
     red_hsv_high1: Tuple[int, int, int] = (12,  255, 255)
-    red_hsv_low2:  Tuple[int, int, int] = (163, 100, 80)
+    red_hsv_low2:  Tuple[int, int, int] = (163, 140, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / lime-green pieces
@@ -471,7 +473,10 @@ class BoardDetector:
         board = np.zeros((6, 7), dtype=np.int8)
 
         cell_spacing  = abs(int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0]))
-        sample_radius = max(int(cell_spacing * 0.36), 8)
+        # 0.28 × cell_spacing ≈ 74% of the hole radius — sampling the inner
+        # core of each hole.  Avoids the hole-edge fringe where lens aberration,
+        # blue-frame reflections, and the tray ledge can create spurious colour.
+        sample_radius = max(int(cell_spacing * 0.28), 8)
 
         h_img, w_img = hsv.shape[:2]
 
@@ -503,6 +508,16 @@ class BoardDetector:
                     board[r, c] = 1
                 elif yel_r > cfg.piece_threshold and yel_r > red_r:
                     board[r, c] = 2
+
+                # Debug: log cells with notable coverage so phantom sources
+                # can be identified from the log file.
+                if red_r > 0.12 or yel_r > 0.12:
+                    detected = ("R" if board[r, c] == 1
+                                else "Y" if board[r, c] == 2
+                                else ".")
+                    if detected != "." or red_r > 0.20 or yel_r > 0.20:
+                        print(f"  [cell {r},{c}] red={red_r:.2f} yel={yel_r:.2f}"
+                              f"  cx={cx} cy={cy}  -> {detected}")
 
         return board   # raw, un-filtered — caller applies gravity filter
 
@@ -573,16 +588,29 @@ class BoardDetector:
         for hx, hy in holes:
             cv2.circle(dbg, (int(hx), int(hy)), 4, (255, 255, 0), 1)
 
-        # Grid cells
+        # Grid cells — draw at the actual sample radius so the overlay shows
+        # exactly what pixels are being classified for each hole.
+        cell_spacing  = abs(int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0]))
+        sample_radius = max(int(cell_spacing * 0.28), 8)
         for r in range(6):
             for c in range(7):
                 cx, cy = int(grid_centers[r, c, 0]), int(grid_centers[r, c, 1])
                 cell   = board[r, c]
-                col    = (90, 90, 90) if cell == 0 else ((0, 0, 255) if cell == 1 else (0, 220, 255))
-                label  = "." if cell == 0 else ("R" if cell == 1 else "Y")
-                cv2.circle(dbg, (cx, cy), 6, col, -1)
-                cv2.putText(dbg, label, (cx - 6, cy + 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, col, 2)
+                if cell == 0:
+                    col_fill = (60, 60, 60)
+                    col_ring = (160, 160, 160)
+                elif cell == 1:
+                    col_fill = (0, 0, 200)
+                    col_ring = (0, 80, 255)
+                else:
+                    col_fill = (0, 180, 220)
+                    col_ring = (0, 255, 255)
+                # Filled inner dot + ring at sample radius
+                cv2.circle(dbg, (cx, cy), sample_radius, col_fill, -1)
+                cv2.circle(dbg, (cx, cy), sample_radius, col_ring, 1)
+                label = "." if cell == 0 else ("R" if cell == 1 else "Y")
+                cv2.putText(dbg, label, (cx - 5, cy + 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
 
         tag = "FALLBACK " if fallback_used else ""
         cv2.putText(dbg,
