@@ -58,7 +58,8 @@ class DetectionConfig:
 
     # Yellow / lime-green pieces
     # H 15–85 covers standard yellow (H≈20-35) AND lime/chartreuse (H≈40-75)
-    yellow_hsv_low:  Tuple[int, int, int] = (15, 80, 80)
+    # S≥100 prevents background colours seen through empty holes from matching
+    yellow_hsv_low:  Tuple[int, int, int] = (15, 100, 80)
     yellow_hsv_high: Tuple[int, int, int] = (85, 255, 255)
 
     # Minimum board area as fraction of image
@@ -610,14 +611,18 @@ class LockedBoardDetector:
                           debug: bool) -> DetectionResult:
         result = self.detector.detect(image, debug=debug)
 
-        # When the blue frame is found, update the candidate grid position.
+        # Only update the candidate when the fresh detection is itself verified
+        # good — this prevents a slightly-wrong bounding box on the next frame
+        # from overwriting a good candidate and tanking confidence.
         if result.board_contour is not None and result.grid_centers is not None:
-            self._cand_centers = result.grid_centers.copy()
-            self._cand_contour = result.board_contour.copy()
+            fresh_board = self.detector._classify_cells(hsv, result.grid_centers)
+            fresh_conf  = self.detector._compute_confidence(fresh_board)
+            if fresh_conf >= self.LOCK_MIN_CONF:
+                self._cand_centers = result.grid_centers.copy()
+                self._cand_contour = result.board_contour.copy()
 
         # If we have a candidate, classify at that position regardless of
-        # whether the blue frame was detected this frame.  This decouples
-        # locking progress from the (often unstable) bounding-box detection.
+        # whether the blue frame was detected this frame.
         if self._cand_centers is not None:
             cand_board = self.detector._classify_cells(hsv, self._cand_centers)
             cand_conf  = self.detector._compute_confidence(cand_board)
