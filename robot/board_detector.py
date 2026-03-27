@@ -507,19 +507,27 @@ class LockedBoardDetector:
     """
     Two-stage locking wrapper around BoardDetector.
 
-    Stage 1 — Candidate: first confident detection stored immediately;
-              used for display while building toward full lock.
-    Stage 2 — Locked: after LOCK_FRAMES good detections the grid is frozen.
-              Only cell classification runs per-frame (fast path).
+    Stage 1 — Candidate: first board detection stores a candidate grid.
+              Subsequent frames classify pieces at the *candidate* position
+              regardless of whether the blue frame is re-detected.  A "good
+              frame" is defined by classification quality (conf ≥ LOCK_MIN_CONF),
+              not by whether the frame was found again.  This makes locking
+              robust to an unstable/flickering bounding box.
 
-    Bad frames hold the last candidate for display; CANDIDATE_RESET (15)
-    consecutive bad frames drop the candidate entirely (board out of view).
+    Stage 2 — Locked: after LOCK_FRAMES consecutive good classification frames
+              the grid is confirmed frozen.  Only classification runs each frame.
+
+    CANDIDATE_RESET consecutive bad classification frames (board truly gone or
+    covered) drop the candidate and restart.
+
+    Console output: board grid is printed on lock and whenever the board state
+    changes while locked.
     """
 
-    LOCK_MIN_CONF   = 0.45   # Min confidence to count as a "good" frame
+    LOCK_MIN_CONF   = 0.45   # Classification confidence needed for a "good" frame
     LOCK_FRAMES     = 3      # Good frames needed to confirm lock
-    CANDIDATE_RESET = 15     # Consecutive bad frames before dropping candidate
-    UNLOCK_FRAMES   = 20     # Consecutive bad frames while locked → unlock
+    CANDIDATE_RESET = 20     # Consecutive bad frames to drop candidate entirely
+    UNLOCK_FRAMES   = 20     # Consecutive bad locked frames → unlock
 
     def __init__(self, config: Optional[DetectionConfig] = None):
         self.detector = BoardDetector(config)
@@ -531,6 +539,7 @@ class LockedBoardDetector:
         self._bad_streak  = 0
         self._lock_bad    = 0
         self.is_locked    = False
+        self._last_board: Optional[np.ndarray] = None  # for change detection
 
     @property
     def config(self) -> DetectionConfig:
@@ -551,6 +560,7 @@ class LockedBoardDetector:
         self._bad_streak  = 0
         self._lock_bad    = 0
         self.is_locked    = False
+        self._last_board  = None
 
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -572,6 +582,10 @@ class LockedBoardDetector:
                 self.unlock()
         else:
             self._lock_bad = 0
+            # Print board if it changed
+            if self._last_board is None or not np.array_equal(board, self._last_board):
+                self._last_board = board.copy()
+                self._print_board(board)
 
         debug_img = None
         if debug:
@@ -596,43 +610,57 @@ class LockedBoardDetector:
                           debug: bool) -> DetectionResult:
         result = self.detector.detect(image, debug=debug)
 
-        is_good = (result.board_contour is not None
-                   and result.confidence >= self.LOCK_MIN_CONF)
-
-        if is_good:
-            self._bad_streak = 0
+        # When the blue frame is found, update the candidate grid position.
+        if result.board_contour is not None and result.grid_centers is not None:
             self._cand_centers = result.grid_centers.copy()
             self._cand_contour = result.board_contour.copy()
 
-            self._good_count += 1
-            if self._good_count >= self.LOCK_FRAMES:
-                self._locked_centers = self._cand_centers.copy()
-                self._locked_contour = self._cand_contour.copy()
-                self.is_locked    = True
-                self._good_count  = 0
-                print("[Board] Locked ✓")
+        # If we have a candidate, classify at that position regardless of
+        # whether the blue frame was detected this frame.  This decouples
+        # locking progress from the (often unstable) bounding-box detection.
+        if self._cand_centers is not None:
+            cand_board = self.detector._classify_cells(hsv, self._cand_centers)
+            cand_conf  = self.detector._compute_confidence(cand_board)
+
+            # Override result with the candidate-based classification
+            result.grid_centers  = self._cand_centers
+            result.board_contour = self._cand_contour
+            result.board         = cand_board
+            result.confidence    = cand_conf
+
+            is_good = cand_conf >= self.LOCK_MIN_CONF
+
+            if is_good:
+                self._bad_streak = 0
+                self._good_count += 1
+                if self._good_count >= self.LOCK_FRAMES:
+                    self._locked_centers = self._cand_centers.copy()
+                    self._locked_contour = self._cand_contour.copy()
+                    self.is_locked    = True
+                    self._good_count  = 0
+                    self._last_board  = cand_board.copy()
+                    print("[Board] Locked ✓")
+                    self._print_board(cand_board)
+                else:
+                    print(f"[Board] Good frame {self._good_count}/{self.LOCK_FRAMES} "
+                          f"— conf {cand_conf:.2f}")
             else:
-                print(f"[Board] Good frame {self._good_count}/{self.LOCK_FRAMES} "
-                      f"— conf {result.confidence:.2f}")
-
-        else:
-            self._bad_streak += 1
-
-            if self._bad_streak >= self.CANDIDATE_RESET:
-                print(f"[Board] Candidate dropped ({self._bad_streak} bad frames in a row)")
-                self._cand_centers = None
-                self._cand_contour = None
-                self._good_count   = 0
-                self._bad_streak   = 0
-
-            elif self._cand_centers is not None:
-                # Board temporarily lost — show last known good grid
-                result.grid_centers  = self._cand_centers
-                result.board_contour = self._cand_contour
-                result.board         = self.detector._classify_cells(hsv, self._cand_centers)
-                result.confidence    = self.detector._compute_confidence(result.board)
+                self._bad_streak += 1
+                if self._bad_streak >= self.CANDIDATE_RESET:
+                    print(f"[Board] Candidate dropped ({self._bad_streak} bad frames)")
+                    self._cand_centers = None
+                    self._cand_contour = None
+                    self._good_count   = 0
+                    self._bad_streak   = 0
 
         return result
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _print_board(board: np.ndarray):
+        """Print the board grid to the console."""
+        print(board_to_string(board))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
