@@ -51,9 +51,11 @@ class DetectionConfig:
     board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
     # Red pieces (two ranges to wrap the 0/180 hue boundary)
-    red_hsv_low1:  Tuple[int, int, int] = (0,   80, 80)
+    # S≥100 prevents skin tone (S typically 30–80 under normal lighting)
+    # from matching the red range, which overlaps with skin hue (H 0–20).
+    red_hsv_low1:  Tuple[int, int, int] = (0,   100, 80)
     red_hsv_high1: Tuple[int, int, int] = (12,  255, 255)
-    red_hsv_low2:  Tuple[int, int, int] = (163, 80, 80)
+    red_hsv_low2:  Tuple[int, int, int] = (163, 100, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / lime-green pieces

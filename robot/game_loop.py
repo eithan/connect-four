@@ -43,34 +43,67 @@ from ai_player import AIPlayer
 
 class StableStateDetector:
     """
-    Only accepts a new board state when N consecutive frames agree.
-    Prevents false triggers from hands, shadows, or motion blur.
+    Detects confirmed board-state CHANGES from a known baseline.
+
+    A move is accepted only when ALL of the following hold:
+      1. The board differs from the last accepted state (something actually changed).
+      2. The new board state is identical for ``required_frames`` consecutive frames.
+      3. Every one of those frames has confidence ≥ ``min_confidence``.
+
+    Why this beats "N identical frames of anything":
+      - If skin/hand creates a transient piece that then disappears (board
+        returns to baseline), the buffer is cleared — no false trigger.
+      - If confidence drops mid-window (hand still partly covering the board),
+        the buffer is cleared — hand must be fully withdrawn before we count.
+      - A real piece that has just been placed sits there indefinitely, easily
+        surviving the stability window once the hand is gone.
+
+    Call ``reset(new_baseline)`` after each accepted move to update the
+    reference state.  Call ``reset()`` with no argument to start fresh
+    (baseline is set from the first high-confidence frame).
     """
 
-    def __init__(self, required_frames: int = 5, min_confidence: float = 0.4):
+    def __init__(self, required_frames: int = 5, min_confidence: float = 0.75):
         self.required_frames = required_frames
-        self.min_confidence = min_confidence
-        self._buffer: list = []
+        self.min_confidence  = min_confidence
+        self._buffer:   list                   = []
+        self._baseline: Optional[np.ndarray]  = None
 
-    def reset(self):
+    def reset(self, baseline: Optional[np.ndarray] = None):
+        """Clear buffer and optionally set a new reference baseline."""
         self._buffer.clear()
+        self._baseline = baseline.copy() if baseline is not None else None
 
     def update(self, board: np.ndarray, confidence: float):
         """
         Returns (is_new_stable, stable_board).
-        is_new_stable is True only on the single frame stability is first confirmed.
+        is_new_stable is True only on the frame stability is first confirmed.
         """
+        # ── Bootstrap: no baseline yet ────────────────────────────────────────
+        if self._baseline is None:
+            if confidence >= self.min_confidence:
+                self._baseline = board.copy()   # first clean frame → baseline
+            return False, None
+
+        # ── Board returned to baseline (false piece removed / hand gone) ──────
+        if np.array_equal(board, self._baseline):
+            if self._buffer:
+                self._buffer.clear()
+            return False, None
+
+        # ── Board differs from baseline — wait for confident stable window ────
         if confidence < self.min_confidence:
-            self._buffer.clear()
+            self._buffer.clear()    # hand still present; don't count this frame
             return False, None
 
         if self._buffer and not np.array_equal(board, self._buffer[-1]):
-            self._buffer.clear()
+            self._buffer.clear()    # state still changing
 
         self._buffer.append(board.copy())
 
         if len(self._buffer) >= self.required_frames:
             stable = self._buffer[-1].copy()
+            self._baseline = stable.copy()      # advance baseline to new state
             self._buffer.clear()
             return True, stable
 
@@ -102,14 +135,15 @@ class GameLoop:
     }
 
     def __init__(self, detector: LockedBoardDetector, ai: AIPlayer, tracker: TurnTracker,
-                 human_player: int = 1, stable_frames: int = 3):
+                 human_player: int = 1, stable_frames: int = 5):
         self.detector = detector
         self.ai = ai
         self.tracker = tracker
         self.human_player = human_player
         self.ai_player_num = 3 - human_player
 
-        self.stable = StableStateDetector(required_frames=stable_frames)
+        self.stable = StableStateDetector(required_frames=stable_frames,
+                                          min_confidence=0.75)
         self.phase = GamePhase.HUMAN_TURN
         self.ai_column: Optional[int] = None
         self.ai_policy: Optional[np.ndarray] = None
@@ -130,7 +164,7 @@ class GameLoop:
 
     def reset(self):
         self.tracker.reset()
-        self.stable.reset()
+        self.stable.reset()   # no baseline — will bootstrap from first clean frame
         self.phase = GamePhase.HUMAN_TURN
         self.ai_column = None
         self.ai_policy = None
@@ -166,7 +200,9 @@ class GameLoop:
         if not self._initialized:
             self._initialized = True
             self.tracker.set_board(stable_board)
-            red_n   = int(np.sum(stable_board == 1))
+            # Update stable baseline so detector knows what "no change" looks like
+            self.stable.reset(stable_board)
+            red_n    = int(np.sum(stable_board == 1))
             yellow_n = int(np.sum(stable_board == 2))
             print(f"\nInitial board detected: Red={red_n}, Yellow={yellow_n}")
             if self.tracker.state.game_over:
@@ -264,6 +300,10 @@ class GameLoop:
             self._end_game(update)
             return
 
+        # Advance stable baseline to the newly accepted board state so the
+        # detector doesn't re-trigger on the same position next turn.
+        self.stable.reset(self.tracker.state.board)
+
         # Trigger AI
         self._run_ai(board)
 
@@ -302,6 +342,9 @@ class GameLoop:
         if update["game_over"]:
             self._end_game(update)
             return
+
+        # Advance stable baseline so human's next move is detected fresh
+        self.stable.reset(self.tracker.state.board)
 
         self.ai_column = None
         self.ai_policy = None
@@ -499,7 +542,7 @@ def main():
             elif key == ord("l"):
                 detector.unlock()
                 game._initialized = False
-                game.stable.reset()
+                game.stable.reset()   # no baseline — will bootstrap from first clean frame
                 print("Re-locking board...")
             elif key == ord("f"):
                 game.frozen = not game.frozen
