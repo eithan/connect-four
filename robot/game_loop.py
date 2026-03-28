@@ -404,10 +404,11 @@ class GameLoop:
         ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
         print(f"AI ({info['method'].upper()}) → column {ai_col}")
         print(f"  Policy: {np.array2string(info['policy'], precision=3)}")
-        self.status_msg = f"AI plays col {ai_col} ({ai_color}) - drop the AI's piece there"
-        # Announce with column number (1-indexed feels more natural to say aloud)
-        self.ann.speak(f"My move: column {ai_col + 1}. "
-                       f"Please drop a {ai_color.lower()} piece there.", interrupt=True)
+        col_1 = ai_col + 1  # 1-indexed for display and speech
+        self.status_msg = f"AI plays column {col_1} ({ai_color})"
+        # Short, natural announcement; say "middle" for column 4
+        col_name = "middle column four" if col_1 == 4 else f"column {col_1}"
+        self.ann.speak(f"{ai_color} in {col_name}.", interrupt=True)
 
     def _handle_human_turn(self, board: np.ndarray):
         update = self.tracker.update(board)
@@ -451,10 +452,10 @@ class GameLoop:
             print(f"   Remove that piece and drop into column {self.ai_column}")
             self.stable.reset()   # discard this stable snapshot
             ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
-            self.status_msg = (f"WRONG COL! AI wants col {self.ai_column} ({ai_color})"
+            want_1 = self.ai_column + 1
+            self.status_msg = (f"WRONG COL! AI wants column {want_1} ({ai_color})"
                                " - undo & retry")
-            self.ann.speak(f"Wrong column. Please undo that and use column "
-                           f"{self.ai_column + 1}.", interrupt=True)
+            self.ann.speak(f"Wrong column. Use column {want_1}.", interrupt=True)
             return
 
         # Correct column — let tracker accept the move
@@ -532,7 +533,7 @@ class GameLoop:
                         (cx_top, cy_top - 55),
                         (cx_top, cy_top - 18),
                         (0, 255, 0), 3, tipLength=0.4)
-        cv2.putText(display, str(col), (cx_top - 8, cy_top - 60),
+        cv2.putText(display, str(col + 1), (cx_top - 8, cy_top - 60),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
     def _draw_policy_bars(self, display: np.ndarray, grid_centers: np.ndarray):
