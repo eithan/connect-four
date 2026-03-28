@@ -61,13 +61,14 @@ class DetectionConfig:
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / amber / lime-green pieces
-    # H 15–92: covers warm amber-gold (H≈15-28) through pure yellow (H≈30)
-    #           and lime-green (H≈40-80).  Standard Connect Four yellow plastic
-    #           typically reads H≈20-28 under kitchen/indoor light.
+    # H 20–92: standard Connect Four yellow plastic reads H≈21-22 under
+    #           kitchen/indoor light.  Lower bound 20 gives 1-hue margin while
+    #           blocking the persistent warm-orange false-positive at H≈14-15
+    #           visible through empty holes when background is slightly warm.
     # S≥130: yellow plastic is highly saturated (S≥160 typically).  Raising S
     #         threshold blocks warm-light false positives (sunlight or incandescent
     #         through empty holes reads H≈15-35 BUT S≈40-90, well below 130).
-    yellow_hsv_low:  Tuple[int, int, int] = (15, 130, 80)
+    yellow_hsv_low:  Tuple[int, int, int] = (20, 130, 80)
     yellow_hsv_high: Tuple[int, int, int] = (92, 255, 255)
 
     # Minimum board area as fraction of image
@@ -563,22 +564,30 @@ class BoardDetector:
         """
         Score the raw (un-gravity-filtered) board.
 
-        Scan each column BOTTOM→TOP.  A piece sitting above an empty cell is
-        physically impossible (floating) and indicates a misdetection.  Each
-        such violation subtracts 0.15.  Piece-count imbalance > 1 subtracts 0.2.
+        For each column, check that detected pieces form a contiguous stack
+        (no gaps between them).  A gap indicates a phantom detection floating
+        above a real piece, or a piece detection at the wrong row.  Each gap
+        subtracts 0.15.  Piece-count imbalance > 1 subtracts 0.2.
 
-        Note: call this on the RAW board before applying _apply_gravity_filter.
-        After filtering there are no floating pieces, so violations would always
-        be zero and the check would be meaningless.
+        Why stack-contiguity instead of "must reach row 5":
+          The physical board's bottom row of holes may map to camera row 4
+          rather than row 5 (row 5 samples the tray/slider area below the
+          board).  Real pieces will always appear at row 4 at the lowest, so
+          requiring them at row 5 would unfairly penalise every valid state.
+          Contiguity (no empty gap between two pieces in the same column) is
+          the physically meaningful invariant.
         """
         confidence = 1.0
         for col in range(7):
-            found_empty = False
-            for row in range(5, -1, -1):   # bottom → top
-                if board[row, col] == 0:
-                    found_empty = True      # found empty below
-                elif found_empty:
-                    confidence -= 0.15      # piece above an empty = floating
+            piece_rows = [r for r in range(6) if board[r, col] != 0]
+            if len(piece_rows) < 2:
+                continue
+            # Sort top→bottom (ascending row index = higher up in camera frame)
+            piece_rows.sort()
+            # A gap exists if consecutive piece rows are not adjacent
+            for i in range(len(piece_rows) - 1):
+                if piece_rows[i + 1] - piece_rows[i] > 1:
+                    confidence -= 0.15   # gap in stack = floating piece
         red    = int(np.sum(board == 1))
         yellow = int(np.sum(board == 2))
         if abs(red - yellow) > 1:
