@@ -272,12 +272,15 @@ class GameLoop:
             # pieces prevent stable detection from ever firing.
             self._save_screenshot("board_locked")
             self._last_periodic_ss = time.time()
-            # Neutral confirmation at lock time.  Don't say "your turn" here
-            # because stable detection takes ~2s more — the human may have
-            # already placed a piece by then, and a premature "your turn"
-            # followed by "AI's turn" is confusing.  The real turn
-            # announcement comes from initialization after stable detection.
-            self.ann.speak("Board detected.", interrupt=True)
+            # If the board looks empty at lock time, announce "Your turn"
+            # immediately — don't wait for stable detection (~2s).  If the
+            # human plays quickly and the board has a piece by the time
+            # stable detection fires, initialization goes straight to AI
+            # turn without re-announcing.
+            if result.board is not None and int(np.sum(result.board != 0)) == 0:
+                self.ann.speak("Board detected. Your turn.", interrupt=True)
+            else:
+                self.ann.speak("Board detected.", interrupt=True)
 
         # Periodic screenshot every 15s during pre-initialization (diagnostics)
         if (not self._initialized and self.detector.is_locked
@@ -603,6 +606,10 @@ def main():
                              "Warp is ON by default for better grid alignment.")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--mirror", action="store_true",
+                        help="Mirror (horizontally flip) the camera feed for selfie cameras. "
+                             "The flip is applied before ANY processing so detection, overlays, "
+                             "and column numbering all match the mirrored view.")
     args = parser.parse_args()
 
     human_player = 1 if args.human_color == "red" else 2
@@ -686,6 +693,8 @@ def main():
         ret, frame = cap.read()
         if not ret:
             break
+        if args.mirror:
+            frame = cv2.flip(frame, 1)
         orient_display = frame.copy()
         h_o, w_o = orient_display.shape[:2]
         msg1 = "Aim camera at the board"
@@ -720,6 +729,8 @@ def main():
             if not ret:
                 print("Camera read failed")
                 break
+            if args.mirror:
+                frame = cv2.flip(frame, 1)
 
             now = time.time()
             if not game.frozen and (now - last_process) >= frame_interval:
