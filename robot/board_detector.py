@@ -502,20 +502,17 @@ class BoardDetector:
         min_area  = np.pi * (cell_est * 0.18) ** 2
         max_area  = np.pi * (cell_est * 0.52) ** 2
 
-        # Edge exclusion zones — based on CELL SIZE, not bbox height.
+        # Edge exclusion zones — as small as possible.
         #
-        # The bbox height (bh) varies wildly depending on how much of the
-        # board's legs/base are included.  When the bbox is tall, bh*0.12
-        # overshoots and cuts into the first row of playing holes.  Using
-        # cell_est (= bw/7, which is stable) makes margins independent of
-        # how far the bbox extends below the board.
-        #
-        # Guide rail is ~0.4-0.6 cells above the first row → 0.7 clears it.
-        # Tray circles (if any leak through) are handled by _cluster_1d's
-        # smart outlier dropping.
-        # Sides: thin blue rim → 3% of width.
-        margin_top  = cell_est * 0.7
-        margin_bot  = cell_est * 0.7
+        # On budget boards (NICETY etc.) the first row of holes is only
+        # ~22px below the top of the blue frame.  Any margin above ~20px
+        # will exclude it, shifting the grid down by 1 row.  So we use
+        # a tiny margin (0.1 cells ≈ 10-12px) — just enough to skip the
+        # frame border itself — and rely on _cluster_1d's median-deviation
+        # outlier dropping to handle any guide-rail or tray circles that
+        # leak through.
+        margin_top  = cell_est * 0.1
+        margin_bot  = cell_est * 0.1
         margin_side = bw * 0.03
         y_lo = by + margin_top
         y_hi = by + bh - margin_bot
@@ -545,6 +542,14 @@ class BoardDetector:
                 continue
             holes.append((float(cx), float(cy)))
 
+        if holes:
+            ys_sorted = sorted(h[1] for h in holes)
+            print(f"[_find_holes] {len(holes)} holes | "
+                  f"bbox=({bx},{by},{bw},{bh}) | "
+                  f"margin_top={margin_top:.0f} margin_bot={margin_bot:.0f} | "
+                  f"y_lo={y_lo:.0f} y_hi={y_hi:.0f} | "
+                  f"y_range=[{ys_sorted[0]:.0f}..{ys_sorted[-1]:.0f}]")
+
         return holes
 
     # ── Step 3: Grid fitting ──────────────────────────────────────────────────
@@ -561,6 +566,9 @@ class BoardDetector:
         # For rows, prefer dropping the bottom-most extra cluster (collection tray)
         # rather than merging the two closest (which distorts a real row position).
         row_means = self._cluster_1d(ys, 6, cell_est, min_y, max_y, drop_last=True)
+
+        if row_means is not None:
+            print(f"[_fit_grid] final row_means=[{', '.join(f'{m:.0f}' for m in row_means)}]")
 
         if col_means is None or row_means is None:
             return None
@@ -627,35 +635,45 @@ class BoardDetector:
 
         means: List[float] = sorted(float(np.mean(g)) for g in groups)
 
+        if drop_last and n_found != n_target:
+            print(f"[_cluster_1d] rows: {n_found} clusters found, need {n_target} | "
+                  f"means=[{', '.join(f'{m:.0f}' for m in means)}]")
+
         # Reduce to n_target clusters
         while len(means) > n_target:
             if drop_last:
                 # For row clustering: extra clusters come from the guide rail
-                # (top) or collection tray (bottom).  Compare the gap at each
-                # end to the median interior spacing.  An end gap significantly
-                # larger than the median is an outlier (rail/tray); drop it.
-                # If both ends look similar, prefer dropping the bottom (tray
-                # is more common than rail artifacts).
+                # (top) or collection tray (bottom).
                 #
-                # Old behaviour (always drop bottom) failed when the guide rail
-                # created an extra cluster at the top — it would drop a real
-                # bottom row instead, shifting the entire grid down.
+                # Strategy: compare each end gap to the MEDIAN interior gap.
+                # The end that deviates more from the median is the outlier.
+                #
+                # Key insight: guide rail gaps are SMALLER than normal (rail
+                # is close to row 1), while tray gaps may be larger OR
+                # smaller.  The old code checked "gap_top > gap_bot" which
+                # fails for guide rails — a small top gap looks normal when
+                # compared to the bottom gap, but it's actually abnormal
+                # relative to the true row spacing.
                 if len(means) >= 4:
                     interior_gaps = [means[i + 1] - means[i]
                                      for i in range(1, len(means) - 2)]
                     median_gap = float(np.median(interior_gaps)) if interior_gaps else cell_size
                     gap_top = means[1] - means[0]
                     gap_bot = means[-1] - means[-2]
-                    # Drop whichever end deviates more from the median.
-                    # A 20% margin prevents ties from flipping randomly.
-                    if gap_top > gap_bot * 1.2:
-                        means = means[1:]      # outlier at top (guide rail)
+                    dev_top = abs(gap_top - median_gap)
+                    dev_bot = abs(gap_bot - median_gap)
+                    drop_end = "top" if dev_top > dev_bot else "bottom"
+                    print(f"[_cluster_1d] median_gap={median_gap:.0f} "
+                          f"gap_top={gap_top:.0f}(dev={dev_top:.0f}) "
+                          f"gap_bot={gap_bot:.0f}(dev={dev_bot:.0f}) → drop {drop_end}")
+                    if dev_top > dev_bot:
+                        means = means[1:]      # top deviates more → outlier
                     else:
-                        means = means[:-1]     # outlier at bottom (tray) or tie
+                        means = means[:-1]     # bottom deviates more (or tie)
                 elif len(means) >= 3:
                     gap_top = means[1] - means[0]
                     gap_bot = means[-1] - means[-2]
-                    if gap_top > gap_bot * 1.2:
+                    if abs(gap_top - cell_size) > abs(gap_bot - cell_size):
                         means = means[1:]
                     else:
                         means = means[:-1]
