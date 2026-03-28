@@ -502,16 +502,20 @@ class BoardDetector:
         min_area  = np.pi * (cell_est * 0.18) ** 2
         max_area  = np.pi * (cell_est * 0.52) ** 2
 
-        # Edge exclusion zones.
-        # Top: guide rail (~8% of board height) + small buffer → 12%
-        # Bottom: collection tray (~9% of board height) + small buffer → 12%
-        #   NOTE: 20% was too aggressive — it excluded the actual bottom row
-        #   of holes, causing the grid to extrapolate row 5 BELOW the board.
-        #   12% is just enough to clear the tray.  When the tray still leaks
-        #   an extra cluster, _cluster_1d drops the bottom-most one (see below).
-        # Sides: thin blue rim → 3%
-        margin_top  = bh * 0.12
-        margin_bot  = bh * 0.12
+        # Edge exclusion zones — based on CELL SIZE, not bbox height.
+        #
+        # The bbox height (bh) varies wildly depending on how much of the
+        # board's legs/base are included.  When the bbox is tall, bh*0.12
+        # overshoots and cuts into the first row of playing holes.  Using
+        # cell_est (= bw/7, which is stable) makes margins independent of
+        # how far the bbox extends below the board.
+        #
+        # Guide rail is ~0.4-0.6 cells above the first row → 0.7 clears it.
+        # Tray circles (if any leak through) are handled by _cluster_1d's
+        # smart outlier dropping.
+        # Sides: thin blue rim → 3% of width.
+        margin_top  = cell_est * 0.7
+        margin_bot  = cell_est * 0.7
         margin_side = bw * 0.03
         y_lo = by + margin_top
         y_hi = by + bh - margin_bot
