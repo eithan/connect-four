@@ -102,6 +102,9 @@ class DetectionConfig:
     # Hole circularity minimum (0–1; 1 = perfect circle)
     min_circularity: float = 0.40
 
+    # Verbose logging: per-cell HSV, hole counts, cluster decisions
+    verbose: bool = False
+
 
 # Physical board preset (default)
 PHYSICAL_CONFIG = DetectionConfig()
@@ -542,7 +545,7 @@ class BoardDetector:
                 continue
             holes.append((float(cx), float(cy)))
 
-        if holes:
+        if holes and cfg.verbose:
             ys_sorted = sorted(h[1] for h in holes)
             print(f"[_find_holes] {len(holes)} holes | "
                   f"bbox=({bx},{by},{bw},{bh}) | "
@@ -562,12 +565,13 @@ class BoardDetector:
         xs = np.array([h[0] for h in holes])
         ys = np.array([h[1] for h in holes])
 
-        col_means = self._cluster_1d(xs, 7, cell_est, min_x, max_x, drop_last=False)
+        verbose = self.config.verbose
+        col_means = self._cluster_1d(xs, 7, cell_est, min_x, max_x, drop_last=False, verbose=verbose)
         # For rows, prefer dropping the bottom-most extra cluster (collection tray)
         # rather than merging the two closest (which distorts a real row position).
-        row_means = self._cluster_1d(ys, 6, cell_est, min_y, max_y, drop_last=True)
+        row_means = self._cluster_1d(ys, 6, cell_est, min_y, max_y, drop_last=True, verbose=verbose)
 
-        if row_means is not None:
+        if row_means is not None and self.config.verbose:
             print(f"[_fit_grid] final row_means=[{', '.join(f'{m:.0f}' for m in row_means)}]")
 
         if col_means is None or row_means is None:
@@ -611,7 +615,8 @@ class BoardDetector:
                      cell_size: float,
                      lo: Optional[float] = None,
                      hi: Optional[float] = None,
-                     drop_last: bool = False) -> Optional[List[float]]:
+                     drop_last: bool = False,
+                     verbose: bool = False) -> Optional[List[float]]:
         """
         Gap-based 1D clustering into n_target groups.
 
@@ -635,7 +640,7 @@ class BoardDetector:
 
         means: List[float] = sorted(float(np.mean(g)) for g in groups)
 
-        if drop_last and n_found != n_target:
+        if drop_last and n_found != n_target and verbose:
             print(f"[_cluster_1d] rows: {n_found} clusters found, need {n_target} | "
                   f"means=[{', '.join(f'{m:.0f}' for m in means)}]")
 
@@ -662,10 +667,11 @@ class BoardDetector:
                     gap_bot = means[-1] - means[-2]
                     dev_top = abs(gap_top - median_gap)
                     dev_bot = abs(gap_bot - median_gap)
-                    drop_end = "top" if dev_top > dev_bot else "bottom"
-                    print(f"[_cluster_1d] median_gap={median_gap:.0f} "
-                          f"gap_top={gap_top:.0f}(dev={dev_top:.0f}) "
-                          f"gap_bot={gap_bot:.0f}(dev={dev_bot:.0f}) → drop {drop_end}")
+                    if verbose:
+                        drop_end = "top" if dev_top > dev_bot else "bottom"
+                        print(f"[_cluster_1d] median_gap={median_gap:.0f} "
+                              f"gap_top={gap_top:.0f}(dev={dev_top:.0f}) "
+                              f"gap_bot={gap_bot:.0f}(dev={dev_bot:.0f}) → drop {drop_end}")
                     if dev_top > dev_bot:
                         means = means[1:]      # top deviates more → outlier
                     else:
@@ -795,7 +801,7 @@ class BoardDetector:
                             else "Y" if board[r, c] == 2
                             else ".")
                 notable = (red_r > 0.10 or yel_r > 0.10 or detected != ".")
-                if notable:
+                if notable and self.config.verbose:
                     # Include median HSV of the sample area for calibration
                     roi_pixels = hsv[roi_mask > 0]
                     if len(roi_pixels) > 0:
@@ -1019,31 +1025,32 @@ class LockedBoardDetector:
         # ── Full HSV diagnostic dump on first locked frame ───────────────────
         if self._dump_next:
             self._dump_next = False
-            print("[HSV-DUMP] All 42 cells (first locked frame):")
-            cfg = self.detector.config
-            red_mask    = (cv2.inRange(hsv, np.array(cfg.red_hsv_low1),  np.array(cfg.red_hsv_high1)) |
-                           cv2.inRange(hsv, np.array(cfg.red_hsv_low2),  np.array(cfg.red_hsv_high2)))
-            yellow_mask = cv2.inRange(hsv, np.array(cfg.yellow_hsv_low), np.array(cfg.yellow_hsv_high))
-            spacing = (self._locked_centers[0, 1, 0] - self._locked_centers[0, 0, 0] if
-                       self._locked_centers.shape[1] > 1 else 50)
-            radius  = max(4, int(cfg.sample_radius * spacing)) if hasattr(cfg, 'sample_radius') else max(4, int(0.28 * spacing))
-            for r in range(6):
-                for c in range(7):
-                    cx, cy = int(self._locked_centers[r, c, 0]), int(self._locked_centers[r, c, 1])
-                    roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
-                    cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
-                    total = cv2.countNonZero(roi_mask)
-                    if total == 0:
-                        continue
-                    roi_pixels = hsv[roi_mask > 0]
-                    h_med = int(np.median(roi_pixels[:, 0]))
-                    s_med = int(np.median(roi_pixels[:, 1]))
-                    v_med = int(np.median(roi_pixels[:, 2]))
-                    red_r = cv2.countNonZero(red_mask    & roi_mask) / total
-                    yel_r = cv2.countNonZero(yellow_mask & roi_mask) / total
-                    det   = ("R" if board_raw[r, c] == 1 else "Y" if board_raw[r, c] == 2 else ".")
-                    print(f"  [{r},{c}] HSV=({h_med:3d},{s_med:3d},{v_med:3d})"
-                          f"  red={red_r:.2f} yel={yel_r:.2f} -> {det}")
+            if self.detector.config.verbose:
+                print("[HSV-DUMP] All 42 cells (first locked frame):")
+                cfg = self.detector.config
+                red_mask    = (cv2.inRange(hsv, np.array(cfg.red_hsv_low1),  np.array(cfg.red_hsv_high1)) |
+                               cv2.inRange(hsv, np.array(cfg.red_hsv_low2),  np.array(cfg.red_hsv_high2)))
+                yellow_mask = cv2.inRange(hsv, np.array(cfg.yellow_hsv_low), np.array(cfg.yellow_hsv_high))
+                spacing = (self._locked_centers[0, 1, 0] - self._locked_centers[0, 0, 0] if
+                           self._locked_centers.shape[1] > 1 else 50)
+                radius  = max(4, int(cfg.sample_radius * spacing)) if hasattr(cfg, 'sample_radius') else max(4, int(0.28 * spacing))
+                for r in range(6):
+                    for c in range(7):
+                        cx, cy = int(self._locked_centers[r, c, 0]), int(self._locked_centers[r, c, 1])
+                        roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                        cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
+                        total = cv2.countNonZero(roi_mask)
+                        if total == 0:
+                            continue
+                        roi_pixels = hsv[roi_mask > 0]
+                        h_med = int(np.median(roi_pixels[:, 0]))
+                        s_med = int(np.median(roi_pixels[:, 1]))
+                        v_med = int(np.median(roi_pixels[:, 2]))
+                        red_r = cv2.countNonZero(red_mask    & roi_mask) / total
+                        yel_r = cv2.countNonZero(yellow_mask & roi_mask) / total
+                        det   = ("R" if board_raw[r, c] == 1 else "Y" if board_raw[r, c] == 2 else ".")
+                        print(f"  [{r},{c}] HSV=({h_med:3d},{s_med:3d},{v_med:3d})"
+                              f"  red={red_r:.2f} yel={yel_r:.2f} -> {det}")
         board_filt = self.detector._apply_gravity_filter(board_raw)
         board      = self._temporal_smooth(board_filt)
 

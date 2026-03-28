@@ -611,6 +611,9 @@ def main():
                         help="Mirror (horizontally flip) the camera feed for selfie cameras. "
                              "The flip is applied before ANY processing so detection, overlays, "
                              "and column numbering all match the mirrored view.")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Enable verbose debug logging (per-cell HSV, hole counts, "
+                             "cluster decisions). Off by default for clean logs.")
     args = parser.parse_args()
 
     human_player = 1 if args.human_color == "red" else 2
@@ -638,10 +641,12 @@ def main():
         if args.config and os.path.exists(args.config):
             cfg = load_config(args.config)
             print(f"HSV config: {args.config}")
+        from dataclasses import replace
         if args.no_perspective_warp:
-            from dataclasses import replace
             cfg = replace(cfg, perspective_warp=False)
             print("Perspective warp: DISABLED (using legacy grid fitting)")
+        if args.verbose:
+            cfg = replace(cfg, verbose=True)
         detector = LockedBoardDetector(cfg)
     # Compute stable_frames from seconds × fps (minimum 3 so it never feels broken)
     stable_frames = max(3, int(round(args.stable_seconds * args.fps)))
