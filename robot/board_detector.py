@@ -5,6 +5,9 @@ Board Detector — Connect Four
 Pipeline
 --------
 1. Locate the blue board frame (HSV mask → largest well-shaped blue blob).
+1b. (Optional) Perspective-warp the board region to a canonical top-down
+    rectangle, removing camera angle distortion.  Enable with
+    ``DetectionConfig.perspective_warp = True`` or ``--perspective-warp``.
 2. Within the board, find hole circles by detecting non-blue circular regions
    (contour analysis — more reliable than HoughCircles).
 3. Cluster hole centres into a 6×7 grid (gap-based 1D clustering with
@@ -25,6 +28,12 @@ Key design notes
     Stage 2 (Locked)    — confirmed after LOCK_FRAMES good detections.
   Bad frames hold the last candidate; only 15+ consecutive bad frames
   (board truly gone) clear the state.
+- Perspective warp (when enabled) warps the detected board contour to a
+  clean top-down rectangle before hole detection and grid fitting.  Grid
+  centres are then inverse-warped back to original image coordinates for
+  cell classification (which runs on the original, un-warped HSV image to
+  preserve true colour values).  This fixes non-uniform row spacing caused
+  by camera angle and improves grid overlay alignment.
 
 External API (unchanged from previous versions)
 -----------------------------------------------
@@ -70,6 +79,11 @@ class DetectionConfig:
     #         through empty holes reads H≈15-35 BUT S≈40-90, well below 130).
     yellow_hsv_low:  Tuple[int, int, int] = (20, 130, 80)
     yellow_hsv_high: Tuple[int, int, int] = (92, 255, 255)
+
+    # Perspective warp — rectify board to top-down before grid fitting.
+    # Improves grid alignment when the camera is angled.  Off by default
+    # so existing behaviour is unchanged; enable with --perspective-warp.
+    perspective_warp: bool = False
 
     # Minimum board area as fraction of image
     min_board_area_ratio: float = 0.02
@@ -135,32 +149,71 @@ class BoardDetector:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         # ── 1. Locate board ───────────────────────────────────────────────────
-        bbox = self._find_board_bbox(hsv, image.shape)
-        if bbox is None:
+        bbox_result = self._find_board_bbox(hsv, image.shape)
+        if bbox_result is None:
             return DetectionResult(
                 board=np.zeros((6, 7), dtype=np.int8),
                 confidence=0.0,
                 errors=["Board not found — no blue frame detected"],
             )
-        bx, by, bw, bh = bbox
+        bx, by, bw, bh, board_cnt = bbox_result
 
-        # ── 2. Detect holes ───────────────────────────────────────────────────
-        holes = self._find_holes(hsv, bx, by, bw, bh)
+        # ── 1b. Perspective warp (optional) ───────────────────────────────────
+        warp_info = None
+        if self.config.perspective_warp:
+            warp_info = self._compute_warp(board_cnt, bx, by, bw, bh)
 
-        # ── 3. Fit 6×7 grid ───────────────────────────────────────────────────
-        cell_est = bw / 7.0
-        fallback_used = False
-        grid_centers = None
+        if warp_info is not None:
+            M_fwd, M_inv, warp_w, warp_h = warp_info
+            warped_bgr, warped_hsv = self._warp_image(image, M_fwd, warp_w, warp_h)
 
-        if len(holes) >= 8:
-            grid_centers = self._fit_grid(holes, cell_est, bx, bx + bw, by, by + bh)
+            # ── 2–3. Hole detection + grid fitting on warped image ────────────
+            holes_w = self._find_holes(warped_hsv, 0, 0, warp_w, warp_h)
+            cell_est_w = warp_w / 7.0
+            fallback_used = False
+            grid_centers_w = None
 
-        if grid_centers is None:
-            grid_centers = self._grid_from_bounds(bx, by, bw, bh)
-            fallback_used = True
-            errors.append(f"Hole detection found {len(holes)} circles — using padded-bounds grid")
+            if len(holes_w) >= 8:
+                grid_centers_w = self._fit_grid(
+                    holes_w, cell_est_w, 0, warp_w, 0, warp_h,
+                )
 
-        # ── 4. Classify cells ─────────────────────────────────────────────────
+            if grid_centers_w is None:
+                grid_centers_w = self._grid_from_bounds(0, 0, warp_w, warp_h)
+                fallback_used = True
+                errors.append(f"Perspective warp: hole detection found "
+                              f"{len(holes_w)} circles — using padded-bounds grid")
+
+            # In the warped image both axes are uniform, so regularise rows too
+            if not fallback_used and grid_centers_w is not None:
+                grid_centers_w = self._regularize_grid_both_axes(grid_centers_w)
+
+            # ── Inverse-warp grid centres back to original image coords ───────
+            grid_centers = self._inverse_warp_grid(grid_centers_w, M_inv)
+
+            # Also inverse-warp hole positions for the debug overlay
+            holes = self._inverse_warp_points(holes_w, M_inv)
+
+        else:
+            # ── Standard (non-warped) pipeline ────────────────────────────────
+
+            # ── 2. Detect holes ───────────────────────────────────────────────
+            holes = self._find_holes(hsv, bx, by, bw, bh)
+
+            # ── 3. Fit 6×7 grid ──────────────────────────────────────────────
+            cell_est = bw / 7.0
+            fallback_used = False
+            grid_centers = None
+
+            if len(holes) >= 8:
+                grid_centers = self._fit_grid(holes, cell_est, bx, bx + bw, by, by + bh)
+
+            if grid_centers is None:
+                grid_centers = self._grid_from_bounds(bx, by, bw, bh)
+                fallback_used = True
+                errors.append(f"Hole detection found {len(holes)} circles — using padded-bounds grid")
+
+        # ── 4. Classify cells (always on original HSV for true colours) ───────
         # Compute confidence on the raw (unfiltered) board — floating pieces
         # in the raw detection mean the grid is misaligned, which is the
         # signal we want.  Apply the gravity filter afterwards for the result.
@@ -195,11 +248,15 @@ class BoardDetector:
     # ── Step 1: Board bounding box ────────────────────────────────────────────
 
     def _find_board_bbox(self, hsv: np.ndarray,
-                          img_shape: Tuple) -> Optional[Tuple[int, int, int, int]]:
+                          img_shape: Tuple) -> Optional[Tuple[int, int, int, int, np.ndarray]]:
         """
-        Find the blue board frame and return (x, y, w, h).
+        Find the blue board frame and return (x, y, w, h, contour).
         Uses a large MORPH_CLOSE to fill the hole grid, then picks the
         largest blob with a plausible Connect Four aspect ratio (0.6–2.8).
+
+        The raw contour is returned alongside the bounding rect so the
+        perspective-warp step can extract true corner points (not just the
+        axis-aligned bounding box).
         """
         cfg = self.config
         mask = cv2.inRange(hsv, np.array(cfg.board_hsv_low), np.array(cfg.board_hsv_high))
@@ -232,13 +289,152 @@ class BoardDetector:
                 continue
             aspect = w / h
             if 0.6 <= aspect <= 2.8 and w * h >= img_area * cfg.min_board_area_ratio:
-                return x, y, w, h
+                return x, y, w, h, cnt
 
         # Fallback: just the largest blob
-        x, y, w, h = cv2.boundingRect(candidates[0])
+        cnt = candidates[0]
+        x, y, w, h = cv2.boundingRect(cnt)
         if w * h >= img_area * cfg.min_board_area_ratio:
-            return x, y, w, h
+            return x, y, w, h, cnt
         return None
+
+    # ── Step 1b: Perspective warp ────────────────────────────────────────────
+
+    @staticmethod
+    def _order_corners(pts: np.ndarray) -> np.ndarray:
+        """
+        Order 4 points as [top-left, top-right, bottom-right, bottom-left].
+
+        Uses the sum (x+y) to find TL (smallest) and BR (largest), and the
+        difference (y-x) to find TR (smallest diff) and BL (largest diff).
+        """
+        s = pts.sum(axis=1)
+        d = np.diff(pts, axis=1).ravel()
+        ordered = np.zeros((4, 2), dtype=np.float32)
+        ordered[0] = pts[np.argmin(s)]   # top-left
+        ordered[2] = pts[np.argmax(s)]   # bottom-right
+        ordered[1] = pts[np.argmin(d)]   # top-right
+        ordered[3] = pts[np.argmax(d)]   # bottom-left
+        return ordered
+
+    def _compute_warp(self, board_contour: np.ndarray,
+                       bx: int, by: int, bw: int, bh: int
+                       ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, int, int]]:
+        """
+        Compute a perspective transform that maps the detected board region
+        to a canonical top-down rectangle.
+
+        Returns (warped_bgr, warped_hsv, M_inverse, dst_w, dst_h) or None
+        if the contour doesn't yield a usable quadrilateral.
+
+        Strategy:
+          1. Approximate the board contour to a polygon.
+          2. If it reduces to exactly 4 vertices, use those as source corners.
+          3. Otherwise fall back to a rotatedRect (minimum-area bounding rect),
+             which still captures camera rotation and mild perspective.
+          4. Destination is a 7:6 aspect rectangle (Connect Four proportions)
+             scaled to roughly match the bounding box width for consistent
+             cell sizing downstream.
+        """
+        # Try to approximate the contour to a quadrilateral
+        peri = cv2.arcLength(board_contour, True)
+        approx = cv2.approxPolyDP(board_contour, 0.02 * peri, True)
+
+        if len(approx) == 4:
+            src_pts = approx.reshape(4, 2).astype(np.float32)
+        else:
+            # Fall back to minimum-area rotated rectangle
+            rect = cv2.minAreaRect(board_contour)
+            box = cv2.boxPoints(rect)
+            src_pts = box.astype(np.float32)
+
+        src_ordered = self._order_corners(src_pts)
+
+        # Destination: canonical top-down rectangle.
+        # Use 7:6 aspect ratio (cols:rows) and scale to ~bw pixels wide
+        # so cell sizes in the warped image are close to the originals.
+        dst_w = max(bw, 350)                     # minimum 350px for decent resolution
+        dst_h = int(dst_w * 6.0 / 7.0)           # 7:6 → height = width × 6/7
+        dst_pts = np.array([
+            [0,     0],
+            [dst_w, 0],
+            [dst_w, dst_h],
+            [0,     dst_h],
+        ], dtype=np.float32)
+
+        # Sanity check: source quad shouldn't be degenerate
+        src_area = cv2.contourArea(src_ordered.reshape(-1, 1, 2).astype(np.int32))
+        if src_area < bw * bh * 0.3:
+            # Quad is too small relative to bbox — approxPolyDP collapsed
+            return None
+
+        M = cv2.getPerspectiveTransform(src_ordered, dst_pts)
+        M_inv = cv2.getPerspectiveTransform(dst_pts, src_ordered)
+
+        # Need the original BGR image for warping (we only have HSV here).
+        # Store M and let the caller warp.  Actually — since detect() has
+        # the image, we reconstruct BGR from HSV.  This avoids changing the
+        # method signature of _find_board_bbox.
+        # NOTE: BGR→HSV→BGR round-trip is lossy, so we warp the original
+        # image in detect() instead.  Return M and M_inv; detect() does
+        # the actual cv2.warpPerspective.
+        return M, M_inv, dst_w, dst_h
+
+    def _warp_image(self, image: np.ndarray, M: np.ndarray,
+                     dst_w: int, dst_h: int) -> Tuple[np.ndarray, np.ndarray]:
+        """Apply perspective warp and return (warped_bgr, warped_hsv)."""
+        warped_bgr = cv2.warpPerspective(image, M, (dst_w, dst_h))
+        warped_hsv = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2HSV)
+        return warped_bgr, warped_hsv
+
+    @staticmethod
+    def _inverse_warp_grid(grid_w: np.ndarray, M_inv: np.ndarray) -> np.ndarray:
+        """
+        Map a (6, 7, 2) grid of warped-space centres back to original
+        image coordinates using the inverse perspective matrix.
+        """
+        pts = grid_w.reshape(-1, 2).astype(np.float64)
+        # cv2.perspectiveTransform needs shape (N, 1, 2) float32/64
+        pts_h = pts.reshape(-1, 1, 2)
+        mapped = cv2.perspectiveTransform(pts_h, M_inv)
+        return mapped.reshape(6, 7, 2).astype(np.int32)
+
+    @staticmethod
+    def _inverse_warp_points(points: List[Tuple[float, float]],
+                              M_inv: np.ndarray) -> List[Tuple[float, float]]:
+        """Map a list of (x, y) points from warped space back to original."""
+        if not points:
+            return []
+        pts = np.array(points, dtype=np.float64).reshape(-1, 1, 2)
+        mapped = cv2.perspectiveTransform(pts, M_inv)
+        return [(float(p[0][0]), float(p[0][1])) for p in mapped]
+
+    @staticmethod
+    def _regularize_grid_both_axes(grid: np.ndarray) -> np.ndarray:
+        """
+        In a warped (top-down) image, both column AND row spacing should be
+        uniform.  Fit straight lines through both axes and return the
+        perfectly-evenly-spaced grid.
+        """
+        rows, cols = grid.shape[:2]
+
+        # Average column x-positions across all rows, then regularise
+        col_xs = [float(np.mean(grid[:, c, 0])) for c in range(cols)]
+        idx_c = np.arange(cols, dtype=float)
+        slope_c, intercept_c = np.polyfit(idx_c, col_xs, 1)
+        reg_col_xs = [slope_c * i + intercept_c for i in range(cols)]
+
+        # Average row y-positions across all columns, then regularise
+        row_ys = [float(np.mean(grid[r, :, 1])) for r in range(rows)]
+        idx_r = np.arange(rows, dtype=float)
+        slope_r, intercept_r = np.polyfit(idx_r, row_ys, 1)
+        reg_row_ys = [slope_r * i + intercept_r for i in range(rows)]
+
+        out = np.zeros_like(grid)
+        for r in range(rows):
+            for c in range(cols):
+                out[r, c] = [int(round(reg_col_xs[c])), int(round(reg_row_ys[r]))]
+        return out
 
     # ── Step 2: Hole detection ────────────────────────────────────────────────
 
