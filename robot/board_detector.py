@@ -60,15 +60,14 @@ class DetectionConfig:
     red_hsv_low2:  Tuple[int, int, int] = (163, 140, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
-    # Yellow / lime-green pieces
-    # H 30–92: broad coverage — user's lime-green pieces have H≈40-75 in normal
-    #           light, but bright/overexposed lighting can shift them slightly.
-    #           Window warm-light false positives (H≈15-35) are now handled by
-    #           the higher S threshold rather than a narrow H range.
-    # S≥90: lower than before (was 120) to catch slightly washed-out pieces
-    #         under bright kitchen light.  Background through empty holes still
-    #         has S<80 in most cases; S≥90 gives a small safety margin.
-    yellow_hsv_low:  Tuple[int, int, int] = (30, 90, 80)
+    # Yellow / amber / lime-green pieces
+    # H 15–92: covers warm amber-gold (H≈15-28) through pure yellow (H≈30)
+    #           and lime-green (H≈40-80).  Standard Connect Four yellow plastic
+    #           typically reads H≈20-28 under kitchen/indoor light.
+    # S≥130: yellow plastic is highly saturated (S≥160 typically).  Raising S
+    #         threshold blocks warm-light false positives (sunlight or incandescent
+    #         through empty holes reads H≈15-35 BUT S≈40-90, well below 130).
+    yellow_hsv_low:  Tuple[int, int, int] = (15, 130, 80)
     yellow_hsv_high: Tuple[int, int, int] = (92, 255, 255)
 
     # Minimum board area as fraction of image
@@ -511,13 +510,15 @@ class BoardDetector:
                 elif yel_r > cfg.piece_threshold and yel_r > red_r:
                     board[r, c] = 2
 
-                # Debug: log notable cells with HSV stats so we can calibrate ranges.
+                # Debug: log cells with HSV stats for calibration.
+                # Log any cell where either colour mask registers > 0.10,
+                # or where a piece was detected.
                 detected = ("R" if board[r, c] == 1
                             else "Y" if board[r, c] == 2
                             else ".")
-                notable = (red_r > 0.15 or yel_r > 0.15 or detected != ".")
+                notable = (red_r > 0.10 or yel_r > 0.10 or detected != ".")
                 if notable:
-                    # Include mean HSV of the sample area for calibration
+                    # Include median HSV of the sample area for calibration
                     roi_pixels = hsv[roi_mask > 0]
                     if len(roi_pixels) > 0:
                         h_med = int(np.median(roi_pixels[:, 0]))
@@ -689,6 +690,7 @@ class LockedBoardDetector:
         self._absent_count:  np.ndarray = np.zeros((6, 7), dtype=np.int32)
         self._verify_count: int   = 0
         self._verify_sum:   float = 0.0
+        self._dump_next: bool = False  # dump all cell HSVs on next locked frame
 
     @property
     def config(self) -> DetectionConfig:
@@ -727,6 +729,35 @@ class LockedBoardDetector:
                         debug: bool) -> DetectionResult:
         board_raw  = self.detector._classify_cells(hsv, self._locked_centers)
         confidence = self.detector._compute_confidence(board_raw)
+
+        # ── Full HSV diagnostic dump on first locked frame ───────────────────
+        if self._dump_next:
+            self._dump_next = False
+            print("[HSV-DUMP] All 42 cells (first locked frame):")
+            cfg = self.detector.config
+            red_mask    = (cv2.inRange(hsv, np.array(cfg.red_hsv_low1),  np.array(cfg.red_hsv_high1)) |
+                           cv2.inRange(hsv, np.array(cfg.red_hsv_low2),  np.array(cfg.red_hsv_high2)))
+            yellow_mask = cv2.inRange(hsv, np.array(cfg.yellow_hsv_low), np.array(cfg.yellow_hsv_high))
+            spacing = (self._locked_centers[0, 1, 0] - self._locked_centers[0, 0, 0] if
+                       self._locked_centers.shape[1] > 1 else 50)
+            radius  = max(4, int(cfg.sample_radius * spacing)) if hasattr(cfg, 'sample_radius') else max(4, int(0.28 * spacing))
+            for r in range(6):
+                for c in range(7):
+                    cx, cy = int(self._locked_centers[r, c, 0]), int(self._locked_centers[r, c, 1])
+                    roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                    cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
+                    total = cv2.countNonZero(roi_mask)
+                    if total == 0:
+                        continue
+                    roi_pixels = hsv[roi_mask > 0]
+                    h_med = int(np.median(roi_pixels[:, 0]))
+                    s_med = int(np.median(roi_pixels[:, 1]))
+                    v_med = int(np.median(roi_pixels[:, 2]))
+                    red_r = cv2.countNonZero(red_mask    & roi_mask) / total
+                    yel_r = cv2.countNonZero(yellow_mask & roi_mask) / total
+                    det   = ("R" if board_raw[r, c] == 1 else "Y" if board_raw[r, c] == 2 else ".")
+                    print(f"  [{r},{c}] HSV=({h_med:3d},{s_med:3d},{v_med:3d})"
+                          f"  red={red_r:.2f} yel={yel_r:.2f} -> {det}")
         board_filt = self.detector._apply_gravity_filter(board_raw)
         board      = self._temporal_smooth(board_filt)
 
@@ -818,6 +849,7 @@ class LockedBoardDetector:
                     self.is_locked    = True
                     self._good_count  = 0
                     self._last_board  = cand_board.copy()
+                    self._dump_next   = True   # full HSV dump on next frame
                     print("[Board] Locked ✓")
                     self._print_board(cand_board)
                 else:
