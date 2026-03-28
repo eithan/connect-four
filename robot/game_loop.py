@@ -301,7 +301,7 @@ class GameLoop:
             yellow_n = int(np.sum(stable_board == 2))
             print(f"\nInitial board detected: Red={red_n}, Yellow={yellow_n}")
             self._save_screenshot("lock_initial")
-            self.ann.speak("Board locked. Ready to play.")
+            self.ann.speak("Board locked. Your turn.", interrupt=True)
             if self.tracker.state.game_over:
                 self._end_game({"game_over": True,
                                 "winner": self.tracker.state.winner,

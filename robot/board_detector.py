@@ -354,10 +354,13 @@ class BoardDetector:
         src_ordered = self._order_corners(src_pts)
 
         # Destination: canonical top-down rectangle.
-        # Use 7:6 aspect ratio (cols:rows) and scale to ~bw pixels wide
-        # so cell sizes in the warped image are close to the originals.
-        dst_w = max(bw, 350)                     # minimum 350px for decent resolution
-        dst_h = int(dst_w * 6.0 / 7.0)           # 7:6 → height = width × 6/7
+        # Preserve the source bounding-box aspect ratio so the board's
+        # true proportions are maintained (the full frame includes guide
+        # rail + tray, which is taller than the 7:6 playing grid).
+        # Forcing 7:6 compressed the board vertically, pushing the grid
+        # overlay down by ~1 row.
+        dst_w = max(bw, 350)
+        dst_h = max(int(dst_w * bh / bw), 300)   # match source aspect ratio
         dst_pts = np.array([
             [0,     0],
             [dst_w, 0],
