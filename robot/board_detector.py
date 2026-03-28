@@ -339,10 +339,16 @@ class BoardDetector:
         if len(col_means) != 7 or len(row_means) != 6:
             return None
 
-        # Regularise: fit a line through the cluster means so the final grid
-        # is perfectly evenly spaced even when a few means are slightly off.
+        # Regularise columns only: horizontal spacing is consistent (camera
+        # is nearly perpendicular to the vertical axis of the board), so a
+        # straight-line fit removes noise without moving circles off holes.
+        #
+        # Do NOT regularise rows: the camera is typically angled slightly up
+        # or down, making row spacing non-uniform due to perspective.  Fitting
+        # a straight line through uneven row spacings shifts every circle away
+        # from the actual holes.  Use the raw cluster means instead.
         col_means = self._regularize_means(col_means)
-        row_means = self._regularize_means(row_means)
+        # row_means intentionally left as raw cluster positions
 
         centers = np.zeros((6, 7, 2), dtype=np.int32)
         for r, y in enumerate(row_means):
