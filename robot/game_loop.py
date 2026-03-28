@@ -272,11 +272,12 @@ class GameLoop:
             # pieces prevent stable detection from ever firing.
             self._save_screenshot("board_locked")
             self._last_periodic_ss = time.time()
-            # Announce immediately at lock time — don't wait for stable
-            # detection (which takes several more seconds).  The human should
-            # know they can drop their first piece right away.
-            if self.phase == GamePhase.HUMAN_TURN:
-                self.ann.speak("Board detected. Your turn.", interrupt=True)
+            # Neutral confirmation at lock time.  Don't say "your turn" here
+            # because stable detection takes ~2s more — the human may have
+            # already placed a piece by then, and a premature "your turn"
+            # followed by "AI's turn" is confusing.  The real turn
+            # announcement comes from initialization after stable detection.
+            self.ann.speak("Board detected.", interrupt=True)
 
         # Periodic screenshot every 15s during pre-initialization (diagnostics)
         if (not self._initialized and self.detector.is_locked
@@ -306,7 +307,6 @@ class GameLoop:
             yellow_n = int(np.sum(stable_board == 2))
             print(f"\nInitial board detected: Red={red_n}, Yellow={yellow_n}")
             self._save_screenshot("lock_initial")
-            self.ann.speak("Board locked. Your turn.", interrupt=True)
             if self.tracker.state.game_over:
                 self._end_game({"game_over": True,
                                 "winner": self.tracker.state.winner,
@@ -332,6 +332,7 @@ class GameLoop:
                     self._initialized = False
                     return
                 self._set_status_for_phase()
+                self.ann.speak("Your turn.", interrupt=True)
             return
 
         if self.phase == GamePhase.HUMAN_TURN:

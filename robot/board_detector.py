@@ -168,27 +168,30 @@ class BoardDetector:
 
         if warp_info is not None:
             M_fwd, M_inv, warp_w, warp_h = warp_info
-            warped_bgr, warped_hsv = self._warp_image(image, M_fwd, warp_w, warp_h)
 
-            # ── 2–3. Hole detection + grid fitting on warped image ────────────
-            # The board contour includes the full blue frame — guide rail at
-            # top (~15-20% of height) and collection tray at bottom (~10-15%).
-            # Apply extra pre-crop so _find_holes' internal 12% margins don't
-            # need to cover the entire rail/tray.  Total exclusion per end:
-            # 8% pre-crop + 12% of remaining ≈ 19% — clears most rails.
-            # Hole coordinates remain in full warped-image space because
-            # _find_holes adds by back to detected centres.
-            warp_crop_top = int(warp_h * 0.08)
-            warp_crop_bot = int(warp_h * 0.08)
-            holes_w = self._find_holes(
-                warped_hsv, 0, warp_crop_top,
-                warp_w, warp_h - warp_crop_top - warp_crop_bot,
-            )
+            # ── 2–3. Detect holes in ORIGINAL image, regularise in warp space ─
+            #
+            # Key insight: hole detection is reliable on the original image
+            # (proven margins, no warp artifacts).  The perspective warp is
+            # only needed for REGULARISATION — in the warped (top-down) space,
+            # both row and column spacing are uniform, so we can fit a clean
+            # evenly-spaced grid.  No actual image warping required.
+            #
+            # Pipeline:
+            #   a) Find holes in original image (same as non-warp path)
+            #   b) Forward-warp hole positions into the canonical space
+            #   c) Fit + regularise the grid in canonical space (both axes)
+            #   d) Inverse-warp the regularised grid back to original coords
+
+            holes = self._find_holes(hsv, bx, by, bw, bh)
+
             cell_est_w = warp_w / 7.0
             fallback_used = False
             grid_centers_w = None
 
-            if len(holes_w) >= 8:
+            if len(holes) >= 8:
+                # Forward-warp hole positions to canonical space
+                holes_w = self._forward_warp_points(holes, M_fwd)
                 grid_centers_w = self._fit_grid(
                     holes_w, cell_est_w, 0, warp_w, 0, warp_h,
                 )
@@ -197,17 +200,14 @@ class BoardDetector:
                 grid_centers_w = self._grid_from_bounds(0, 0, warp_w, warp_h)
                 fallback_used = True
                 errors.append(f"Perspective warp: hole detection found "
-                              f"{len(holes_w)} circles — using padded-bounds grid")
+                              f"{len(holes)} circles — using padded-bounds grid")
 
-            # In the warped image both axes are uniform, so regularise rows too
+            # In canonical space both axes are uniform → regularise both
             if not fallback_used and grid_centers_w is not None:
                 grid_centers_w = self._regularize_grid_both_axes(grid_centers_w)
 
             # ── Inverse-warp grid centres back to original image coords ───────
             grid_centers = self._inverse_warp_grid(grid_centers_w, M_inv)
-
-            # Also inverse-warp hole positions for the debug overlay
-            holes = self._inverse_warp_points(holes_w, M_inv)
 
         else:
             # ── Standard (non-warped) pipeline ────────────────────────────────
@@ -416,6 +416,16 @@ class BoardDetector:
         pts_h = pts.reshape(-1, 1, 2)
         mapped = cv2.perspectiveTransform(pts_h, M_inv)
         return mapped.reshape(6, 7, 2).astype(np.int32)
+
+    @staticmethod
+    def _forward_warp_points(points: List[Tuple[float, float]],
+                              M_fwd: np.ndarray) -> List[Tuple[float, float]]:
+        """Map a list of (x, y) points from original image to warped space."""
+        if not points:
+            return []
+        pts = np.array(points, dtype=np.float64).reshape(-1, 1, 2)
+        mapped = cv2.perspectiveTransform(pts, M_fwd)
+        return [(float(p[0][0]), float(p[0][1])) for p in mapped]
 
     @staticmethod
     def _inverse_warp_points(points: List[Tuple[float, float]],
