@@ -60,13 +60,15 @@ class DetectionConfig:
     board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
     # Red pieces (two ranges to wrap the 0/180 hue boundary)
-    # S raised 100→140: bright red plastic pieces have S≥180.
-    # Board mechanisms (sliders, reset levers), shadows cast into holes, and
-    # reddish objects visible through empty holes read S≈80-120 and would
-    # otherwise create phantom red detections specifically at center/bottom holes.
-    red_hsv_low1:  Tuple[int, int, int] = (0,   140, 80)
+    # S raised 140→165: bright red plastic pieces have S≥180.
+    # Warm-toned backgrounds visible through empty holes (wood tables,
+    # kitchen surfaces under incandescent/warm light) read H≈11-13,
+    # S≈140-155, V≈90-110 — enough to trigger false reds at S≥140.
+    # At S≥165 we get a clean gap: background tops out at ~155, real
+    # red plastic starts at ~180.
+    red_hsv_low1:  Tuple[int, int, int] = (0,   165, 80)
     red_hsv_high1: Tuple[int, int, int] = (12,  255, 255)
-    red_hsv_low2:  Tuple[int, int, int] = (163, 140, 80)
+    red_hsv_low2:  Tuple[int, int, int] = (163, 165, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / amber / lime-green pieces
@@ -107,9 +109,9 @@ PHYSICAL_CONFIG = DetectionConfig()
 SCREEN_CONFIG = DetectionConfig(
     board_hsv_low=(85,  80, 80),
     board_hsv_high=(140, 255, 255),
-    red_hsv_low1=(0,   120, 100),
+    red_hsv_low1=(0,   140, 100),
     red_hsv_high1=(12,  255, 255),
-    red_hsv_low2=(163, 120, 100),
+    red_hsv_low2=(163, 140, 100),
     red_hsv_high2=(180, 255, 255),
     yellow_hsv_low=(15, 120, 100),
     yellow_hsv_high=(85, 255, 255),
