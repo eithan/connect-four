@@ -83,9 +83,10 @@ class DetectionConfig:
     yellow_hsv_high: Tuple[int, int, int] = (92, 255, 255)
 
     # Perspective warp — rectify board to top-down before grid fitting.
-    # Improves grid alignment when the camera is angled.  Off by default
-    # so existing behaviour is unchanged; enable with --perspective-warp.
-    perspective_warp: bool = False
+    # Produces significantly better grid alignment than the non-warped
+    # path, especially with angled cameras.  On by default; disable with
+    # --no-perspective-warp if needed.
+    perspective_warp: bool = True
 
     # Minimum board area as fraction of image
     min_board_area_ratio: float = 0.02

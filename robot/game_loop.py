@@ -592,9 +592,9 @@ def main():
                         help="TTS speaking rate in words per minute (default: 155)")
     parser.add_argument("--tts-voice", type=str, default="",
                         help="pyttsx3 voice ID (leave blank for system default)")
-    parser.add_argument("--perspective-warp", action="store_true",
-                        help="Rectify board to top-down view before grid fitting "
-                             "(experimental — improves grid alignment with angled cameras)")
+    parser.add_argument("--no-perspective-warp", action="store_true",
+                        help="Disable perspective warp (top-down rectification). "
+                             "Warp is ON by default for better grid alignment.")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     args = parser.parse_args()
@@ -624,10 +624,10 @@ def main():
         if args.config and os.path.exists(args.config):
             cfg = load_config(args.config)
             print(f"HSV config: {args.config}")
-        if args.perspective_warp:
+        if args.no_perspective_warp:
             from dataclasses import replace
-            cfg = replace(cfg, perspective_warp=True)
-            print("Perspective warp: ENABLED (experimental)")
+            cfg = replace(cfg, perspective_warp=False)
+            print("Perspective warp: DISABLED (using legacy grid fitting)")
         detector = LockedBoardDetector(cfg)
     # Compute stable_frames from seconds × fps (minimum 3 so it never feels broken)
     stable_frames = max(3, int(round(args.stable_seconds * args.fps)))
