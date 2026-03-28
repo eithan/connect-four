@@ -272,6 +272,11 @@ class GameLoop:
             # pieces prevent stable detection from ever firing.
             self._save_screenshot("board_locked")
             self._last_periodic_ss = time.time()
+            # Announce immediately at lock time — don't wait for stable
+            # detection (which takes several more seconds).  The human should
+            # know they can drop their first piece right away.
+            if self.phase == GamePhase.HUMAN_TURN:
+                self.ann.speak("Board detected. Your turn.", interrupt=True)
 
         # Periodic screenshot every 15s during pre-initialization (diagnostics)
         if (not self._initialized and self.detector.is_locked

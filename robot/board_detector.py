@@ -171,7 +171,19 @@ class BoardDetector:
             warped_bgr, warped_hsv = self._warp_image(image, M_fwd, warp_w, warp_h)
 
             # ── 2–3. Hole detection + grid fitting on warped image ────────────
-            holes_w = self._find_holes(warped_hsv, 0, 0, warp_w, warp_h)
+            # The board contour includes the full blue frame — guide rail at
+            # top (~15-20% of height) and collection tray at bottom (~10-15%).
+            # Apply extra pre-crop so _find_holes' internal 12% margins don't
+            # need to cover the entire rail/tray.  Total exclusion per end:
+            # 8% pre-crop + 12% of remaining ≈ 19% — clears most rails.
+            # Hole coordinates remain in full warped-image space because
+            # _find_holes adds by back to detected centres.
+            warp_crop_top = int(warp_h * 0.08)
+            warp_crop_bot = int(warp_h * 0.08)
+            holes_w = self._find_holes(
+                warped_hsv, 0, warp_crop_top,
+                warp_w, warp_h - warp_crop_top - warp_crop_bot,
+            )
             cell_est_w = warp_w / 7.0
             fallback_used = False
             grid_centers_w = None
@@ -604,12 +616,37 @@ class BoardDetector:
         # Reduce to n_target clusters
         while len(means) > n_target:
             if drop_last:
-                # For row clustering: the extra cluster is almost always the
-                # collection tray at the bottom.  Drop the bottom-most cluster
-                # so we keep the real board rows at their true positions.
-                # Merging the two closest (old behaviour) was shifting a real
-                # row centre to a wrong y coordinate.
-                means = means[:-1]
+                # For row clustering: extra clusters come from the guide rail
+                # (top) or collection tray (bottom).  Compare the gap at each
+                # end to the median interior spacing.  An end gap significantly
+                # larger than the median is an outlier (rail/tray); drop it.
+                # If both ends look similar, prefer dropping the bottom (tray
+                # is more common than rail artifacts).
+                #
+                # Old behaviour (always drop bottom) failed when the guide rail
+                # created an extra cluster at the top — it would drop a real
+                # bottom row instead, shifting the entire grid down.
+                if len(means) >= 4:
+                    interior_gaps = [means[i + 1] - means[i]
+                                     for i in range(1, len(means) - 2)]
+                    median_gap = float(np.median(interior_gaps)) if interior_gaps else cell_size
+                    gap_top = means[1] - means[0]
+                    gap_bot = means[-1] - means[-2]
+                    # Drop whichever end deviates more from the median.
+                    # A 20% margin prevents ties from flipping randomly.
+                    if gap_top > gap_bot * 1.2:
+                        means = means[1:]      # outlier at top (guide rail)
+                    else:
+                        means = means[:-1]     # outlier at bottom (tray) or tie
+                elif len(means) >= 3:
+                    gap_top = means[1] - means[0]
+                    gap_bot = means[-1] - means[-2]
+                    if gap_top > gap_bot * 1.2:
+                        means = means[1:]
+                    else:
+                        means = means[:-1]
+                else:
+                    means = means[:-1]
             else:
                 # For column clustering (or generic): merge the two groups with
                 # the smallest gap between them (noise split).
