@@ -61,16 +61,16 @@ class DetectionConfig:
 
     # Red pieces (two ranges to wrap the 0/180 hue boundary)
     #
-    # S lowered 165→150: under dim indoor lighting, red plastic reads
-    # S≈161-175 — right at the old S=165 cutoff, causing flicker.
-    # S=150 gives a ~10-unit buffer below worst-case piece (S≈161).
-    # Empty holes: kitchen background peaks at S≈155, dim rooms at
-    # S≈60-110.  At S=150, a few kitchen pixels might enter the red
-    # mask, but piece_threshold (0.38) blocks false positives — those
-    # stray pixels are <15% of the sample circle, well below 38%.
-    red_hsv_low1:  Tuple[int, int, int] = (0,   150, 80)
+    # S lowered 165→130: under dim indoor lighting, camera auto-exposure
+    # causes red plastic S to fluctuate 143-175.  S=130 gives a 13-unit
+    # buffer below worst-case dips (S≈143).
+    # Empty holes: dim rooms S≈60-110, kitchen background peaks S≈155.
+    # At S=130, some kitchen background pixels (H≈12, S≈140-155) will
+    # enter the red mask, but piece_threshold (0.38) blocks false
+    # positives — background covers <20% of the sample circle.
+    red_hsv_low1:  Tuple[int, int, int] = (0,   130, 80)
     red_hsv_high1: Tuple[int, int, int] = (12,  255, 255)
-    red_hsv_low2:  Tuple[int, int, int] = (158, 150, 80)
+    red_hsv_low2:  Tuple[int, int, int] = (158, 130, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / amber / lime-green pieces
