@@ -969,7 +969,10 @@ class LockedBoardDetector:
     # Fan/lighting flicker typically lasts 1–3 frames; real removals are
     # permanent.  5 frames ≈ ~0.5 s at 10 fps — fast enough to track gameplay
     # while ignoring shadows.
-    REMOVE_THRESHOLD = 5
+    # 15 frames ≈ 2 seconds @ 7.5fps — a real piece removal (physical
+    # extraction) takes much longer.  Brief HSV dips from auto-exposure
+    # or hand shadows resolve well within 15 frames.
+    REMOVE_THRESHOLD = 15
 
     # Post-lock quality verification.  If average confidence over the first
     # VERIFY_WINDOW frames is below VERIFY_MIN_CONF the lock was probably made
@@ -1065,8 +1068,13 @@ class LockedBoardDetector:
                         det   = ("R" if board_raw[r, c] == 1 else "Y" if board_raw[r, c] == 2 else ".")
                         print(f"  [{r},{c}] HSV=({h_med:3d},{s_med:3d},{v_med:3d})"
                               f"  red={red_r:.2f} yel={yel_r:.2f} -> {det}")
-        board_filt = self.detector._apply_gravity_filter(board_raw)
-        board      = self._temporal_smooth(board_filt)
+        # Temporal smooth FIRST, then gravity.  If gravity runs on raw
+        # board_raw, a brief HSV dropout of a mid-column piece creates a
+        # gap → gravity rearranges the whole column → the temporal smoother
+        # sees 3+ cell changes and can't recover.  Smoothing first preserves
+        # the known piece while it flickers, so gravity never sees the gap.
+        board_smooth = self._temporal_smooth(board_raw)
+        board        = self.detector._apply_gravity_filter(board_smooth)
 
         # ── Post-lock quality verification (first VERIFY_WINDOW frames) ─────
         if self._verify_count < self.VERIFY_WINDOW:
