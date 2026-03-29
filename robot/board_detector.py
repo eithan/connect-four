@@ -78,10 +78,11 @@ class DetectionConfig:
     #           kitchen/indoor light.  Lower bound 20 gives 1-hue margin while
     #           blocking the persistent warm-orange false-positive at H≈14-15
     #           visible through empty holes when background is slightly warm.
-    # S≥130: yellow plastic is highly saturated (S≥160 typically).  Raising S
-    #         threshold blocks warm-light false positives (sunlight or incandescent
-    #         through empty holes reads H≈15-35 BUT S≈40-90, well below 130).
-    yellow_hsv_low:  Tuple[int, int, int] = (20, 130, 80)
+    # S≥100: yellow plastic reads S≈121-170 depending on lighting.  Under dim
+    #         indoor light with auto-exposure, S dips to ~121.  S=100 gives a
+    #         21-unit buffer.  Empty holes with H in yellow range (20-92) max
+    #         out at S≈66 (dim rooms) to S≈91 (kitchen) — safe gap above 100.
+    yellow_hsv_low:  Tuple[int, int, int] = (20, 100, 80)
     yellow_hsv_high: Tuple[int, int, int] = (92, 255, 255)
 
     # Perspective warp — rectify board to top-down before grid fitting.
