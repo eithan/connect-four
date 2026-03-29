@@ -112,7 +112,7 @@ class DetectionConfig:
     # Adaptive colour detection: classify pieces by measuring HSV change
     # from the empty-board baseline rather than fixed HSV ranges.
     # This eliminates lighting-dependent S_min tuning entirely.
-    adaptive: bool = False
+    adaptive: bool = True
 
     # Adaptive mode thresholds
     # Minimum saturation increase from empty baseline to consider a cell

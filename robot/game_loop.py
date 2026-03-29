@@ -614,11 +614,6 @@ def main():
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose debug logging (per-cell HSV, hole counts, "
                              "cluster decisions). Off by default for clean logs.")
-    parser.add_argument("--adaptive", action="store_true",
-                        help="Adaptive colour detection: classify pieces by measuring "
-                             "HSV change from the empty-board baseline instead of fixed "
-                             "thresholds. Works across different lighting conditions "
-                             "without manual tuning.")
     args = parser.parse_args()
 
     human_player = 1 if args.human_color == "red" else 2
@@ -652,9 +647,6 @@ def main():
             print("Perspective warp: DISABLED (using legacy grid fitting)")
         if args.verbose:
             cfg = replace(cfg, verbose=True)
-        if args.adaptive:
-            cfg = replace(cfg, adaptive=True)
-            print("Adaptive mode: ON — colour detection adapts to lighting automatically")
         detector = LockedBoardDetector(cfg)
     # Compute stable_frames from seconds × fps (minimum 3 so it never feels broken)
     stable_frames = max(3, int(round(args.stable_seconds * args.fps)))
