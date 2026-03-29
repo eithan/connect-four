@@ -109,6 +109,22 @@ class DetectionConfig:
     # Verbose logging: per-cell HSV, hole counts, cluster decisions
     verbose: bool = False
 
+    # Adaptive colour detection: classify pieces by measuring HSV change
+    # from the empty-board baseline rather than fixed HSV ranges.
+    # This eliminates lighting-dependent S_min tuning entirely.
+    adaptive: bool = False
+
+    # Adaptive mode thresholds
+    # Minimum saturation increase from empty baseline to consider a cell
+    # "has a piece" (replaces fixed S_min).  Empty→piece typically shows
+    # ΔS ≥ 40–80; empty→empty drift is usually < 15.
+    adaptive_min_delta_s: int = 25
+
+    # Hue boundary between red and yellow (in OpenCV 0-180 scale).
+    # Red wraps around 0/180, so: hue < boundary OR hue > (180 - boundary) → red
+    # Otherwise → yellow.   With boundary=30: red is H<30 or H>150; yellow is 30–150.
+    adaptive_hue_boundary: int = 30
+
 
 # Physical board preset (default)
 PHYSICAL_CONFIG = DetectionConfig()
@@ -1000,6 +1016,9 @@ class LockedBoardDetector:
         self._verify_count: int   = 0
         self._verify_sum:   float = 0.0
         self._dump_next: bool = False  # dump all cell HSVs on next locked frame
+        # Per-cell empty-board HSV baselines for adaptive mode.
+        # Shape (6, 7, 3) — median H, S, V for each cell at lock time.
+        self._empty_baselines: Optional[np.ndarray] = None
 
     @property
     def config(self) -> DetectionConfig:
@@ -1025,6 +1044,7 @@ class LockedBoardDetector:
         self._absent_count = np.zeros((6, 7), dtype=np.int32)
         self._verify_count = 0
         self._verify_sum   = 0.0
+        self._empty_baselines = None
 
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -1036,7 +1056,10 @@ class LockedBoardDetector:
 
     def _detect_locked(self, image: np.ndarray, hsv: np.ndarray,
                         debug: bool) -> DetectionResult:
-        board_raw  = self.detector._classify_cells(hsv, self._locked_centers)
+        if self.config.adaptive and self._empty_baselines is not None:
+            board_raw = self._classify_cells_adaptive(hsv, self._locked_centers)
+        else:
+            board_raw = self.detector._classify_cells(hsv, self._locked_centers)
         confidence = self.detector._compute_confidence(board_raw)
 
         # ── Full HSV diagnostic dump on first locked frame ───────────────────
@@ -1165,6 +1188,9 @@ class LockedBoardDetector:
                     self._good_count  = 0
                     self._last_board  = cand_board.copy()
                     self._dump_next   = True   # full HSV dump on next frame
+                    # Capture per-cell HSV baselines for adaptive mode
+                    if self.config.adaptive:
+                        self._capture_empty_baselines(hsv)
                     print("[Board] Locked ✓")
                     self._print_board(cand_board)
                 else:
@@ -1182,6 +1208,162 @@ class LockedBoardDetector:
         return result
 
     # ── Helpers ──────────────────────────────────────────────────────────────
+
+    # ── Adaptive colour detection ──────────────────────────────────────────
+
+    def _capture_empty_baselines(self, hsv: np.ndarray):
+        """
+        Sample median HSV at each grid cell position and store as the
+        empty-board baseline.  Called once at lock time.
+
+        If the board isn't fully empty (e.g. pieces pre-placed), cells that
+        the fixed-threshold classifier detects as occupied get a sentinel
+        baseline of (-1, -1, -1) — adaptive mode falls back to fixed
+        thresholds for those cells.
+        """
+        centers = self._locked_centers
+        h_img, w_img = hsv.shape[:2]
+        baselines = np.full((6, 7, 3), -1.0, dtype=np.float32)
+        spacing = abs(int(centers[0, 1, 0]) - int(centers[0, 0, 0]))
+        radius  = max(int(spacing * 0.28), 8)
+
+        # Run fixed-threshold classification to identify pre-existing pieces
+        fixed_board = self.detector._classify_cells(hsv, centers)
+
+        empty_count = 0
+        for r in range(6):
+            for c in range(7):
+                if fixed_board[r, c] != 0:
+                    continue  # cell has a piece — skip, leave sentinel
+                cx = int(centers[r, c, 0])
+                cy = int(centers[r, c, 1])
+                if not (0 <= cx < w_img and 0 <= cy < h_img):
+                    continue
+                roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
+                roi_pixels = hsv[roi_mask > 0]
+                if len(roi_pixels) > 0:
+                    baselines[r, c, 0] = np.median(roi_pixels[:, 0])
+                    baselines[r, c, 1] = np.median(roi_pixels[:, 1])
+                    baselines[r, c, 2] = np.median(roi_pixels[:, 2])
+                    empty_count += 1
+
+        self._empty_baselines = baselines
+        print(f"[Adaptive] Baselines captured for {empty_count}/42 empty cells")
+        if self.config.verbose:
+            for r in range(6):
+                for c in range(7):
+                    h, s, v = baselines[r, c]
+                    if h >= 0:
+                        print(f"  [{r},{c}] baseline HSV=({h:.0f},{s:.0f},{v:.0f})")
+                    else:
+                        print(f"  [{r},{c}] (piece at lock — no baseline)")
+
+    def _classify_cells_adaptive(self, hsv: np.ndarray,
+                                  grid_centers: np.ndarray) -> np.ndarray:
+        """
+        Classify cells by comparing current HSV against the empty-board
+        baseline.  A cell is considered to have a piece when its saturation
+        has increased significantly from the baseline.  Hue distinguishes
+        red from yellow.
+
+        Falls back to the standard fixed-threshold method if baselines
+        aren't available.
+        """
+        if self._empty_baselines is None:
+            return self.detector._classify_cells(hsv, grid_centers)
+
+        cfg = self.config
+        board = np.zeros((6, 7), dtype=np.int8)
+        h_img, w_img = hsv.shape[:2]
+        spacing = abs(int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0]))
+        radius  = max(int(spacing * 0.28), 8)
+
+        min_ds = cfg.adaptive_min_delta_s
+        hue_bnd = cfg.adaptive_hue_boundary
+
+        for r in range(6):
+            for c in range(7):
+                cx = int(grid_centers[r, c, 0])
+                cy = int(grid_centers[r, c, 1])
+                if not (0 <= cx < w_img and 0 <= cy < h_img):
+                    continue
+                # Out-of-bounds guard (same as fixed-threshold path)
+                if hasattr(self.detector, '_board_bbox') and self.detector._board_bbox is not None:
+                    bbx, bby, bbw, bbh = self.detector._board_bbox
+                    margin = spacing
+                    if not (bbx - margin <= cx <= bbx + bbw + margin and
+                            bby - margin <= cy <= bby + bbh + margin):
+                        continue
+
+                roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
+                roi_pixels = hsv[roi_mask > 0]
+                if len(roi_pixels) == 0:
+                    continue
+
+                h_med = float(np.median(roi_pixels[:, 0]))
+                s_med = float(np.median(roi_pixels[:, 1]))
+                v_med = float(np.median(roi_pixels[:, 2]))
+
+                base_h = self._empty_baselines[r, c, 0]
+                base_s = self._empty_baselines[r, c, 1]
+                base_v = self._empty_baselines[r, c, 2]
+
+                # Sentinel baseline (-1) → no empty reference for this cell.
+                # Fall back to fixed-threshold mask classification.
+                if base_s < 0:
+                    cfg_f = self.config
+                    roi_mask2 = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                    cv2.circle(roi_mask2, (cx, cy), radius, 255, -1)
+                    total = cv2.countNonZero(roi_mask2)
+                    if total > 0:
+                        red_mask = (
+                            cv2.inRange(hsv, np.array(cfg_f.red_hsv_low1), np.array(cfg_f.red_hsv_high1)) |
+                            cv2.inRange(hsv, np.array(cfg_f.red_hsv_low2), np.array(cfg_f.red_hsv_high2))
+                        )
+                        yel_mask = cv2.inRange(hsv, np.array(cfg_f.yellow_hsv_low), np.array(cfg_f.yellow_hsv_high))
+                        red_r = cv2.countNonZero(red_mask & roi_mask2) / total
+                        yel_r = cv2.countNonZero(yel_mask & roi_mask2) / total
+                        if red_r > cfg_f.piece_threshold and red_r > yel_r:
+                            board[r, c] = 1
+                        elif yel_r > cfg_f.piece_threshold and yel_r > red_r:
+                            board[r, c] = 2
+                    continue
+
+                delta_s = s_med - base_s
+                delta_v = v_med - base_v
+
+                # A piece produces a substantial saturation increase from
+                # the (typically low-saturation) background seen through the
+                # empty hole.  The value channel also shifts but is less
+                # reliable.
+                #
+                # Additionally check that current S is at least somewhat
+                # saturated (>60) to avoid classifying desaturated noise.
+                is_piece = delta_s >= min_ds and s_med > 60
+
+                if is_piece:
+                    # Distinguish red vs yellow by hue.
+                    # Red: H < boundary OR H > (180 - boundary)
+                    # Yellow: everything else in the chromatic range.
+                    if h_med < hue_bnd or h_med > (180 - hue_bnd):
+                        board[r, c] = 1   # red
+                    else:
+                        board[r, c] = 2   # yellow
+
+                if cfg.verbose:
+                    detected = "R" if board[r, c] == 1 else "Y" if board[r, c] == 2 else "."
+                    notable = is_piece or delta_s > 10
+                    if notable:
+                        print(f"  [cell {r},{c}] H={h_med:.0f} S={s_med:.0f} V={v_med:.0f}"
+                              f"  ΔS={delta_s:+.0f} ΔV={delta_v:+.0f}"
+                              f"  base=({base_h:.0f},{base_s:.0f},{base_v:.0f})"
+                              f" -> {detected}")
+
+        return board
+
+    # ── Temporal smoothing ───────────────────────────────────────────────────
 
     def _temporal_smooth(self, board: np.ndarray) -> np.ndarray:
         """
