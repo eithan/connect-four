@@ -60,18 +60,17 @@ class DetectionConfig:
     board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
     # Red pieces (two ranges to wrap the 0/180 hue boundary)
-    # S raised 140→165: bright red plastic pieces have S≥180.
-    # Warm-toned backgrounds visible through empty holes (wood tables,
-    # kitchen surfaces under incandescent/warm light) read H≈11-13,
-    # S≈140-155, V≈90-110 — enough to trigger false reds at S≥140.
-    # At S≥165 we get a clean gap: background tops out at ~155, real
-    # red plastic starts at ~180.
-    red_hsv_low1:  Tuple[int, int, int] = (0,   165, 80)
+    #
+    # S lowered 165→150: under dim indoor lighting, red plastic reads
+    # S≈161-175 — right at the old S=165 cutoff, causing flicker.
+    # S=150 gives a ~10-unit buffer below worst-case piece (S≈161).
+    # Empty holes: kitchen background peaks at S≈155, dim rooms at
+    # S≈60-110.  At S=150, a few kitchen pixels might enter the red
+    # mask, but piece_threshold (0.38) blocks false positives — those
+    # stray pixels are <15% of the sample circle, well below 38%.
+    red_hsv_low1:  Tuple[int, int, int] = (0,   150, 80)
     red_hsv_high1: Tuple[int, int, int] = (12,  255, 255)
-    # red2 H lowered 163→158: under dimmer/cooler lighting, red plastic
-    # reads H≈160-163 — just below the old cutoff.  158 captures these
-    # while staying well above purple/magenta territory (H≈140-150).
-    red_hsv_low2:  Tuple[int, int, int] = (158, 165, 80)
+    red_hsv_low2:  Tuple[int, int, int] = (158, 150, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / amber / lime-green pieces
