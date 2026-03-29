@@ -68,7 +68,10 @@ class DetectionConfig:
     # red plastic starts at ~180.
     red_hsv_low1:  Tuple[int, int, int] = (0,   165, 80)
     red_hsv_high1: Tuple[int, int, int] = (12,  255, 255)
-    red_hsv_low2:  Tuple[int, int, int] = (163, 165, 80)
+    # red2 H lowered 163→158: under dimmer/cooler lighting, red plastic
+    # reads H≈160-163 — just below the old cutoff.  158 captures these
+    # while staying well above purple/magenta territory (H≈140-150).
+    red_hsv_low2:  Tuple[int, int, int] = (158, 165, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
     # Yellow / amber / lime-green pieces
@@ -95,9 +98,10 @@ class DetectionConfig:
     # 0.18 → too loose (background through empty holes easily hits 18%)
     # 0.60 → too strict (piece viewed at a slight angle or with minor grid
     #          offset may only cover 50-55% of the sample circle → missed)
-    # 0.45 → sweet spot: blocks patchy background (≤30%) while catching real
-    #          plastic discs (≥50% even with mild misalignment or angle)
-    piece_threshold: float = 0.45
+    # 0.38 → catches real pieces (≥40% even with grid jitter or dim lighting)
+    #          while blocking patchy background (≤30%).  Lowered from 0.45
+    #          because dim/different lighting reduces sample coverage to ~35-45%.
+    piece_threshold: float = 0.38
 
     # Hole circularity minimum (0–1; 1 = perfect circle)
     min_circularity: float = 0.40
@@ -163,6 +167,7 @@ class BoardDetector:
                 errors=["Board not found — no blue frame detected"],
             )
         bx, by, bw, bh, board_cnt = bbox_result
+        self._board_bbox = (bx, by, bw, bh)
 
         # ── 1b. Perspective warp (optional) ───────────────────────────────────
         warp_info = None
@@ -779,6 +784,15 @@ class BoardDetector:
                 cy = int(grid_centers[r, c, 1])
                 if not (0 <= cx < w_img and 0 <= cy < h_img):
                     continue
+                # Skip cells that landed far outside the board bbox (can
+                # happen when the perspective warp extrapolates aggressively).
+                # A 1-cell margin accommodates slight warp overshoot.
+                if hasattr(self, '_board_bbox') and self._board_bbox is not None:
+                    bbx, bby, bbw, bbh = self._board_bbox
+                    margin = cell_spacing
+                    if not (bbx - margin <= cx <= bbx + bbw + margin and
+                            bby - margin <= cy <= bby + bbh + margin):
+                        continue
 
                 roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
                 cv2.circle(roi_mask, (cx, cy), sample_radius, 255, -1)
