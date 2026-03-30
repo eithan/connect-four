@@ -132,6 +132,13 @@ class DetectionConfig:
     # yellow; outside that window (but not red) → treated as empty.
     adaptive_yellow_hue_max: int = 60
 
+    # Minimum ABSOLUTE saturation for a cell to be called a red piece in
+    # adaptive mode.  Red plastic pieces have S≥130 even in very dim rooms.
+    # Human skin bleeds through empty holes at S≈80-100 — reliably below
+    # this threshold.  Yellow is NOT subject to this limit (it's a lighter
+    # colour with naturally lower S).
+    adaptive_red_min_s: int = 130
+
 
 # Physical board preset (default)
 PHYSICAL_CONFIG = DetectionConfig()
@@ -995,6 +1002,12 @@ class LockedBoardDetector:
     # 15 frames ≈ 2 seconds @ 7.5fps — a real piece removal (physical
     # extraction) takes much longer.  Brief HSV dips from auto-exposure
     # or hand shadows resolve well within 15 frames.
+    # A NEW piece must appear in this many consecutive frames before being
+    # accepted into the stable board state.  Skin bleeding through an empty
+    # hole is transient (1-3 frames); a real placed piece persists for hundreds.
+    # At ~30 fps, ADD_THRESHOLD=3 adds ~100ms latency — imperceptible to the player.
+    ADD_THRESHOLD = 3
+
     REMOVE_THRESHOLD = 15
 
     # Post-lock quality verification.  If average confidence over the first
@@ -1020,6 +1033,7 @@ class LockedBoardDetector:
         self._last_board:    Optional[np.ndarray] = None  # for change detection
         self._stable_board:  Optional[np.ndarray] = None  # temporally-smoothed state
         self._absent_count:  np.ndarray = np.zeros((6, 7), dtype=np.int32)
+        self._present_count: np.ndarray = np.zeros((6, 7), dtype=np.int32)
         self._verify_count: int   = 0
         self._verify_sum:   float = 0.0
         self._dump_next: bool = False  # dump all cell HSVs on next locked frame
@@ -1047,8 +1061,9 @@ class LockedBoardDetector:
         self._lock_bad    = 0
         self.is_locked    = False
         self._last_board   = None
-        self._stable_board = None
-        self._absent_count = np.zeros((6, 7), dtype=np.int32)
+        self._stable_board  = None
+        self._absent_count  = np.zeros((6, 7), dtype=np.int32)
+        self._present_count = np.zeros((6, 7), dtype=np.int32)
         self._verify_count = 0
         self._verify_sum   = 0.0
         self._empty_baselines = None
@@ -1265,7 +1280,7 @@ class LockedBoardDetector:
                     yel_max = cfg.adaptive_yellow_hue_max
                     is_piece_hue = (h_b < hue_bnd or h_b > (180 - hue_bnd) or
                                     (hue_bnd <= h_b <= yel_max))
-                    if is_piece_hue and s_b > 50:
+                    if is_piece_hue and s_b >= 40:
                         # Suspicious baseline — leave as sentinel (-1)
                         if self.config.verbose:
                             print(f"  [{r},{c}] baseline REJECTED "
@@ -1380,7 +1395,13 @@ class LockedBoardDetector:
                     # Anything else (H=60-140: green/cyan/blue board colour) → empty.
                     yel_max = cfg.adaptive_yellow_hue_max
                     if h_med < hue_bnd or h_med > (180 - hue_bnd):
-                        board[r, c] = 1   # red
+                        # Red candidate — also enforce absolute saturation floor.
+                        # Real red plastic: S≥130 even in very dim conditions.
+                        # Human skin bleeding through holes: S≈80-100.
+                        # This single check eliminates nearly all skin false positives.
+                        if s_med >= cfg.adaptive_red_min_s:
+                            board[r, c] = 1   # red
+                        # else: too low S to be a real red piece (skin/background)
                     elif h_med <= yel_max:
                         board[r, c] = 2   # yellow
                     # else: hue is board-blue or other non-piece colour → leave as empty
@@ -1400,16 +1421,21 @@ class LockedBoardDetector:
 
     def _temporal_smooth(self, board: np.ndarray) -> np.ndarray:
         """
-        Debounce piece removal.
+        Debounce both piece addition and removal.
 
-        New pieces are accepted immediately (1 frame).
-        A piece is only removed from the stable state after it has been
-        absent for REMOVE_THRESHOLD consecutive frames — this filters out
-        1–3 frame shadows from a spinning fan or momentary lighting changes.
+        ADD_THRESHOLD:    A NEW piece must be seen for this many consecutive
+                          frames before it is accepted into the stable state.
+                          Skin flashes through holes are typically 1-3 frames;
+                          a real placed piece persists for hundreds of frames.
+
+        REMOVE_THRESHOLD: A PRESENT piece must be absent for this many
+                          consecutive frames before it is removed — filters
+                          out transient shadows and hand occlusions.
         """
         if self._stable_board is None:
             self._stable_board = board.copy()
-            self._absent_count = np.zeros((6, 7), dtype=np.int32)
+            self._absent_count  = np.zeros((6, 7), dtype=np.int32)
+            self._present_count = np.zeros((6, 7), dtype=np.int32)
             return self._stable_board.copy()
 
         for r in range(6):
@@ -1418,16 +1444,24 @@ class LockedBoardDetector:
                 stable   = self._stable_board[r, c]
 
                 if detected != 0:
-                    # Piece visible this frame — accept immediately
-                    self._stable_board[r, c] = detected
                     self._absent_count[r, c] = 0
-                elif stable != 0:
-                    # Piece was there but not seen this frame
-                    self._absent_count[r, c] += 1
-                    if self._absent_count[r, c] >= self.REMOVE_THRESHOLD:
-                        self._stable_board[r, c] = 0   # confirmed gone
-                    # else: keep the piece in the stable state
-                # else: was empty, still empty — nothing to do
+                    if stable == detected:
+                        # Already confirmed — nothing to do
+                        self._present_count[r, c] = self.ADD_THRESHOLD  # saturate
+                    else:
+                        # New (or changed) detection — require ADD_THRESHOLD frames
+                        self._present_count[r, c] += 1
+                        if self._present_count[r, c] >= self.ADD_THRESHOLD:
+                            self._stable_board[r, c] = detected  # confirmed new piece
+                else:
+                    self._present_count[r, c] = 0
+                    if stable != 0:
+                        # Piece was there but not seen this frame
+                        self._absent_count[r, c] += 1
+                        if self._absent_count[r, c] >= self.REMOVE_THRESHOLD:
+                            self._stable_board[r, c] = 0   # confirmed gone
+                        # else: keep the piece in the stable state
+                    # else: was empty, still empty — nothing to do
 
         return self._stable_board.copy()
 
