@@ -141,11 +141,21 @@ class DetectionConfig:
     adaptive_yellow_hue_max: int = 60
 
     # Minimum ABSOLUTE saturation for a cell to be called a red piece in
-    # adaptive mode.  Red plastic pieces have S≥130 even in very dim rooms.
-    # Human skin bleeds through empty holes at S≈80-100 — reliably below
-    # this threshold.  Yellow is NOT subject to this limit (it's a lighter
-    # colour with naturally lower S).
-    adaptive_red_min_s: int = 130
+    # adaptive mode.  Real red plastic in this environment: S≥176.
+    # Human arm/skin at its peak (red-hued angles): S≈130-142.
+    # Gap: using 150 cleanly separates arm (S≤142) from real pieces (S≥176).
+    adaptive_red_min_s: int = 150
+
+    # Minimum ABSOLUTE saturation for yellow piece classification.
+    # Real yellow (golden plastic): S≥100+ even in varied lighting.
+    # Arm/skin at yellow hues (H=15-30): S≈70-90 — clearly below this.
+    adaptive_yellow_min_s: int = 100
+
+    # Minimum ABSOLUTE brightness (V) for yellow piece classification.
+    # Yellow pieces are bright plastic: V≥120 consistently.
+    # Arm visible through dark bottom-row holes: V≈40-56.
+    # This catches arm false-yellows that pass the S gate (e.g. S=119, V=41).
+    adaptive_yellow_min_v: int = 100
 
 
 # Physical board preset (default)
@@ -1011,10 +1021,10 @@ class LockedBoardDetector:
     # extraction) takes much longer.  Brief HSV dips from auto-exposure
     # or hand shadows resolve well within 15 frames.
     # A NEW piece must appear in this many consecutive frames before being
-    # accepted into the stable board state.  Skin bleeding through an empty
-    # hole is transient (1-3 frames); a real placed piece persists for hundreds.
-    # At ~30 fps, ADD_THRESHOLD=3 adds ~100ms latency — imperceptible to the player.
-    ADD_THRESHOLD = 3
+    # accepted into the stable board state.  Arm movements cause artefacts
+    # that typically persist 1-5 frames; a real placed piece persists indefinitely.
+    # At ~30 fps, ADD_THRESHOLD=5 adds ~165ms latency — still imperceptible.
+    ADD_THRESHOLD = 5
 
     REMOVE_THRESHOLD = 15
 
@@ -1411,7 +1421,12 @@ class LockedBoardDetector:
                             board[r, c] = 1   # red
                         # else: too low S to be a real red piece (skin/background)
                     elif h_med <= yel_max:
-                        board[r, c] = 2   # yellow
+                        # Yellow candidate — enforce absolute S and V floors.
+                        # Real yellow plastic: S≥100, V≥100.
+                        # Arm/body at yellow hues: S≈70-90, V≈40-56 → rejected.
+                        if s_med >= cfg.adaptive_yellow_min_s and v_med >= cfg.adaptive_yellow_min_v:
+                            board[r, c] = 2   # yellow
+                        # else: too dim or unsaturated to be a real yellow piece
                     # else: hue is board-blue or other non-piece colour → leave as empty
 
                 if cfg.verbose:
