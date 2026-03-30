@@ -1250,9 +1250,32 @@ class LockedBoardDetector:
                 cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
                 roi_pixels = hsv[roi_mask > 0]
                 if len(roi_pixels) > 0:
-                    baselines[r, c, 0] = np.median(roi_pixels[:, 0])
-                    baselines[r, c, 1] = np.median(roi_pixels[:, 1])
-                    baselines[r, c, 2] = np.median(roi_pixels[:, 2])
+                    h_b = float(np.median(roi_pixels[:, 0]))
+                    s_b = float(np.median(roi_pixels[:, 1]))
+                    v_b = float(np.median(roi_pixels[:, 2]))
+
+                    # Sanity check: an empty hole should NOT look like a piece.
+                    # If the baseline hue is already in piece territory (red or
+                    # yellow) AND saturation is significant, it means skin /
+                    # clothing was visible through the hole at lock time.
+                    # Mark as sentinel so adaptive falls back to fixed thresholds
+                    # (which require much higher S for red and won't fire on skin).
+                    cfg = self.config
+                    hue_bnd = cfg.adaptive_hue_boundary
+                    yel_max = cfg.adaptive_yellow_hue_max
+                    is_piece_hue = (h_b < hue_bnd or h_b > (180 - hue_bnd) or
+                                    (hue_bnd <= h_b <= yel_max))
+                    if is_piece_hue and s_b > 50:
+                        # Suspicious baseline — leave as sentinel (-1)
+                        if self.config.verbose:
+                            print(f"  [{r},{c}] baseline REJECTED "
+                                  f"(piece-hue H={h_b:.0f} S={s_b:.0f} "
+                                  f"— skin/hand likely visible at lock time)")
+                        continue
+
+                    baselines[r, c, 0] = h_b
+                    baselines[r, c, 1] = s_b
+                    baselines[r, c, 2] = v_b
                     empty_count += 1
 
         self._empty_baselines = baselines
