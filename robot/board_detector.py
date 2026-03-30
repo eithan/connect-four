@@ -125,6 +125,13 @@ class DetectionConfig:
     # Otherwise → yellow.   With boundary=30: red is H<30 or H>150; yellow is 30–150.
     adaptive_hue_boundary: int = 30
 
+    # Maximum hue for yellow pieces (OpenCV 0-180 scale).
+    # Real yellow pieces sit at H≈20-50.  H=60-140 is green/cyan/blue —
+    # that's the board frame, shadows, or background bleeding through holes.
+    # Anything between adaptive_hue_boundary and adaptive_yellow_hue_max is
+    # yellow; outside that window (but not red) → treated as empty.
+    adaptive_yellow_hue_max: int = 60
+
 
 # Physical board preset (default)
 PHYSICAL_CONFIG = DetectionConfig()
@@ -1345,12 +1352,15 @@ class LockedBoardDetector:
 
                 if is_piece:
                     # Distinguish red vs yellow by hue.
-                    # Red: H < boundary OR H > (180 - boundary)
-                    # Yellow: everything else in the chromatic range.
+                    # Red:    H < boundary OR H > (180 - boundary)  (wraps at 0/180)
+                    # Yellow: boundary <= H <= yellow_hue_max  (real yellows ~H=20-50)
+                    # Anything else (H=60-140: green/cyan/blue board colour) → empty.
+                    yel_max = cfg.adaptive_yellow_hue_max
                     if h_med < hue_bnd or h_med > (180 - hue_bnd):
                         board[r, c] = 1   # red
-                    else:
+                    elif h_med <= yel_max:
                         board[r, c] = 2   # yellow
+                    # else: hue is board-blue or other non-piece colour → leave as empty
 
                 if cfg.verbose:
                     detected = "R" if board[r, c] == 1 else "Y" if board[r, c] == 2 else "."
