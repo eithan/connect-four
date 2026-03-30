@@ -122,8 +122,16 @@ class DetectionConfig:
 
     # Hue boundary between red and yellow (in OpenCV 0-180 scale).
     # Red wraps around 0/180, so: hue < boundary OR hue > (180 - boundary) → red
-    # Otherwise → yellow.   With boundary=30: red is H<30 or H>150; yellow is 30–150.
-    adaptive_hue_boundary: int = 30
+    # Yellow occupies the window [boundary .. yellow_hue_max].
+    #
+    # Why 15 instead of 30:
+    #   Real red pieces in this setup sit at H≈170-175 (high-end wrap near 180).
+    #   Yellow plastic pieces sit at H≈20-30 (warm golden-yellow).
+    #   With boundary=30 those yellow pieces (H=25-27) fell into the "red" zone.
+    #   Skin is at H=5-10 — still inside the red zone at boundary=15, but the
+    #   adaptive_red_min_s gate (S≥130) rejects them (skin S≈70-100).
+    #   With boundary=15: red=H<15 or H>165; yellow=H=15-60; empty=H=60-165.
+    adaptive_hue_boundary: int = 15
 
     # Maximum hue for yellow pieces (OpenCV 0-180 scale).
     # Real yellow pieces sit at H≈20-50.  H=60-140 is green/cyan/blue —
