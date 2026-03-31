@@ -56,7 +56,7 @@ class DetectionConfig:
     """HSV colour thresholds and detection parameters."""
 
     # Blue board frame
-    board_hsv_low:  Tuple[int, int, int] = (90,  80, 50)
+    board_hsv_low:  Tuple[int, int, int] = (90,  80, 40)
     board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
     # Red pieces (two ranges to wrap the 0/180 hue boundary)
@@ -98,10 +98,14 @@ class DetectionConfig:
     # 0.18 → too loose (background through empty holes easily hits 18%)
     # 0.60 → too strict (piece viewed at a slight angle or with minor grid
     #          offset may only cover 50-55% of the sample circle → missed)
-    # 0.38 → catches real pieces (≥40% even with grid jitter or dim lighting)
-    #          while blocking patchy background (≤30%).  Lowered from 0.45
-    #          because dim/different lighting reduces sample coverage to ~35-45%.
-    piece_threshold: float = 0.38
+    # 0.33 → catches real pieces viewed from an angle or with slight grid
+    #          offset (coverage can drop to ~34-36% for top-row holes seen
+    #          from below).  Background through empty holes peaks at ~30%,
+    #          so 0.33 keeps a 3% gap above worst-case background noise.
+    #          Lowered from 0.38 because top-row cells with sentinel baselines
+    #          (pre-existing pieces at lock time) use the fixed classifier and
+    #          need a looser gate to catch angled/partially-occluded pieces.
+    piece_threshold: float = 0.33
 
     # Hole circularity minimum (0–1; 1 = perfect circle)
     min_circularity: float = 0.40
@@ -157,6 +161,12 @@ class DetectionConfig:
     # This catches arm false-yellows that pass the S gate (e.g. S=119, V=41).
     adaptive_yellow_min_v: int = 100
 
+    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to the
+    # V channel of the HSV image before any color classification.  Normalizes
+    # brightness across the frame so fixed S/V thresholds remain valid under
+    # dim or uneven lighting.  Near-no-op on well-lit synthetic test images.
+    use_clahe: bool = True
+
 
 # Physical board preset (default)
 PHYSICAL_CONFIG = DetectionConfig()
@@ -205,6 +215,11 @@ class BoardDetector:
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         errors: List[str] = []
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        # Cell classification always uses original HSV (CLAHE would boost V of
+        # skin/background through dark holes, causing false piece detections).
+        # Board/hole detection also uses original HSV; CLAHE is applied lazily
+        # inside _find_board_bbox only as a last-resort tier when all regular
+        # thresholds fail — preventing it from expanding the bbox in normal light.
 
         # ── 1. Locate board ───────────────────────────────────────────────────
         bbox_result = self._find_board_bbox(hsv, image.shape)
@@ -318,19 +333,15 @@ class BoardDetector:
 
     # ── Step 1: Board bounding box ────────────────────────────────────────────
 
-    def _find_board_bbox(self, hsv: np.ndarray,
-                          img_shape: Tuple) -> Optional[Tuple[int, int, int, int, np.ndarray]]:
+    def _find_board_bbox_mask(self, hsv: np.ndarray, img_shape: Tuple,
+                               hsv_low: Tuple, hsv_high: Tuple,
+                               ) -> Optional[Tuple[int, int, int, int, np.ndarray]]:
         """
-        Find the blue board frame and return (x, y, w, h, contour).
-        Uses a large MORPH_CLOSE to fill the hole grid, then picks the
-        largest blob with a plausible Connect Four aspect ratio (0.6–2.8).
-
-        The raw contour is returned alongside the bounding rect so the
-        perspective-warp step can extract true corner points (not just the
-        axis-aligned bounding box).
+        Inner implementation: try to find the blue board frame using the
+        given HSV range. Returns (x, y, w, h, contour) or None.
         """
         cfg = self.config
-        mask = cv2.inRange(hsv, np.array(cfg.board_hsv_low), np.array(cfg.board_hsv_high))
+        mask = cv2.inRange(hsv, np.array(hsv_low), np.array(hsv_high))
 
         # Fill the circular holes so the board reads as a solid blue rectangle
         k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
@@ -367,6 +378,65 @@ class BoardDetector:
         x, y, w, h = cv2.boundingRect(cnt)
         if w * h >= img_area * cfg.min_board_area_ratio:
             return x, y, w, h, cnt
+        return None
+
+    def _find_board_bbox(self, hsv: np.ndarray,
+                          img_shape: Tuple) -> Optional[Tuple[int, int, int, int, np.ndarray]]:
+        """
+        Find the blue board frame and return (x, y, w, h, contour).
+        Uses a large MORPH_CLOSE to fill the hole grid, then picks the
+        largest blob with a plausible Connect Four aspect ratio (0.6–2.8).
+
+        The raw contour is returned alongside the bounding rect so the
+        perspective-warp step can extract true corner points (not just the
+        axis-aligned bounding box).
+
+        If the primary HSV range finds nothing, retries with progressively
+        looser thresholds, then as a final emergency fallback applies CLAHE to
+        boost V in dark frames.  CLAHE is intentionally last so it never runs
+        in normal lighting — applying it early would inflate the bounding box
+        by boosting V of background areas with slight blue hues, shifting the
+        grid overlay upward and causing missed detections in the top row.
+
+          Tier 1: relax only V (−15) — mild underexposure.
+          Tier 2: relax V (−25) and S (−20) — very dim lighting.
+          Tier 3: CLAHE + primary thresholds — extreme dim / emergency only.
+        """
+        cfg = self.config
+        result = self._find_board_bbox_mask(
+            hsv, img_shape, cfg.board_hsv_low, cfg.board_hsv_high,
+        )
+        if result is not None:
+            return result
+
+        # Tier 1: lower V only (mild dim lighting)
+        lo = cfg.board_hsv_low
+        tier1_low = (lo[0], lo[1], max(lo[2] - 15, 10))
+        result = self._find_board_bbox_mask(hsv, img_shape, tier1_low, cfg.board_hsv_high)
+        if result is not None:
+            return result
+
+        # Tier 2: lower both S and V (very dim lighting)
+        tier2_low = (lo[0], max(lo[1] - 20, 40), max(lo[2] - 25, 10))
+        result = self._find_board_bbox_mask(hsv, img_shape, tier2_low, cfg.board_hsv_high)
+        if result is not None:
+            return result
+
+        # Tier 3 (emergency): apply CLAHE then retry with primary thresholds.
+        # Only reached when the board is genuinely too dark to find otherwise.
+        if cfg.use_clahe:
+            hsv_c = self._apply_clahe_hsv(hsv)
+            result = self._find_board_bbox_mask(
+                hsv_c, img_shape, cfg.board_hsv_low, cfg.board_hsv_high,
+            )
+            if result is not None:
+                return result
+            result = self._find_board_bbox_mask(
+                hsv_c, img_shape, tier1_low, cfg.board_hsv_high,
+            )
+            if result is not None:
+                return result
+
         return None
 
     # ── Step 1b: Perspective warp ────────────────────────────────────────────
@@ -492,6 +562,13 @@ class BoardDetector:
         pts = np.array(points, dtype=np.float64).reshape(-1, 1, 2)
         mapped = cv2.perspectiveTransform(pts, M_inv)
         return [(float(p[0][0]), float(p[0][1])) for p in mapped]
+
+    @staticmethod
+    def _apply_clahe_hsv(hsv: np.ndarray) -> np.ndarray:
+        """Normalize brightness (V channel) with CLAHE to reduce lighting sensitivity."""
+        h, s, v = cv2.split(hsv)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        return cv2.merge([h, s, clahe.apply(v)])
 
     @staticmethod
     def _regularize_grid_both_axes(grid: np.ndarray) -> np.ndarray:
@@ -1087,6 +1164,9 @@ class LockedBoardDetector:
         self._empty_baselines = None
 
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
+        # Cell classification always uses the original (non-CLAHE) HSV so that
+        # the calibrated S/V thresholds remain valid.  CLAHE is applied inside
+        # BoardDetector.detect() specifically for board/hole detection only.
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         if self.is_locked:
             return self._detect_locked(image, hsv, debug)
