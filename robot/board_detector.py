@@ -124,7 +124,10 @@ class DetectionConfig:
     # Minimum saturation increase from empty baseline to consider a cell
     # "has a piece" (replaces fixed S_min).  Empty→piece typically shows
     # ΔS ≥ 40–80; empty→empty drift is usually < 15.
-    adaptive_min_delta_s: int = 25
+    # Lowered 25→20: top-row pieces viewed at angle through the board's
+    # transparent face show ΔS≈18-22 in stable state; empty drift stays
+    # below 15, so 20 preserves the safety margin.
+    adaptive_min_delta_s: int = 20
 
     # Hue boundary between red and yellow (in OpenCV 0-180 scale).
     # Red wraps around 0/180, so: hue < boundary OR hue > (180 - boundary) → red.
@@ -141,7 +144,10 @@ class DetectionConfig:
 
     # Absolute colour floors used by adaptive classification to reject
     # skin / clothing / warm background seen through transparent slots.
-    adaptive_red_min_s: int = 140
+    # Lowered 140→115: top-row red pieces are viewed at an angle through
+    # the board's curved slot opening, washing out saturation to S≈115-130.
+    # Skin S is typically 20-80, so 115 still safely rejects false positives.
+    adaptive_red_min_s: int = 115
     adaptive_red_min_v: int = 90
     adaptive_yellow_min_s: int = 100
     adaptive_yellow_min_v: int = 100
