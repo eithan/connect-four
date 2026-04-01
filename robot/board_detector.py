@@ -56,7 +56,13 @@ class DetectionConfig:
     """HSV colour thresholds and detection parameters."""
 
     # Blue board frame
-    board_hsv_low:  Tuple[int, int, int] = (90,  80, 50)
+    # S_min raised from 80->110: the plastic board frame is highly saturated
+    # (S~180-240); clothing fabric blues are much less saturated (S~80-140).
+    # Raising S_min excludes most shirt pixels from the blue mask, which both
+    # prevents the board+shirt blob from merging and restores hole visibility
+    # (shirt seen through transparent holes is also excluded, so holes appear
+    # non-blue again, enabling reliable hole-count metrics).
+    board_hsv_low:  Tuple[int, int, int] = (90,  110, 50)
     board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
     # Red pieces (two ranges to wrap the 0/180 hue boundary)
