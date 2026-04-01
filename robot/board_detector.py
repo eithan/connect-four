@@ -322,44 +322,138 @@ class BoardDetector:
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k_open)
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
+
+        # Secondary pass: break thin blue connections between the board and
+        # nearby clothing/background.  This is especially helpful when the
+        # player is close to the camera wearing a blue shirt.
+        k_detach = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17))
+        detached_mask = cv2.erode(mask, k_detach, iterations=1)
+        detached_mask = cv2.dilate(detached_mask, k_detach, iterations=1)
+        detached_contours, _ = cv2.findContours(
+            detached_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        all_contours = contours + detached_contours
+        if not all_contours:
             return None
 
         img_area     = img_shape[0] * img_shape[1]
         noise_thresh = img_area * 0.001
 
         # Sort by area largest-first, ignore noise
-        candidates = sorted(
-            [c for c in contours if cv2.contourArea(c) > noise_thresh],
-            key=cv2.contourArea, reverse=True,
-        )
+        deduped: List[np.ndarray] = []
+        seen_rects = set()
+        for cnt in sorted(all_contours, key=cv2.contourArea, reverse=True):
+            if cv2.contourArea(cnt) <= noise_thresh:
+                continue
+            x, y, w, h = cv2.boundingRect(cnt)
+            rect_key = (
+                int(round(x / 12.0)),
+                int(round(y / 12.0)),
+                int(round(w / 12.0)),
+                int(round(h / 12.0)),
+            )
+            if rect_key in seen_rects:
+                continue
+            seen_rects.add(rect_key)
+            deduped.append(cnt)
+        candidates = deduped
         if not candidates:
             return None
 
+        img_h, img_w = img_shape[:2]
+
         # Prefer candidates that not only look like a blue board-sized blob,
         # but also contain a board-like distribution of hole circles inside.
+        # When the player's blue shirt is close behind the transparent board,
+        # the hole signal gets weaker because the holes are no longer strongly
+        # non-blue, so shape cues still need to be able to win on their own.
         best = None
         best_key = None
-        for cnt in candidates[:8]:
+        best_support = None
+        for cnt in candidates[:20]:
             x, y, w, h = cv2.boundingRect(cnt)
             if h == 0:
                 continue
             aspect = w / h
             if not (0.6 <= aspect <= 2.8 and w * h >= img_area * cfg.min_board_area_ratio):
                 continue
-            hole_count, span_x_ratio, span_y_ratio = self._hole_support_metrics(hsv, x, y, w, h)
+            hole_count, span_x_ratio, span_y_ratio, hole_bounds = self._hole_support_metrics(
+                hsv, x, y, w, h
+            )
+            contour_area = cv2.contourArea(cnt)
+            extent = contour_area / max(float(w * h), 1.0)
+            hull = cv2.convexHull(cnt)
+            hull_area = cv2.contourArea(hull)
+            solidity = contour_area / max(float(hull_area), 1.0)
+            perim = cv2.arcLength(cnt, True)
+            approx_vertices = 99
+            if perim > 0:
+                approx = cv2.approxPolyDP(cnt, 0.03 * perim, True)
+                approx_vertices = len(approx)
+
+            strong_support = hole_count >= 10 and span_x_ratio >= 0.58 and span_y_ratio >= 0.48
+            decent_support = hole_count >= 8 and span_x_ratio >= 0.55 and span_y_ratio >= 0.42
+            board_like_shape = (
+                extent >= 0.58
+                and solidity >= 0.82
+                and 0.78 <= aspect <= 1.45
+                and approx_vertices <= 8
+            )
+            not_frame_hog = (
+                y > int(img_h * 0.02)
+                and x > int(img_w * 0.01)
+                and (x + w) < int(img_w * 0.99)
+                and h < img_h * 0.92
+                and w < img_w * 0.96
+            )
             key = (
-                hole_count >= 8 and span_y_ratio >= 0.42,
+                strong_support,
+                decent_support,
+                board_like_shape,
                 hole_count,
-                span_y_ratio,
-                span_x_ratio,
-                cv2.contourArea(cnt),
+                round(span_y_ratio * 1000),
+                round(span_x_ratio * 1000),
+                not_frame_hog,
+                round(solidity * 1000),
+                round(extent * 1000),
+                -abs(aspect - 1.18),
+                -abs(approx_vertices - 4),
+                -h,
+                contour_area,
             )
             if best_key is None or key > best_key:
                 best_key = key
                 best = (x, y, w, h, cnt)
+                best_support = (hole_count, span_x_ratio, span_y_ratio, hole_bounds)
 
         if best is not None:
+            x, y, w, h, cnt = best
+            if best_support is not None:
+                hole_count, span_x_ratio, span_y_ratio, hole_bounds = best_support
+                if hole_count >= 14 and hole_bounds is not None:
+                    refined = self._refine_bbox_from_holes(hole_bounds, img_shape)
+                    rx, ry, rw, rh, _ = refined
+                    bbox_area = max(float(w * h), 1.0)
+                    refined_area = max(float(rw * rh), 1.0)
+                    center_dx = abs((x + w / 2.0) - (rx + rw / 2.0))
+                    center_dy = abs((y + h / 2.0) - (ry + rh / 2.0))
+                    size_mismatch = bbox_area / refined_area
+                    if (
+                        size_mismatch >= 1.22
+                        or center_dx > rw * 0.18
+                        or center_dy > rh * 0.18
+                    ):
+                        return refined
+                suspicious_bbox = (
+                    y <= int(img_h * 0.02)
+                    or h >= img_h * 0.88
+                    or w >= img_w * 0.94
+                    or span_y_ratio < 0.55
+                    or span_x_ratio < 0.68
+                )
+                if hole_count >= 10 and hole_bounds is not None and suspicious_bbox:
+                    return self._refine_bbox_from_holes(hole_bounds, img_shape)
             return best
 
         # Fallback: just the largest blob
@@ -370,17 +464,19 @@ class BoardDetector:
         return None
 
     def _hole_support_metrics(self, hsv: np.ndarray, bx: int, by: int,
-                               bw: int, bh: int) -> Tuple[int, float, float]:
+                               bw: int, bh: int
+                               ) -> Tuple[int, float, float, Optional[Tuple[float, float, float, float]]]:
         """
         Estimate whether a board bbox contains a plausible spread of hole circles.
 
-        Returns (count, x_span_ratio, y_span_ratio), where span ratios are the
-        detected-hole span relative to bbox width/height.
+        Returns (count, x_span_ratio, y_span_ratio, hole_bounds), where span
+        ratios are the detected-hole span relative to bbox width/height and
+        hole_bounds is (min_x, min_y, max_x, max_y) in image coordinates.
         """
         cfg = self.config
         hsv_roi = hsv[by:by + bh, bx:bx + bw]
         if hsv_roi.size == 0:
-            return 0, 0.0, 0.0
+            return 0, 0.0, 0.0, None
 
         raw_blue = cv2.inRange(
             hsv_roi, np.array(cfg.board_hsv_low), np.array(cfg.board_hsv_high)
@@ -422,13 +518,47 @@ class BoardDetector:
             pts.append((float(cx), float(cy)))
 
         if not pts:
-            return 0, 0.0, 0.0
+            return 0, 0.0, 0.0, None
 
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         span_x = (max(xs) - min(xs)) / max(float(bw), 1.0)
         span_y = (max(ys) - min(ys)) / max(float(bh), 1.0)
-        return len(pts), float(span_x), float(span_y)
+        hole_bounds = (float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys)))
+        return len(pts), float(span_x), float(span_y), hole_bounds
+
+    def _refine_bbox_from_holes(
+        self,
+        hole_bounds: Tuple[float, float, float, float],
+        img_shape: Tuple[int, ...],
+    ) -> Tuple[int, int, int, int, np.ndarray]:
+        """
+        Tighten an oversized blue contour back around the detected hole grid.
+
+        This is mainly a rescue path for cases where nearby blue clothing
+        merges with the board and inflates the raw contour.
+        """
+        img_h, img_w = img_shape[:2]
+        min_x, min_y, max_x, max_y = hole_bounds
+
+        hole_w = max(max_x - min_x, 1.0)
+        hole_h = max(max_y - min_y, 1.0)
+        cell_w = max(hole_w / 6.0, 1.0)
+        cell_h = max(hole_h / 5.0, 1.0)
+
+        pad_x = cell_w * 0.82
+        pad_y = cell_h * 0.88
+
+        x0 = int(round(max(0.0, min_x - pad_x)))
+        y0 = int(round(max(0.0, min_y - pad_y)))
+        x1 = int(round(min(float(img_w - 1), max_x + pad_x)))
+        y1 = int(round(min(float(img_h - 1), max_y + pad_y)))
+
+        contour = np.array(
+            [[[x0, y0]], [[x1, y0]], [[x1, y1]], [[x0, y1]]],
+            dtype=np.int32,
+        )
+        return x0, y0, max(1, x1 - x0 + 1), max(1, y1 - y0 + 1), contour
 
     # ── Step 1b: Perspective warp ────────────────────────────────────────────
 
