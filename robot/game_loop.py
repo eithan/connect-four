@@ -174,6 +174,8 @@ class GamePhase(Enum):
 
 class GameLoop:
     WINDOW = "Connect Four - Game"
+    FAST_PREVIEW_FRAMES = 2
+    FAST_PREVIEW_MIN_CONF = 0.82
 
     COLOR_NAMES = {1: "Red", 2: "Yellow"}
     PIECE_COLORS = {
@@ -205,6 +207,8 @@ class GameLoop:
         self._initialized = False    # True after first stable board observed
         self._prev_locked = False    # track lock→unlock transitions
         self._lock_board_was_empty = False
+        self._preview_signature = None
+        self._preview_count = 0
         self._latest_frame:   Optional[np.ndarray] = None  # raw camera frame
         self._latest_display: Optional[np.ndarray] = None  # drawn overlay
         self._ss_dir:  str = ""   # screenshot directory (set via set_screenshot_dir)
@@ -221,6 +225,52 @@ class GameLoop:
 
     def set_screenshot_dir(self, path: str):
         self._ss_dir = path
+
+    def _reset_move_preview(self):
+        self._preview_signature = None
+        self._preview_count = 0
+
+    def _maybe_fast_confirm_move(self, board: np.ndarray, confidence: float) -> bool:
+        """
+        Accept a real move after a short run of consistent valid tracker previews.
+        Keeps the existing stable detector as the safety net for noisier cases.
+        """
+        if confidence < self.FAST_PREVIEW_MIN_CONF:
+            self._reset_move_preview()
+            return False
+
+        preview = self.tracker.analyze_transition(board)
+        if not preview["changed"]:
+            self._reset_move_preview()
+            return False
+
+        if self.phase == GamePhase.HUMAN_TURN:
+            sig = ("human", preview["move_row"], preview["move_col"], preview["move_player"])
+        elif self.phase == GamePhase.AI_TURN and preview["move_col"] == self.ai_column:
+            sig = ("ai", preview["move_row"], preview["move_col"], preview["move_player"])
+        else:
+            self._reset_move_preview()
+            return False
+
+        if sig == self._preview_signature:
+            self._preview_count += 1
+        else:
+            self._preview_signature = sig
+            self._preview_count = 1
+
+        if self._preview_count < self.FAST_PREVIEW_FRAMES:
+            return False
+
+        self._reset_move_preview()
+        if self.phase == GamePhase.HUMAN_TURN:
+            print(f"[fast-confirm] human move in column {preview['move_col']}")
+            self._handle_human_turn(board)
+            return True
+        if self.phase == GamePhase.AI_TURN:
+            print(f"[fast-confirm] ai move in column {preview['move_col']}")
+            self._handle_ai_placement(board)
+            return True
+        return False
 
     def _save_screenshot(self, label: str = "event"):
         """Save the current overlay frame to the screenshot directory."""
@@ -244,6 +294,7 @@ class GameLoop:
         self.last_result = None
         self._initialized = False
         self._lock_board_was_empty = False
+        self._reset_move_preview()
         self._set_status_for_phase()
         self.ann.speak("New game. Your turn.", interrupt=True)
         print("\n" + "=" * 50)
@@ -297,9 +348,14 @@ class GameLoop:
             # Board was lost — reset so the next lock re-seeds the tracker.
             self._initialized = False
             self._lock_board_was_empty = False
+            self._reset_move_preview()
             self.stable.reset()
 
         if self.phase == GamePhase.GAME_OVER:
+            return
+
+        if (self._initialized and self.detector.is_locked and
+                self._maybe_fast_confirm_move(result.board, result.confidence)):
             return
 
         is_stable, stable_board = self.stable.update(result.board, result.confidence)
@@ -337,6 +393,7 @@ class GameLoop:
                       " — waiting for clean empty board or a persistent first move")
                 self.tracker.reset()
                 self.stable.reset(np.zeros_like(stable_board))
+                self._reset_move_preview()
                 self._set_status_for_phase()
                 return
 
@@ -370,6 +427,7 @@ class GameLoop:
                     self.tracker.reset()   # discard false-positive initial state
                     self.stable.reset()    # require another clean stable detection
                     self._initialized = False
+                    self._reset_move_preview()
                     return
                 self._set_status_for_phase()
                 self.ann.speak("Your turn.", interrupt=True)
@@ -431,6 +489,7 @@ class GameLoop:
 
     def _run_ai(self, board: np.ndarray):
         """Compute AI move and transition to AI_TURN phase."""
+        self._reset_move_preview()
         # Save tracker state before AI turn in case wrong column is placed
         self._ai_turn_saved_board  = self.tracker.state.board.copy()
         self._ai_turn_saved_player = self.tracker.state.current_player
@@ -448,6 +507,7 @@ class GameLoop:
         self.ann.speak(f"{ai_color} in {col_name}.", interrupt=True)
 
     def _handle_human_turn(self, board: np.ndarray):
+        self._reset_move_preview()
         update = self.tracker.update(board)
 
         if not update["changed"]:
@@ -474,6 +534,7 @@ class GameLoop:
         self._run_ai(board)
 
     def _handle_ai_placement(self, board: np.ndarray):
+        self._reset_move_preview()
         preview = self.tracker.analyze_transition(board)
 
         if not preview["changed"]:
