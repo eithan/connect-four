@@ -204,6 +204,7 @@ class GameLoop:
         self.frozen = False
         self._initialized = False    # True after first stable board observed
         self._prev_locked = False    # track lock→unlock transitions
+        self._lock_board_was_empty = False
         self._latest_frame:   Optional[np.ndarray] = None  # raw camera frame
         self._latest_display: Optional[np.ndarray] = None  # drawn overlay
         self._ss_dir:  str = ""   # screenshot directory (set via set_screenshot_dir)
@@ -242,6 +243,7 @@ class GameLoop:
         self._ai_turn_saved_player = 1
         self.last_result = None
         self._initialized = False
+        self._lock_board_was_empty = False
         self._set_status_for_phase()
         self.ann.speak("New game. Your turn.", interrupt=True)
         print("\n" + "=" * 50)
@@ -277,7 +279,10 @@ class GameLoop:
             # human plays quickly and the board has a piece by the time
             # stable detection fires, initialization goes straight to AI
             # turn without re-announcing.
-            if result.board is not None and int(np.sum(result.board != 0)) == 0:
+            self._lock_board_was_empty = (
+                result.board is not None and int(np.sum(result.board != 0)) == 0
+            )
+            if self._lock_board_was_empty:
                 self.ann.speak("Board detected. Your turn.", interrupt=True)
             else:
                 self.ann.speak("Board detected.", interrupt=True)
@@ -291,6 +296,7 @@ class GameLoop:
         if just_unlocked:
             # Board was lost — reset so the next lock re-seeds the tracker.
             self._initialized = False
+            self._lock_board_was_empty = False
             self.stable.reset()
 
         if self.phase == GamePhase.GAME_OVER:
@@ -302,14 +308,45 @@ class GameLoop:
 
         # ── First stable frame: seed tracker with current board state ─────────
         if not self._initialized:
+            red_n    = int(np.sum(stable_board == 1))
+            yellow_n = int(np.sum(stable_board == 2))
+            piece_n  = red_n + yellow_n
+
+            # If lock-time detection looked empty, a single piece in the very
+            # first stable startup board is usually a phantom caused by skin /
+            # clothing showing through the transparent slot. Keep waiting from
+            # an empty baseline so a real first move can still be accepted a
+            # moment later if the piece genuinely remains on the board.
+            if self._lock_board_was_empty and piece_n == 1:
+                piece_pos = np.argwhere(stable_board != 0)
+                if len(piece_pos) == 1:
+                    row, col = map(int, piece_pos[0])
+                    piece_player = int(stable_board[row, col])
+                    expected_row = 5
+                    if piece_player == self.human_player and row == expected_row:
+                        print("Accepting startup first move after empty lock"
+                              f" — human piece detected in column {col}")
+                        self._initialized = True
+                        empty_board = np.zeros_like(stable_board)
+                        self.tracker.set_board(empty_board)
+                        self.stable.reset(empty_board)
+                        self._handle_human_turn(stable_board)
+                        return
+
+                print("Ignoring suspicious startup piece after empty lock"
+                      " — waiting for clean empty board or a persistent first move")
+                self.tracker.reset()
+                self.stable.reset(np.zeros_like(stable_board))
+                self._set_status_for_phase()
+                return
+
             self._initialized = True
             self.tracker.set_board(stable_board)
             # Update stable baseline so detector knows what "no change" looks like
             self.stable.reset(stable_board)
-            red_n    = int(np.sum(stable_board == 1))
-            yellow_n = int(np.sum(stable_board == 2))
             print(f"\nInitial board detected: Red={red_n}, Yellow={yellow_n}")
             self._save_screenshot("lock_initial")
+
             if self.tracker.state.game_over:
                 self._end_game({"game_over": True,
                                 "winner": self.tracker.state.winner,
@@ -416,6 +453,9 @@ class GameLoop:
         if not update["changed"]:
             if update["error"]:
                 print(f"[tracker] {update['error']}")
+                # Keep the stable detector anchored to the last accepted board
+                # so a bad snapshot doesn't become the new reference state.
+                self.stable.reset(self.tracker.state.board)
             return
 
         col = update["move_col"]
@@ -434,25 +474,31 @@ class GameLoop:
         self._run_ai(board)
 
     def _handle_ai_placement(self, board: np.ndarray):
-        # Peek at what changed before letting tracker advance
-        diff = board - self.tracker.state.board
-        new_cells = np.argwhere(diff != 0)
+        preview = self.tracker.analyze_transition(board)
 
-        if len(new_cells) == 0:
+        if not preview["changed"]:
+            if preview["error"]:
+                print(f"[tracker] AI placement candidate rejected: {preview['error']}")
+                # Stay anchored to the last accepted position and wait for a
+                # cleaner stable board instead of treating noise as a move.
+                self.stable.reset(self.tracker.state.board)
             return
 
-        placed_col = int(new_cells[0][1]) if len(new_cells) == 1 else -1
+        placed_col = preview["move_col"]
 
         if placed_col != self.ai_column:
             # Wrong column — restore tracker to pre-AI-turn state and warn
             if self._ai_turn_saved_board is not None:
                 self.tracker.state.board          = self._ai_turn_saved_board.copy()
                 self.tracker.state.current_player = self._ai_turn_saved_player
-            print(f"WRONG COLUMN! Placed col {placed_col}, AI wants col {self.ai_column}")
-            print(f"   Remove that piece and drop into column {self.ai_column}")
-            self.stable.reset()   # discard this stable snapshot
-            ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
+            got_1 = placed_col + 1
             want_1 = self.ai_column + 1
+            print(f"WRONG COLUMN! Placed column {got_1}, AI wants column {want_1}")
+            print(f"   Remove that piece and drop into column {want_1}")
+            # Anchor to the wrong-but-stable board so we don't repeat the same
+            # warning forever while the misplaced piece still sits there.
+            self.stable.reset(board)
+            ai_color = 'Red' if self.ai_player_num == 1 else 'Yellow'
             self.status_msg = (f"WRONG COL! AI wants column {want_1} ({ai_color})"
                                " - undo & retry")
             self.ann.speak(f"Wrong column. Use column {want_1}.", interrupt=True)

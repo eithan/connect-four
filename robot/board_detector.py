@@ -56,7 +56,7 @@ class DetectionConfig:
     """HSV colour thresholds and detection parameters."""
 
     # Blue board frame
-    board_hsv_low:  Tuple[int, int, int] = (90,  80, 40)
+    board_hsv_low:  Tuple[int, int, int] = (90,  80, 50)
     board_hsv_high: Tuple[int, int, int] = (140, 255, 255)
 
     # Red pieces (two ranges to wrap the 0/180 hue boundary)
@@ -98,14 +98,10 @@ class DetectionConfig:
     # 0.18 → too loose (background through empty holes easily hits 18%)
     # 0.60 → too strict (piece viewed at a slight angle or with minor grid
     #          offset may only cover 50-55% of the sample circle → missed)
-    # 0.33 → catches real pieces viewed from an angle or with slight grid
-    #          offset (coverage can drop to ~34-36% for top-row holes seen
-    #          from below).  Background through empty holes peaks at ~30%,
-    #          so 0.33 keeps a 3% gap above worst-case background noise.
-    #          Lowered from 0.38 because top-row cells with sentinel baselines
-    #          (pre-existing pieces at lock time) use the fixed classifier and
-    #          need a looser gate to catch angled/partially-occluded pieces.
-    piece_threshold: float = 0.33
+    # 0.38 → catches real pieces (≥40% even with grid jitter or dim lighting)
+    #          while blocking patchy background (≤30%).  Lowered from 0.45
+    #          because dim/different lighting reduces sample coverage to ~35-45%.
+    piece_threshold: float = 0.38
 
     # Hole circularity minimum (0–1; 1 = perfect circle)
     min_circularity: float = 0.40
@@ -125,16 +121,9 @@ class DetectionConfig:
     adaptive_min_delta_s: int = 25
 
     # Hue boundary between red and yellow (in OpenCV 0-180 scale).
-    # Red wraps around 0/180, so: hue < boundary OR hue > (180 - boundary) → red
-    # Yellow occupies the window [boundary .. yellow_hue_max].
-    #
-    # Why 15 instead of 30:
-    #   Real red pieces in this setup sit at H≈170-175 (high-end wrap near 180).
-    #   Yellow plastic pieces sit at H≈20-30 (warm golden-yellow).
-    #   With boundary=30 those yellow pieces (H=25-27) fell into the "red" zone.
-    #   Skin is at H=5-10 — still inside the red zone at boundary=15, but the
-    #   adaptive_red_min_s gate (S≥130) rejects them (skin S≈70-100).
-    #   With boundary=15: red=H<15 or H>165; yellow=H=15-60; empty=H=60-165.
+    # Red wraps around 0/180, so: hue < boundary OR hue > (180 - boundary) → red.
+    # Real yellows in this setup often land around H=20-30, so keep the red
+    # low-end boundary tight enough that those warm yellows stay yellow.
     adaptive_hue_boundary: int = 15
 
     # Maximum hue for yellow pieces (OpenCV 0-180 scale).
@@ -144,28 +133,12 @@ class DetectionConfig:
     # yellow; outside that window (but not red) → treated as empty.
     adaptive_yellow_hue_max: int = 60
 
-    # Minimum ABSOLUTE saturation for a cell to be called a red piece in
-    # adaptive mode.  Real red plastic in this environment: S≥176.
-    # Human arm/skin at its peak (red-hued angles): S≈130-142.
-    # Gap: using 150 cleanly separates arm (S≤142) from real pieces (S≥176).
-    adaptive_red_min_s: int = 150
-
-    # Minimum ABSOLUTE saturation for yellow piece classification.
-    # Real yellow (golden plastic): S≥100+ even in varied lighting.
-    # Arm/skin at yellow hues (H=15-30): S≈70-90 — clearly below this.
+    # Absolute colour floors used by adaptive classification to reject
+    # skin / clothing / warm background seen through transparent slots.
+    adaptive_red_min_s: int = 140
+    adaptive_red_min_v: int = 90
     adaptive_yellow_min_s: int = 100
-
-    # Minimum ABSOLUTE brightness (V) for yellow piece classification.
-    # Yellow pieces are bright plastic: V≥120 consistently.
-    # Arm visible through dark bottom-row holes: V≈40-56.
-    # This catches arm false-yellows that pass the S gate (e.g. S=119, V=41).
     adaptive_yellow_min_v: int = 100
-
-    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to the
-    # V channel of the HSV image before any color classification.  Normalizes
-    # brightness across the frame so fixed S/V thresholds remain valid under
-    # dim or uneven lighting.  Near-no-op on well-lit synthetic test images.
-    use_clahe: bool = True
 
 
 # Physical board preset (default)
@@ -215,11 +188,6 @@ class BoardDetector:
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
         errors: List[str] = []
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        # Cell classification always uses original HSV (CLAHE would boost V of
-        # skin/background through dark holes, causing false piece detections).
-        # Board/hole detection also uses original HSV; CLAHE is applied lazily
-        # inside _find_board_bbox only as a last-resort tier when all regular
-        # thresholds fail — preventing it from expanding the bbox in normal light.
 
         # ── 1. Locate board ───────────────────────────────────────────────────
         bbox_result = self._find_board_bbox(hsv, image.shape)
@@ -333,15 +301,19 @@ class BoardDetector:
 
     # ── Step 1: Board bounding box ────────────────────────────────────────────
 
-    def _find_board_bbox_mask(self, hsv: np.ndarray, img_shape: Tuple,
-                               hsv_low: Tuple, hsv_high: Tuple,
-                               ) -> Optional[Tuple[int, int, int, int, np.ndarray]]:
+    def _find_board_bbox(self, hsv: np.ndarray,
+                          img_shape: Tuple) -> Optional[Tuple[int, int, int, int, np.ndarray]]:
         """
-        Inner implementation: try to find the blue board frame using the
-        given HSV range. Returns (x, y, w, h, contour) or None.
+        Find the blue board frame and return (x, y, w, h, contour).
+        Uses a large MORPH_CLOSE to fill the hole grid, then picks the
+        largest blob with a plausible Connect Four aspect ratio (0.6–2.8).
+
+        The raw contour is returned alongside the bounding rect so the
+        perspective-warp step can extract true corner points (not just the
+        axis-aligned bounding box).
         """
         cfg = self.config
-        mask = cv2.inRange(hsv, np.array(hsv_low), np.array(hsv_high))
+        mask = cv2.inRange(hsv, np.array(cfg.board_hsv_low), np.array(cfg.board_hsv_high))
 
         # Fill the circular holes so the board reads as a solid blue rectangle
         k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
@@ -364,14 +336,31 @@ class BoardDetector:
         if not candidates:
             return None
 
-        # Prefer the largest blob with a board-like aspect ratio
-        for cnt in candidates:
+        # Prefer candidates that not only look like a blue board-sized blob,
+        # but also contain a board-like distribution of hole circles inside.
+        best = None
+        best_key = None
+        for cnt in candidates[:8]:
             x, y, w, h = cv2.boundingRect(cnt)
             if h == 0:
                 continue
             aspect = w / h
-            if 0.6 <= aspect <= 2.8 and w * h >= img_area * cfg.min_board_area_ratio:
-                return x, y, w, h, cnt
+            if not (0.6 <= aspect <= 2.8 and w * h >= img_area * cfg.min_board_area_ratio):
+                continue
+            hole_count, span_x_ratio, span_y_ratio = self._hole_support_metrics(hsv, x, y, w, h)
+            key = (
+                hole_count >= 8 and span_y_ratio >= 0.42,
+                hole_count,
+                span_y_ratio,
+                span_x_ratio,
+                cv2.contourArea(cnt),
+            )
+            if best_key is None or key > best_key:
+                best_key = key
+                best = (x, y, w, h, cnt)
+
+        if best is not None:
+            return best
 
         # Fallback: just the largest blob
         cnt = candidates[0]
@@ -380,64 +369,66 @@ class BoardDetector:
             return x, y, w, h, cnt
         return None
 
-    def _find_board_bbox(self, hsv: np.ndarray,
-                          img_shape: Tuple) -> Optional[Tuple[int, int, int, int, np.ndarray]]:
+    def _hole_support_metrics(self, hsv: np.ndarray, bx: int, by: int,
+                               bw: int, bh: int) -> Tuple[int, float, float]:
         """
-        Find the blue board frame and return (x, y, w, h, contour).
-        Uses a large MORPH_CLOSE to fill the hole grid, then picks the
-        largest blob with a plausible Connect Four aspect ratio (0.6–2.8).
+        Estimate whether a board bbox contains a plausible spread of hole circles.
 
-        The raw contour is returned alongside the bounding rect so the
-        perspective-warp step can extract true corner points (not just the
-        axis-aligned bounding box).
-
-        If the primary HSV range finds nothing, retries with progressively
-        looser thresholds, then as a final emergency fallback applies CLAHE to
-        boost V in dark frames.  CLAHE is intentionally last so it never runs
-        in normal lighting — applying it early would inflate the bounding box
-        by boosting V of background areas with slight blue hues, shifting the
-        grid overlay upward and causing missed detections in the top row.
-
-          Tier 1: relax only V (−15) — mild underexposure.
-          Tier 2: relax V (−25) and S (−20) — very dim lighting.
-          Tier 3: CLAHE + primary thresholds — extreme dim / emergency only.
+        Returns (count, x_span_ratio, y_span_ratio), where span ratios are the
+        detected-hole span relative to bbox width/height.
         """
         cfg = self.config
-        result = self._find_board_bbox_mask(
-            hsv, img_shape, cfg.board_hsv_low, cfg.board_hsv_high,
+        hsv_roi = hsv[by:by + bh, bx:bx + bw]
+        if hsv_roi.size == 0:
+            return 0, 0.0, 0.0
+
+        raw_blue = cv2.inRange(
+            hsv_roi, np.array(cfg.board_hsv_low), np.array(cfg.board_hsv_high)
         )
-        if result is not None:
-            return result
+        non_blue = cv2.bitwise_not(raw_blue)
+        k_noise = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        non_blue = cv2.morphologyEx(non_blue, cv2.MORPH_OPEN, k_noise)
 
-        # Tier 1: lower V only (mild dim lighting)
-        lo = cfg.board_hsv_low
-        tier1_low = (lo[0], lo[1], max(lo[2] - 15, 10))
-        result = self._find_board_bbox_mask(hsv, img_shape, tier1_low, cfg.board_hsv_high)
-        if result is not None:
-            return result
+        cell_est  = bw / 7.0
+        min_area  = np.pi * (cell_est * 0.18) ** 2
+        max_area  = np.pi * (cell_est * 0.52) ** 2
+        margin_top  = cell_est * 0.1
+        margin_bot  = cell_est * 0.1
+        margin_side = bw * 0.03
+        y_lo = by + margin_top
+        y_hi = by + bh - margin_bot
+        x_lo = bx + margin_side
+        x_hi = bx + bw - margin_side
 
-        # Tier 2: lower both S and V (very dim lighting)
-        tier2_low = (lo[0], max(lo[1] - 20, 40), max(lo[2] - 25, 10))
-        result = self._find_board_bbox_mask(hsv, img_shape, tier2_low, cfg.board_hsv_high)
-        if result is not None:
-            return result
+        contours, _ = cv2.findContours(non_blue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        pts: List[Tuple[float, float]] = []
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if not (min_area < area < max_area):
+                continue
+            perim = cv2.arcLength(cnt, True)
+            if perim == 0:
+                continue
+            circularity = 4 * np.pi * area / (perim ** 2)
+            if circularity < cfg.min_circularity:
+                continue
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+            cx = M["m10"] / M["m00"] + bx
+            cy = M["m01"] / M["m00"] + by
+            if not (x_lo < cx < x_hi and y_lo < cy < y_hi):
+                continue
+            pts.append((float(cx), float(cy)))
 
-        # Tier 3 (emergency): apply CLAHE then retry with primary thresholds.
-        # Only reached when the board is genuinely too dark to find otherwise.
-        if cfg.use_clahe:
-            hsv_c = self._apply_clahe_hsv(hsv)
-            result = self._find_board_bbox_mask(
-                hsv_c, img_shape, cfg.board_hsv_low, cfg.board_hsv_high,
-            )
-            if result is not None:
-                return result
-            result = self._find_board_bbox_mask(
-                hsv_c, img_shape, tier1_low, cfg.board_hsv_high,
-            )
-            if result is not None:
-                return result
+        if not pts:
+            return 0, 0.0, 0.0
 
-        return None
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        span_x = (max(xs) - min(xs)) / max(float(bw), 1.0)
+        span_y = (max(ys) - min(ys)) / max(float(bh), 1.0)
+        return len(pts), float(span_x), float(span_y)
 
     # ── Step 1b: Perspective warp ────────────────────────────────────────────
 
@@ -562,13 +553,6 @@ class BoardDetector:
         pts = np.array(points, dtype=np.float64).reshape(-1, 1, 2)
         mapped = cv2.perspectiveTransform(pts, M_inv)
         return [(float(p[0][0]), float(p[0][1])) for p in mapped]
-
-    @staticmethod
-    def _apply_clahe_hsv(hsv: np.ndarray) -> np.ndarray:
-        """Normalize brightness (V channel) with CLAHE to reduce lighting sensitivity."""
-        h, s, v = cv2.split(hsv)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        return cv2.merge([h, s, clahe.apply(v)])
 
     @staticmethod
     def _regularize_grid_both_axes(grid: np.ndarray) -> np.ndarray:
@@ -1089,6 +1073,9 @@ class LockedBoardDetector:
     LOCK_FRAMES     = 4      # Good frames needed to confirm lock
     CANDIDATE_RESET = 20     # Consecutive bad frames to drop candidate entirely
     UNLOCK_FRAMES   = 20     # Consecutive bad locked frames → unlock
+    CANDIDATE_GEOM_MAX_SHIFT_FRAC = 0.35  # max median centre shift vs cell spacing
+    GRID_GAP_MIN_FRAC = 0.55
+    GRID_GAP_MAX_FRAC = 1.80
 
     # Piece removal requires this many consecutive absent frames.
     # Fan/lighting flicker typically lasts 1–3 frames; real removals are
@@ -1097,12 +1084,6 @@ class LockedBoardDetector:
     # 15 frames ≈ 2 seconds @ 7.5fps — a real piece removal (physical
     # extraction) takes much longer.  Brief HSV dips from auto-exposure
     # or hand shadows resolve well within 15 frames.
-    # A NEW piece must appear in this many consecutive frames before being
-    # accepted into the stable board state.  Arm movements cause artefacts
-    # that typically persist 1-5 frames; a real placed piece persists indefinitely.
-    # At ~30 fps, ADD_THRESHOLD=5 adds ~165ms latency — still imperceptible.
-    ADD_THRESHOLD = 5
-
     REMOVE_THRESHOLD = 15
 
     # Post-lock quality verification.  If average confidence over the first
@@ -1128,7 +1109,6 @@ class LockedBoardDetector:
         self._last_board:    Optional[np.ndarray] = None  # for change detection
         self._stable_board:  Optional[np.ndarray] = None  # temporally-smoothed state
         self._absent_count:  np.ndarray = np.zeros((6, 7), dtype=np.int32)
-        self._present_count: np.ndarray = np.zeros((6, 7), dtype=np.int32)
         self._verify_count: int   = 0
         self._verify_sum:   float = 0.0
         self._dump_next: bool = False  # dump all cell HSVs on next locked frame
@@ -1156,17 +1136,13 @@ class LockedBoardDetector:
         self._lock_bad    = 0
         self.is_locked    = False
         self._last_board   = None
-        self._stable_board  = None
-        self._absent_count  = np.zeros((6, 7), dtype=np.int32)
-        self._present_count = np.zeros((6, 7), dtype=np.int32)
+        self._stable_board = None
+        self._absent_count = np.zeros((6, 7), dtype=np.int32)
         self._verify_count = 0
         self._verify_sum   = 0.0
         self._empty_baselines = None
 
     def detect(self, image: np.ndarray, debug: bool = False) -> DetectionResult:
-        # Cell classification always uses the original (non-CLAHE) HSV so that
-        # the calibrated S/V thresholds remain valid.  CLAHE is applied inside
-        # BoardDetector.detect() specifically for board/hole detection only.
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         if self.is_locked:
             return self._detect_locked(image, hsv, debug)
@@ -1268,6 +1244,7 @@ class LockedBoardDetector:
     def _detect_unlocked(self, image: np.ndarray, hsv: np.ndarray,
                           debug: bool) -> DetectionResult:
         result = self.detector.detect(image, debug=debug)
+        fresh_supports_candidate = False
 
         # Only update the candidate when the fresh detection is itself verified
         # good — this prevents a slightly-wrong bounding box on the next frame
@@ -1279,9 +1256,17 @@ class LockedBoardDetector:
                 and not result.fallback_used):
             fresh_raw  = self.detector._classify_cells(hsv, result.grid_centers)
             fresh_conf = self.detector._compute_confidence(fresh_raw)
-            if fresh_conf >= self.LOCK_MIN_CONF:
+            if fresh_conf >= self.LOCK_MIN_CONF and self._grid_spacing_plausible(result.grid_centers):
+                if (self._cand_centers is not None and
+                        not self._candidate_geometry_matches(result.grid_centers)):
+                    print("[Board] Candidate geometry changed too much — restarting lock streak")
+                    self._good_count = 0
+                    self._bad_streak = 0
                 self._cand_centers = result.grid_centers.copy()
                 self._cand_contour = result.board_contour.copy()
+                fresh_supports_candidate = True
+            elif fresh_conf >= self.LOCK_MIN_CONF:
+                print("[Board] Rejecting implausible grid spacing before lock")
 
         # If we have a candidate, classify at that position regardless of
         # whether the blue frame was detected this frame.
@@ -1296,7 +1281,11 @@ class LockedBoardDetector:
             result.board         = cand_board     # gravity-filtered
             result.confidence    = cand_conf
 
-            is_good = cand_conf >= self.LOCK_MIN_CONF
+            # A pre-lock frame only counts when the *current* fresh detection
+            # also supports the candidate grid. This prevents a stale candidate
+            # from reaching LOCK_FRAMES while fresh fits on later frames have
+            # already gone off the rails.
+            is_good = cand_conf >= self.LOCK_MIN_CONF and fresh_supports_candidate
 
             if is_good:
                 self._bad_streak = 0
@@ -1326,6 +1315,45 @@ class LockedBoardDetector:
                     self._bad_streak   = 0
 
         return result
+
+    def _candidate_geometry_matches(self, new_centers: np.ndarray) -> bool:
+        """Reject candidate streaks whose fitted grid jumps between frames."""
+        if self._cand_centers is None or new_centers is None:
+            return True
+
+        old_pts = self._cand_centers.reshape(-1, 2).astype(np.float32)
+        new_pts = new_centers.reshape(-1, 2).astype(np.float32)
+        if old_pts.shape != new_pts.shape or old_pts.size == 0:
+            return False
+
+        old_spacing = float(abs(self._cand_centers[0, 1, 0] - self._cand_centers[0, 0, 0]))
+        new_spacing = float(abs(new_centers[0, 1, 0] - new_centers[0, 0, 0]))
+        cell_spacing = max((old_spacing + new_spacing) * 0.5, 1.0)
+
+        dists = np.sqrt(np.sum((old_pts - new_pts) ** 2, axis=1))
+        median_shift = float(np.median(dists))
+        return median_shift <= cell_spacing * self.CANDIDATE_GEOM_MAX_SHIFT_FRAC
+
+    def _grid_spacing_plausible(self, centers: np.ndarray) -> bool:
+        """Reject grids with row/column spacing jumps that indicate bad extrapolation."""
+        if centers is None or centers.shape != (6, 7, 2):
+            return False
+
+        row_means = centers[:, :, 1].mean(axis=1).astype(np.float32)
+        col_means = centers[:, :, 0].mean(axis=0).astype(np.float32)
+        row_gaps = np.diff(row_means)
+        col_gaps = np.diff(col_means)
+
+        def gaps_ok(gaps: np.ndarray) -> bool:
+            if len(gaps) == 0:
+                return False
+            med = float(np.median(gaps))
+            if med <= 1.0:
+                return False
+            return (float(np.min(gaps)) >= med * self.GRID_GAP_MIN_FRAC and
+                    float(np.max(gaps)) <= med * self.GRID_GAP_MAX_FRAC)
+
+        return gaps_ok(row_gaps) and gaps_ok(col_gaps)
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -1363,32 +1391,9 @@ class LockedBoardDetector:
                 cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
                 roi_pixels = hsv[roi_mask > 0]
                 if len(roi_pixels) > 0:
-                    h_b = float(np.median(roi_pixels[:, 0]))
-                    s_b = float(np.median(roi_pixels[:, 1]))
-                    v_b = float(np.median(roi_pixels[:, 2]))
-
-                    # Sanity check: an empty hole should NOT look like a piece.
-                    # If the baseline hue is already in piece territory (red or
-                    # yellow) AND saturation is significant, it means skin /
-                    # clothing was visible through the hole at lock time.
-                    # Mark as sentinel so adaptive falls back to fixed thresholds
-                    # (which require much higher S for red and won't fire on skin).
-                    cfg = self.config
-                    hue_bnd = cfg.adaptive_hue_boundary
-                    yel_max = cfg.adaptive_yellow_hue_max
-                    is_piece_hue = (h_b < hue_bnd or h_b > (180 - hue_bnd) or
-                                    (hue_bnd <= h_b <= yel_max))
-                    if is_piece_hue and s_b >= 40:
-                        # Suspicious baseline — leave as sentinel (-1)
-                        if self.config.verbose:
-                            print(f"  [{r},{c}] baseline REJECTED "
-                                  f"(piece-hue H={h_b:.0f} S={s_b:.0f} "
-                                  f"— skin/hand likely visible at lock time)")
-                        continue
-
-                    baselines[r, c, 0] = h_b
-                    baselines[r, c, 1] = s_b
-                    baselines[r, c, 2] = v_b
+                    baselines[r, c, 0] = np.median(roi_pixels[:, 0])
+                    baselines[r, c, 1] = np.median(roi_pixels[:, 1])
+                    baselines[r, c, 2] = np.median(roi_pixels[:, 2])
                     empty_count += 1
 
         self._empty_baselines = baselines
@@ -1493,20 +1498,11 @@ class LockedBoardDetector:
                     # Anything else (H=60-140: green/cyan/blue board colour) → empty.
                     yel_max = cfg.adaptive_yellow_hue_max
                     if h_med < hue_bnd or h_med > (180 - hue_bnd):
-                        # Red candidate — also enforce absolute saturation floor.
-                        # Real red plastic: S≥130 even in very dim conditions.
-                        # Human skin bleeding through holes: S≈80-100.
-                        # This single check eliminates nearly all skin false positives.
-                        if s_med >= cfg.adaptive_red_min_s:
+                        if s_med >= cfg.adaptive_red_min_s and v_med >= cfg.adaptive_red_min_v:
                             board[r, c] = 1   # red
-                        # else: too low S to be a real red piece (skin/background)
                     elif h_med <= yel_max:
-                        # Yellow candidate — enforce absolute S and V floors.
-                        # Real yellow plastic: S≥100, V≥100.
-                        # Arm/body at yellow hues: S≈70-90, V≈40-56 → rejected.
                         if s_med >= cfg.adaptive_yellow_min_s and v_med >= cfg.adaptive_yellow_min_v:
                             board[r, c] = 2   # yellow
-                        # else: too dim or unsaturated to be a real yellow piece
                     # else: hue is board-blue or other non-piece colour → leave as empty
 
                 if cfg.verbose:
@@ -1524,21 +1520,16 @@ class LockedBoardDetector:
 
     def _temporal_smooth(self, board: np.ndarray) -> np.ndarray:
         """
-        Debounce both piece addition and removal.
+        Debounce piece removal.
 
-        ADD_THRESHOLD:    A NEW piece must be seen for this many consecutive
-                          frames before it is accepted into the stable state.
-                          Skin flashes through holes are typically 1-3 frames;
-                          a real placed piece persists for hundreds of frames.
-
-        REMOVE_THRESHOLD: A PRESENT piece must be absent for this many
-                          consecutive frames before it is removed — filters
-                          out transient shadows and hand occlusions.
+        New pieces are accepted immediately (1 frame).
+        A piece is only removed from the stable state after it has been
+        absent for REMOVE_THRESHOLD consecutive frames — this filters out
+        1–3 frame shadows from a spinning fan or momentary lighting changes.
         """
         if self._stable_board is None:
             self._stable_board = board.copy()
-            self._absent_count  = np.zeros((6, 7), dtype=np.int32)
-            self._present_count = np.zeros((6, 7), dtype=np.int32)
+            self._absent_count = np.zeros((6, 7), dtype=np.int32)
             return self._stable_board.copy()
 
         for r in range(6):
@@ -1547,24 +1538,16 @@ class LockedBoardDetector:
                 stable   = self._stable_board[r, c]
 
                 if detected != 0:
+                    # Piece visible this frame — accept immediately
+                    self._stable_board[r, c] = detected
                     self._absent_count[r, c] = 0
-                    if stable == detected:
-                        # Already confirmed — nothing to do
-                        self._present_count[r, c] = self.ADD_THRESHOLD  # saturate
-                    else:
-                        # New (or changed) detection — require ADD_THRESHOLD frames
-                        self._present_count[r, c] += 1
-                        if self._present_count[r, c] >= self.ADD_THRESHOLD:
-                            self._stable_board[r, c] = detected  # confirmed new piece
-                else:
-                    self._present_count[r, c] = 0
-                    if stable != 0:
-                        # Piece was there but not seen this frame
-                        self._absent_count[r, c] += 1
-                        if self._absent_count[r, c] >= self.REMOVE_THRESHOLD:
-                            self._stable_board[r, c] = 0   # confirmed gone
-                        # else: keep the piece in the stable state
-                    # else: was empty, still empty — nothing to do
+                elif stable != 0:
+                    # Piece was there but not seen this frame
+                    self._absent_count[r, c] += 1
+                    if self._absent_count[r, c] >= self.REMOVE_THRESHOLD:
+                        self._stable_board[r, c] = 0   # confirmed gone
+                    # else: keep the piece in the stable state
+                # else: was empty, still empty — nothing to do
 
         return self._stable_board.copy()
 

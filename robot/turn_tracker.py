@@ -36,7 +36,44 @@ class TurnTracker:
 
     def update(self, detected_board):
         """Update state from a newly detected board. Returns result dict."""
+        result = self.analyze_transition(detected_board)
+
+        if self.state.game_over:
+            return result
+
+        if not result['changed']:
+            return result
+
+        row = result['move_row']
+        col = result['move_col']
+        new_value = result['move_player']
+
+        self.state.board = detected_board.copy()
+        self.state.move_history.append(col)
+
+        win_cells = self._check_win(self.state.board, row, col, new_value)
+        if win_cells:
+            self.state.game_over = True
+            self.state.winner = new_value
+            self.state.winning_cells = win_cells
+            result['game_over'] = True
+            result['winner'] = new_value
+        elif np.sum(self.state.board == 0) == 0:
+            self.state.game_over = True
+            self.state.winner = 0
+            result['game_over'] = True
+            result['winner'] = 0
+        else:
+            self.state.current_player = 3 - self.state.current_player
+
+        result['is_robot_turn'] = (self.state.current_player == self.robot_player
+                                   and not self.state.game_over)
+        return result
+
+    def analyze_transition(self, detected_board):
+        """Validate a detected transition without mutating tracker state."""
         result = {'changed': False, 'move_col': None, 'move_player': None,
+                  'move_row': None,
                   'is_robot_turn': False, 'game_over': self.state.game_over,
                   'winner': self.state.winner, 'error': None}
 
@@ -71,29 +108,10 @@ class TurnTracker:
             result['error'] = f"Gravity violation at ({row},{col}), expected row {expected_row}"
             return result
 
-        self.state.board = detected_board.copy()
-        self.state.move_history.append(col)
         result['changed'] = True
+        result['move_row'] = row
         result['move_col'] = col
         result['move_player'] = new_value
-
-        win_cells = self._check_win(self.state.board, row, col, new_value)
-        if win_cells:
-            self.state.game_over = True
-            self.state.winner = new_value
-            self.state.winning_cells = win_cells
-            result['game_over'] = True
-            result['winner'] = new_value
-        elif np.sum(self.state.board == 0) == 0:
-            self.state.game_over = True
-            self.state.winner = 0
-            result['game_over'] = True
-            result['winner'] = 0
-        else:
-            self.state.current_player = 3 - self.state.current_player
-
-        result['is_robot_turn'] = (self.state.current_player == self.robot_player
-                                   and not self.state.game_over)
         return result
 
     def set_board(self, board):
