@@ -638,8 +638,8 @@ def main():
     parser.add_argument("--yolo", type=str, metavar="MODEL",
                         help="Path to YOLOv8 model (.pt or .engine) — uses YOLO detector")
     parser.add_argument("--human-color", choices=["red", "yellow"], default="red")
-    parser.add_argument("--stable-seconds", type=float, default=1.0,
-                        help="Seconds a board state must hold before accepting a move (default: 1.0). "
+    parser.add_argument("--stable-seconds", type=float, default=2.0,
+                        help="Seconds a board state must hold before accepting a move (default: 2.0). "
                              "Auto-computes from --fps. Use lower (0.5-1.0) for faster play.")
     parser.add_argument("--fps", type=float, default=8.0)
     parser.add_argument("--no-tts", action="store_true",

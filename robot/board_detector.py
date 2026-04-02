@@ -1029,14 +1029,6 @@ class BoardDetector:
             hsv, np.array(cfg.yellow_hsv_low), np.array(cfg.yellow_hsv_high)
         )
 
-        # Precompute a small boolean disk once and crop per-cell — avoids
-        # allocating a full-image mask (720×1280) for each of the 42 cells.
-        d = sample_radius
-        ys_g, xs_g = np.ogrid[-d:d+1, -d:d+1]
-        disk = (xs_g * xs_g + ys_g * ys_g) <= d * d
-
-        board_bbox = getattr(self, '_board_bbox', None)
-
         for r in range(6):
             for c in range(7):
                 cx = int(grid_centers[r, c, 0])
@@ -1046,23 +1038,21 @@ class BoardDetector:
                 # Skip cells that landed far outside the board bbox (can
                 # happen when the perspective warp extrapolates aggressively).
                 # A 1-cell margin accommodates slight warp overshoot.
-                if board_bbox is not None:
-                    bbx, bby, bbw, bbh = board_bbox
+                if hasattr(self, '_board_bbox') and self._board_bbox is not None:
+                    bbx, bby, bbw, bbh = self._board_bbox
                     margin = cell_spacing
                     if not (bbx - margin <= cx <= bbx + bbw + margin and
                             bby - margin <= cy <= bby + bbh + margin):
                         continue
 
-                y0 = max(0, cy - d);  y1 = min(h_img, cy + d + 1)
-                x0 = max(0, cx - d);  x1 = min(w_img, cx + d + 1)
-                dy0 = cy - d - y0;    dx0 = cx - d - x0
-                disk_s = disk[dy0:dy0 + (y1 - y0), dx0:dx0 + (x1 - x0)]
-                total = int(disk_s.sum())
+                roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                cv2.circle(roi_mask, (cx, cy), sample_radius, 255, -1)
+                total = cv2.countNonZero(roi_mask)
                 if total == 0:
                     continue
 
-                red_r = int(red_mask[y0:y1, x0:x1][disk_s].sum()) / (255 * total)
-                yel_r = int(yellow_mask[y0:y1, x0:x1][disk_s].sum()) / (255 * total)
+                red_r = cv2.countNonZero(red_mask    & roi_mask) / total
+                yel_r = cv2.countNonZero(yellow_mask & roi_mask) / total
 
                 if red_r > cfg.piece_threshold and red_r > yel_r:
                     board[r, c] = 1
@@ -1077,12 +1067,15 @@ class BoardDetector:
                             else ".")
                 notable = (red_r > 0.10 or yel_r > 0.10 or detected != ".")
                 if notable and self.config.verbose:
-                    roi_pixels = hsv[y0:y1, x0:x1][disk_s]
+                    # Include median HSV of the sample area for calibration
+                    roi_pixels = hsv[roi_mask > 0]
                     if len(roi_pixels) > 0:
-                        medians = np.median(roi_pixels, axis=0)
+                        h_med = int(np.median(roi_pixels[:, 0]))
+                        s_med = int(np.median(roi_pixels[:, 1]))
+                        v_med = int(np.median(roi_pixels[:, 2]))
                         print(f"  [cell {r},{c}] red={red_r:.2f} yel={yel_r:.2f}"
                               f"  cx={cx} cy={cy}"
-                              f"  HSV=({medians[0]:.0f},{medians[1]:.0f},{medians[2]:.0f}) -> {detected}")
+                              f"  HSV=({h_med},{s_med},{v_med}) -> {detected}")
 
         return board   # raw, un-filtered — caller applies gravity filter
 
@@ -1527,11 +1520,6 @@ class LockedBoardDetector:
         # Run fixed-threshold classification to identify pre-existing pieces
         fixed_board = self.detector._classify_cells(hsv, centers)
 
-        # Precompute small disk mask — avoids 42 full-image allocations.
-        d = radius
-        ys_g, xs_g = np.ogrid[-d:d+1, -d:d+1]
-        disk = (xs_g * xs_g + ys_g * ys_g) <= d * d
-
         empty_count = 0
         for r in range(6):
             for c in range(7):
@@ -1541,16 +1529,13 @@ class LockedBoardDetector:
                 cy = int(centers[r, c, 1])
                 if not (0 <= cx < w_img and 0 <= cy < h_img):
                     continue
-                y0 = max(0, cy - d);  y1 = min(h_img, cy + d + 1)
-                x0 = max(0, cx - d);  x1 = min(w_img, cx + d + 1)
-                dy0 = cy - d - y0;    dx0 = cx - d - x0
-                disk_s = disk[dy0:dy0 + (y1 - y0), dx0:dx0 + (x1 - x0)]
-                roi_pixels = hsv[y0:y1, x0:x1][disk_s]
+                roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
+                roi_pixels = hsv[roi_mask > 0]
                 if len(roi_pixels) > 0:
-                    medians = np.median(roi_pixels, axis=0)
-                    baselines[r, c, 0] = medians[0]
-                    baselines[r, c, 1] = medians[1]
-                    baselines[r, c, 2] = medians[2]
+                    baselines[r, c, 0] = np.median(roi_pixels[:, 0])
+                    baselines[r, c, 1] = np.median(roi_pixels[:, 1])
+                    baselines[r, c, 2] = np.median(roi_pixels[:, 2])
                     empty_count += 1
 
         self._empty_baselines = baselines
@@ -1584,16 +1569,8 @@ class LockedBoardDetector:
         spacing = abs(int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0]))
         radius  = max(int(spacing * 0.28), 8)
 
-        # Precompute a small boolean disk once — avoids allocating a full-image
-        # mask (e.g. 720×1280 bytes) and calling cv2.circle for each of the 42
-        # cells every locked frame.  We crop a slice of this disk per cell.
-        d = radius
-        ys_g, xs_g = np.ogrid[-d:d+1, -d:d+1]
-        disk = (xs_g * xs_g + ys_g * ys_g) <= d * d
-
         min_ds = cfg.adaptive_min_delta_s
         hue_bnd = cfg.adaptive_hue_boundary
-        board_bbox = getattr(self.detector, '_board_bbox', None)
 
         for r in range(6):
             for c in range(7):
@@ -1602,26 +1579,22 @@ class LockedBoardDetector:
                 if not (0 <= cx < w_img and 0 <= cy < h_img):
                     continue
                 # Out-of-bounds guard (same as fixed-threshold path)
-                if board_bbox is not None:
-                    bbx, bby, bbw, bbh = board_bbox
+                if hasattr(self.detector, '_board_bbox') and self.detector._board_bbox is not None:
+                    bbx, bby, bbw, bbh = self.detector._board_bbox
                     margin = spacing
                     if not (bbx - margin <= cx <= bbx + bbw + margin and
                             bby - margin <= cy <= bby + bbh + margin):
                         continue
 
-                y0 = max(0, cy - d);  y1 = min(h_img, cy + d + 1)
-                x0 = max(0, cx - d);  x1 = min(w_img, cx + d + 1)
-                dy0 = cy - d - y0;    dx0 = cx - d - x0
-                disk_s = disk[dy0:dy0 + (y1 - y0), dx0:dx0 + (x1 - x0)]
-                roi_pixels = hsv[y0:y1, x0:x1][disk_s]
+                roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
+                roi_pixels = hsv[roi_mask > 0]
                 if len(roi_pixels) == 0:
                     continue
 
-                # Single median call for all 3 channels at once
-                medians = np.median(roi_pixels, axis=0)
-                h_med = float(medians[0])
-                s_med = float(medians[1])
-                v_med = float(medians[2])
+                h_med = float(np.median(roi_pixels[:, 0]))
+                s_med = float(np.median(roi_pixels[:, 1]))
+                v_med = float(np.median(roi_pixels[:, 2]))
 
                 base_h = self._empty_baselines[r, c, 0]
                 base_s = self._empty_baselines[r, c, 1]
@@ -1630,19 +1603,21 @@ class LockedBoardDetector:
                 # Sentinel baseline (-1) → no empty reference for this cell.
                 # Fall back to fixed-threshold mask classification.
                 if base_s < 0:
-                    roi_hsv = hsv[y0:y1, x0:x1]
-                    red_pix = (
-                        cv2.inRange(roi_hsv, np.array(cfg.red_hsv_low1), np.array(cfg.red_hsv_high1)) |
-                        cv2.inRange(roi_hsv, np.array(cfg.red_hsv_low2), np.array(cfg.red_hsv_high2))
-                    )
-                    yel_pix = cv2.inRange(roi_hsv, np.array(cfg.yellow_hsv_low), np.array(cfg.yellow_hsv_high))
-                    total = int(disk_s.sum())
+                    cfg_f = self.config
+                    roi_mask2 = np.zeros(hsv.shape[:2], dtype=np.uint8)
+                    cv2.circle(roi_mask2, (cx, cy), radius, 255, -1)
+                    total = cv2.countNonZero(roi_mask2)
                     if total > 0:
-                        red_r = int(red_pix[disk_s].sum()) / (255 * total)
-                        yel_r = int(yel_pix[disk_s].sum()) / (255 * total)
-                        if red_r > cfg.piece_threshold and red_r > yel_r:
+                        red_mask = (
+                            cv2.inRange(hsv, np.array(cfg_f.red_hsv_low1), np.array(cfg_f.red_hsv_high1)) |
+                            cv2.inRange(hsv, np.array(cfg_f.red_hsv_low2), np.array(cfg_f.red_hsv_high2))
+                        )
+                        yel_mask = cv2.inRange(hsv, np.array(cfg_f.yellow_hsv_low), np.array(cfg_f.yellow_hsv_high))
+                        red_r = cv2.countNonZero(red_mask & roi_mask2) / total
+                        yel_r = cv2.countNonZero(yel_mask & roi_mask2) / total
+                        if red_r > cfg_f.piece_threshold and red_r > yel_r:
                             board[r, c] = 1
-                        elif yel_r > cfg.piece_threshold and yel_r > red_r:
+                        elif yel_r > cfg_f.piece_threshold and yel_r > red_r:
                             board[r, c] = 2
                     continue
 
