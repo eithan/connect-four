@@ -78,8 +78,7 @@ def setup_logging(log_dir: str = "logs") -> tuple:
     return log_path, ss_dir, tee
 
 
-from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG
-from board_detector_yolo import YOLOBoardDetector
+from board_detector import BoardDetector, LockedBoardDetector, YOLOEnhancedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG
 from turn_tracker import TurnTracker
 from ai_player import AIPlayer
 from tts_announcer import GameAnnouncer
@@ -673,27 +672,29 @@ def main():
     print(f"  Settle time:   {args.stable_seconds}s")
     print()
 
-    if args.yolo:
-        detector = YOLOBoardDetector(model_path=args.yolo)
-        print(f"YOLO mode: {args.yolo}")
+    if args.screen:
+        cfg = SCREEN_CONFIG
+        print("Screen mode: using display-optimised HSV thresholds")
+        print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
+        print("      omit --screen and use --config hsv_config.json (or run without flags).")
     else:
-        if args.screen:
-            cfg = SCREEN_CONFIG
-            print("Screen mode: using display-optimised HSV thresholds")
-            print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
-            print("      omit --screen and use --config hsv_config.json (or run without flags).")
-        else:
-            cfg = PHYSICAL_CONFIG
-        if args.config and os.path.exists(args.config):
-            cfg = load_config(args.config)
-            print(f"HSV config: {args.config}")
-        from dataclasses import replace
-        if args.no_perspective_warp:
-            cfg = replace(cfg, perspective_warp=False)
-            print("Perspective warp: DISABLED (using legacy grid fitting)")
-        if args.verbose:
-            cfg = replace(cfg, verbose=True)
-        detector = LockedBoardDetector(cfg)
+        cfg = PHYSICAL_CONFIG
+    if args.config and os.path.exists(args.config):
+        cfg = load_config(args.config)
+        print(f"HSV config: {args.config}")
+    from dataclasses import replace
+    if args.no_perspective_warp:
+        cfg = replace(cfg, perspective_warp=False)
+        print("Perspective warp: DISABLED (using legacy grid fitting)")
+    if args.verbose:
+        cfg = replace(cfg, verbose=True)
+
+    yolo_path = args.yolo if args.yolo else None
+    detector = YOLOEnhancedBoardDetector(model_path=yolo_path, config=cfg)
+    if args.yolo:
+        print(f"YOLO model override: {args.yolo}")
+    else:
+        print("YOLO-enhanced mode: using bundled model for piece classification")
     # Compute stable_frames from seconds × fps (minimum 3 so it never feels broken)
     stable_frames = max(3, int(round(args.stable_seconds * args.fps)))
     print(f"Stable detection: {args.stable_seconds}s × {args.fps}fps = {stable_frames} frames")

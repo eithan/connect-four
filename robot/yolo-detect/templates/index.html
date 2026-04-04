@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connect Four — YOLO Detector</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f13;
+      color: #e8e8e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.7rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.3rem;
+      color: #fff;
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 2rem;
+    }
+
+    /* ── Upload card ── */
+    .card {
+      background: #1a1a22;
+      border: 1px solid #2c2c3a;
+      border-radius: 14px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 760px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #3a3a4e;
+      border-radius: 10px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .drop-zone.drag-over {
+      border-color: #5b9bf8;
+      background: #1e2535;
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .drop-zone .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.6rem;
+    }
+    .drop-zone p {
+      color: #aaa;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .drop-zone strong {
+      color: #5b9bf8;
+    }
+
+    /* ── Preview row ── */
+    #preview-row {
+      display: none;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    #preview-thumb {
+      width: 64px;
+      height: 64px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid #2c2c3a;
+      flex-shrink: 0;
+    }
+    .preview-meta {
+      font-size: 0.8rem;
+      color: #aaa;
+      line-height: 1.7;
+      padding-top: 4px;
+    }
+    .preview-meta span { color: #fff; font-weight: 500; }
+
+    /* ── Button ── */
+    button#run-btn {
+      margin-top: 1.25rem;
+      width: 100%;
+      padding: 0.8rem;
+      border-radius: 9px;
+      border: none;
+      background: #5b9bf8;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    button#run-btn:hover:not(:disabled) { background: #4a88e8; }
+    button#run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: none;
+      width: 22px; height: 22px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 1.2rem auto 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ── */
+    #error-box {
+      display: none;
+      margin-top: 1rem;
+      background: #2e1a1a;
+      border: 1px solid #7c2020;
+      color: #f87171;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+
+    /* ── Results ── */
+    #result-section {
+      display: none;
+      width: 100%;
+      max-width: 760px;
+      margin-top: 1.5rem;
+    }
+    .result-card {
+      background: #1a1a22;
+      border: 1px solid #2c2c3a;
+      border-radius: 14px;
+      padding: 1.5rem;
+    }
+    .result-card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #ccc;
+    }
+
+    /* Stats pills */
+    .stats {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+    }
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      background: #22222d;
+      border: 1px solid #333;
+      border-radius: 30px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.82rem;
+      font-weight: 500;
+    }
+    .pill .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .pill.red   .dot { background: #e53535; }
+    .pill.yellow .dot { background: #f5d020; }
+    .pill.board .dot { background: #3b82f6; }
+
+    /* Result image */
+    #result-img {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #2c2c3a;
+      display: block;
+    }
+
+    /* Download link */
+    #download-link {
+      display: inline-block;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: #5b9bf8;
+      text-decoration: none;
+    }
+    #download-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <h1>Connect Four Detector</h1>
+  <p class="subtitle">YOLO26 · best.pt · Board / Red / Yellow detection</p>
+
+  <div class="card">
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept="image/*" />
+      <div class="icon">🖼</div>
+      <p><strong>Click to choose</strong> or drag &amp; drop an image</p>
+      <p style="margin-top:0.3rem; font-size:0.78rem;">JPG · PNG · BMP · WebP</p>
+    </div>
+
+    <div id="preview-row">
+      <img id="preview-thumb" src="" alt="preview" />
+      <div class="preview-meta">
+        <div>File: <span id="meta-name">—</span></div>
+        <div>Size: <span id="meta-size">—</span></div>
+        <div>Dimensions: <span id="meta-dims">—</span></div>
+      </div>
+    </div>
+
+    <button id="run-btn" disabled>Run Detection</button>
+    <div class="spinner" id="spinner"></div>
+    <div id="error-box"></div>
+  </div>
+
+  <div id="result-section">
+    <div class="result-card">
+      <h2>Detection Result</h2>
+      <div class="stats" id="stats"></div>
+      <img id="result-img" src="" alt="annotated result" />
+      <a id="download-link" download="connect4_result.png">⬇ Download annotated image</a>
+    </div>
+  </div>
+
+<script>
+  const dropZone   = document.getElementById('drop-zone');
+  const fileInput  = document.getElementById('file-input');
+  const runBtn     = document.getElementById('run-btn');
+  const spinner    = document.getElementById('spinner');
+  const errorBox   = document.getElementById('error-box');
+  const previewRow = document.getElementById('preview-row');
+  const resultSec  = document.getElementById('result-section');
+
+  let selectedFile = null;
+
+  // Drag-and-drop highlight
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('drag-over')));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  function handleFile(file) {
+    selectedFile = file;
+    errorBox.style.display = 'none';
+    resultSec.style.display = 'none';
+    runBtn.disabled = false;
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = e => {
+      const src = e.target.result;
+      document.getElementById('preview-thumb').src = src;
+      previewRow.style.display = 'flex';
+      document.getElementById('meta-name').textContent = file.name;
+      document.getElementById('meta-size').textContent = (file.size / 1024).toFixed(1) + ' KB';
+      // Get dimensions
+      const img = new Image();
+      img.onload = () => {
+        document.getElementById('meta-dims').textContent = img.naturalWidth + ' × ' + img.naturalHeight + ' px';
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  runBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    runBtn.disabled = true;
+    spinner.style.display = 'block';
+    errorBox.style.display = 'none';
+    resultSec.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('image', selectedFile);
+
+    try {
+      const res = await fetch('/detect', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        showError(data.error || 'Unknown server error');
+        return;
+      }
+
+      // Stats
+      const statsEl = document.getElementById('stats');
+      statsEl.innerHTML = '';
+      const s = data.stats;
+
+      if (s.board_detected) {
+        statsEl.insertAdjacentHTML('beforeend', `
+          <div class="pill board"><div class="dot"></div>Board detected</div>`);
+      }
+      statsEl.insertAdjacentHTML('beforeend', `
+        <div class="pill red"><div class="dot"></div>${s.red} Red piece${s.red !== 1 ? 's' : ''}</div>
+        <div class="pill yellow"><div class="dot"></div>${s.yellow} Yellow piece${s.yellow !== 1 ? 's' : ''}</div>
+      `);
+
+      // Annotated image
+      const imgSrc = 'data:image/png;base64,' + data.image;
+      document.getElementById('result-img').src = imgSrc;
+      document.getElementById('download-link').href = imgSrc;
+      resultSec.style.display = 'block';
+
+    } catch (err) {
+      showError('Request failed: ' + err.message);
+    } finally {
+      spinner.style.display = 'none';
+      runBtn.disabled = false;
+    }
+  });
+
+  function showError(msg) {
+    errorBox.textContent = 'Error: ' + msg;
+    errorBox.style.display = 'block';
+  }
+</script>
+</body>
+</html>

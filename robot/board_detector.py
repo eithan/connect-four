@@ -38,9 +38,10 @@ Key design notes
 External API (unchanged from previous versions)
 -----------------------------------------------
   DetectionConfig, DetectionResult, BoardDetector, LockedBoardDetector,
-  PHYSICAL_CONFIG, SCREEN_CONFIG, board_to_string
+  YOLOEnhancedBoardDetector, PHYSICAL_CONFIG, SCREEN_CONFIG, board_to_string
 """
 
+import os
 import cv2
 import numpy as np
 from dataclasses import dataclass, field
@@ -1292,12 +1293,16 @@ class LockedBoardDetector:
 
     # ── Locked fast path ─────────────────────────────────────────────────────
 
+    def _raw_board(self, image: np.ndarray, hsv: np.ndarray,
+                   grid_centers: np.ndarray) -> np.ndarray:
+        """Return raw (un-filtered) board classification. Override for YOLO."""
+        if self.config.adaptive and self._empty_baselines is not None:
+            return self._classify_cells_adaptive(hsv, grid_centers)
+        return self.detector._classify_cells(hsv, grid_centers)
+
     def _detect_locked(self, image: np.ndarray, hsv: np.ndarray,
                         debug: bool) -> DetectionResult:
-        if self.config.adaptive and self._empty_baselines is not None:
-            board_raw = self._classify_cells_adaptive(hsv, self._locked_centers)
-        else:
-            board_raw = self.detector._classify_cells(hsv, self._locked_centers)
+        board_raw = self._raw_board(image, hsv, self._locked_centers)
         confidence = self.detector._compute_confidence(board_raw)
 
         # ── Full HSV diagnostic dump on first locked frame ───────────────────
@@ -1710,3 +1715,146 @@ def board_to_string(board: np.ndarray) -> str:
         lines.append(f"{row}|" + " ".join(symbols[board[row, c]] for c in range(7)) + "|")
     lines.append("  " + "-" * 13)
     return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# YOLO-enhanced detector
+# ─────────────────────────────────────────────────────────────────────────────
+
+class YOLOEnhancedBoardDetector(LockedBoardDetector):
+    """
+    Hybrid board detector: OpenCV/HSV for board location + grid fitting,
+    YOLO for piece classification.
+
+    Board-frame detection, perspective warp, hole detection, and grid
+    fitting all use the proven OpenCV/HSV pipeline from LockedBoardDetector.
+    Once the grid is locked, YOLO classifies each cell as red / yellow / empty
+    instead of HSV thresholding — making piece detection robust to skin tones,
+    clothing colours, and lighting changes that defeat fixed HSV ranges.
+
+    Fusion strategy (per cell, each locked frame):
+      1. YOLO confidence ≥ min_piece_conf   → trust YOLO (primary)
+      2. YOLO saw nothing + HSV adaptive fires → trust HSV (fallback for
+         partially-occluded or low-contrast pieces YOLO might miss)
+      3. Both silent                          → empty
+
+    Drop-in replacement for LockedBoardDetector.  Defaults to loading
+    ``yolo-detect/detect/train/weights/best.pt`` relative to this file.
+    """
+
+    # Class indices in the Connect4 YOLO model (yolo-detect/detect/train)
+    YOLO_CLASS_EMPTY  = 0
+    YOLO_CLASS_RED    = 1
+    YOLO_CLASS_YELLOW = 2
+
+    # Default model: bundled weights next to this file
+    DEFAULT_MODEL_PATH = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "yolo-detect", "detect", "train", "weights", "best.pt",
+    )
+
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        config: Optional[DetectionConfig] = None,
+        min_piece_conf: float = 0.35,
+    ):
+        super().__init__(config)
+        self._yolo_model = None
+        self._min_piece_conf = min_piece_conf
+        path = model_path if model_path is not None else self.DEFAULT_MODEL_PATH
+        if os.path.exists(path):
+            self._load_yolo(path)
+        else:
+            print(f"[YOLOEnhanced] Model not found at {path} — HSV-only mode")
+
+    def _load_yolo(self, path: str) -> None:
+        try:
+            from ultralytics import YOLO  # type: ignore
+            self._yolo_model = YOLO(path)
+            print(f"[YOLOEnhanced] Loaded YOLO model: {path}")
+        except ImportError:
+            print("[YOLOEnhanced] ultralytics not installed — HSV-only mode")
+        except Exception as exc:
+            print(f"[YOLOEnhanced] Model load error ({exc}) — HSV-only mode")
+
+    # ── Override: classification step ────────────────────────────────────────
+
+    def _raw_board(self, image: np.ndarray, hsv: np.ndarray,
+                   grid_centers: np.ndarray) -> np.ndarray:
+        """YOLO-only classification. No HSV fallback — avoids skin/background FPs."""
+        if self._yolo_model is None:
+            return super()._raw_board(image, hsv, grid_centers)
+
+        yolo_board, yolo_confs = self._classify_with_yolo(image, grid_centers)
+
+        board = np.zeros((6, 7), dtype=np.int8)
+        for r in range(6):
+            for c in range(7):
+                if yolo_board[r, c] != 0 and yolo_confs[r, c] >= self._min_piece_conf:
+                    board[r, c] = yolo_board[r, c]
+
+        if self.config.verbose:
+            for r in range(6):
+                for c in range(7):
+                    if yolo_board[r, c] != 0 or board[r, c] != 0:
+                        sym = "." if board[r, c] == 0 else ("R" if board[r, c] == 1 else "Y")
+                        print(f"  [YOLOEnh {r},{c}] conf={yolo_confs[r,c]:.2f} -> {sym}")
+
+        return board
+
+    def _classify_with_yolo(
+        self, image: np.ndarray, grid_centers: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Run YOLO inference and snap each detection to the nearest grid cell.
+
+        Returns:
+            board  — (6, 7) int8   0=empty 1=red 2=yellow (highest-conf hit)
+            confs  — (6, 7) float32  confidence of the winning detection per cell
+        """
+        board = np.zeros((6, 7), dtype=np.int8)
+        confs = np.zeros((6, 7), dtype=np.float32)
+
+        results = self._yolo_model.predict(image, imgsz=640, verbose=False)[0]
+        if results.boxes is None or len(results.boxes) == 0:
+            return board, confs
+
+        # Snap radius: detections whose centre is more than half a cell away
+        # from every grid centre are treated as background noise.
+        cell_spacing = float(abs(
+            int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0])
+        ))
+        max_snap = cell_spacing * 0.55
+
+        for box in results.boxes:
+            cls  = int(box.cls[0])
+            conf = float(box.conf[0])
+            if cls not in (self.YOLO_CLASS_RED, self.YOLO_CLASS_YELLOW):
+                continue  # ignore empty-class detections and other classes
+            if conf < self._min_piece_conf * 0.5:
+                continue  # cheap pre-filter before distance calculation
+
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            bx = (x1 + x2) * 0.5
+            by = (y1 + y2) * 0.5
+
+            best_r, best_c, best_d = -1, -1, float("inf")
+            for r in range(6):
+                for c in range(7):
+                    gx = float(grid_centers[r, c, 0])
+                    gy = float(grid_centers[r, c, 1])
+                    d  = ((bx - gx) ** 2 + (by - gy) ** 2) ** 0.5
+                    if d < best_d:
+                        best_d = d
+                        best_r, best_c = r, c
+
+            if best_r < 0 or best_d > max_snap:
+                continue  # too far from any cell
+
+            piece = 1 if cls == self.YOLO_CLASS_RED else 2
+            if conf > confs[best_r, best_c]:
+                board[best_r, best_c] = piece
+                confs[best_r, best_c] = conf
+
+        return board, confs

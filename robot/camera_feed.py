@@ -24,8 +24,7 @@ import time
 import os
 import sys
 
-from board_detector import BoardDetector, LockedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG, board_to_string
-from board_detector_yolo import YOLOBoardDetector
+from board_detector import BoardDetector, LockedBoardDetector, YOLOEnhancedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG, board_to_string
 
 WINDOW_MAIN = "Connect Four - Camera Feed"
 WINDOW_TUNE = "Connect Four - HSV Tuning"
@@ -191,21 +190,23 @@ def main():
                         help="Path to YOLOv8 model (.pt or .engine) — uses YOLO detector")
     args = parser.parse_args()
 
-    if args.yolo:
-        detector = YOLOBoardDetector(model_path=args.yolo)
-        print(f"YOLO mode: {args.yolo}")
+    if args.screen:
+        cfg = SCREEN_CONFIG
+        print("Screen mode: using display-optimized HSV thresholds")
+        print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
+        print("      omit --screen and use --config hsv_config.json (or run without flags).")
     else:
-        if args.screen:
-            cfg = SCREEN_CONFIG
-            print("Screen mode: using display-optimized HSV thresholds")
-            print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
-            print("      omit --screen and use --config hsv_config.json (or run without flags).")
-        else:
-            cfg = PHYSICAL_CONFIG
-        if args.config and os.path.exists(args.config):
-            cfg = load_config(args.config)
-            print(f"Loaded config: {args.config}")
-        detector = LockedBoardDetector(cfg)
+        cfg = PHYSICAL_CONFIG
+    if args.config and os.path.exists(args.config):
+        cfg = load_config(args.config)
+        print(f"Loaded config: {args.config}")
+
+    yolo_path = args.yolo if args.yolo else None
+    detector = YOLOEnhancedBoardDetector(model_path=yolo_path, config=cfg)
+    if args.yolo:
+        print(f"YOLO model override: {args.yolo}")
+    else:
+        print("YOLO-enhanced mode: using bundled model for piece classification")
 
     print(f"Opening camera {args.camera}...")
     cap = cv2.VideoCapture(args.camera)
