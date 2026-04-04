@@ -1232,6 +1232,13 @@ class LockedBoardDetector:
     # misses from shadows or hand occlusion resolve well within 15 frames.
     REMOVE_THRESHOLD = 15
 
+    # Maximum number of gravity-valid new-piece candidates allowed in one frame.
+    # A real play adds exactly 1 piece at the bottom of a column (gravity-valid).
+    # A face/hand through upper-row holes is NOT gravity-valid and is excluded.
+    # Clothing bursts that fill several bottom-row holes still trigger this guard.
+    # 1–2 simultaneous detections are tolerated for YOLO jitter; 3+ = contamination.
+    MAX_BURST_NEW = 2
+
     # Post-lock quality verification.  If average confidence over the first
     # VERIFY_WINDOW frames is below VERIFY_MIN_CONF the lock was probably made
     # on poor (e.g. camera still warming up) frames — auto-relock.
@@ -1256,6 +1263,10 @@ class LockedBoardDetector:
         self._stable_board:  Optional[np.ndarray] = None  # temporally-smoothed state
         self._absent_count:  np.ndarray = np.zeros((6, 7), dtype=np.int32)
         self._add_count:     np.ndarray = np.zeros((6, 7), dtype=np.int32)
+        # True once a cell has been observed as empty since lock.
+        # Prevents shirt/background that occupies holes from the very first locked
+        # frame from ever being accepted as a piece (it never transitions empty→piece).
+        self._cell_was_empty: np.ndarray = np.zeros((6, 7), dtype=bool)
         self._verify_count: int   = 0
         self._verify_sum:   float = 0.0
         self._dump_next: bool = False  # dump all cell HSVs on next locked frame
@@ -1282,10 +1293,11 @@ class LockedBoardDetector:
         self._bad_streak  = 0
         self._lock_bad    = 0
         self.is_locked    = False
-        self._last_board   = None
-        self._stable_board = None
-        self._absent_count = np.zeros((6, 7), dtype=np.int32)
-        self._add_count    = np.zeros((6, 7), dtype=np.int32)
+        self._last_board      = None
+        self._stable_board    = None
+        self._absent_count    = np.zeros((6, 7), dtype=np.int32)
+        self._add_count       = np.zeros((6, 7), dtype=np.int32)
+        self._cell_was_empty  = np.zeros((6, 7), dtype=bool)
         self._verify_count = 0
         self._verify_sum   = 0.0
         self._empty_baselines = None
@@ -1308,6 +1320,12 @@ class LockedBoardDetector:
     def _detect_locked(self, image: np.ndarray, hsv: np.ndarray,
                         debug: bool) -> DetectionResult:
         board_raw = self._raw_board(image, hsv, self._locked_centers)
+
+        # Track which cells have ever been seen as empty since lock.
+        # Used by _temporal_smooth to reject contamination (shirt/face) that
+        # occupies holes without ever transitioning through an empty state.
+        self._cell_was_empty |= (board_raw == 0)
+
         confidence = self.detector._compute_confidence(board_raw)
 
         # ── Full HSV diagnostic dump on first locked frame ───────────────────
@@ -1682,10 +1700,37 @@ class LockedBoardDetector:
         absent frames, filtering shadows and brief YOLO misses.
         """
         if self._stable_board is None:
-            self._stable_board = board.copy()
+            # Start from zeros — not board.copy() — so ADD_THRESHOLD applies
+            # to every piece from the very first frame, including any shirt or
+            # background that is already filling holes at lock time.
+            self._stable_board = np.zeros((6, 7), dtype=np.int8)
             self._absent_count = np.zeros((6, 7), dtype=np.int32)
             self._add_count    = np.zeros((6, 7), dtype=np.int32)
             return self._stable_board.copy()
+
+        # Burst detection — only count gravity-valid new candidates.
+        # "Gravity-valid" = lowest empty slot in its column (all rows below
+        # are already occupied).  A real piece always satisfies this; a face
+        # or hand visible through upper-row holes does NOT, so it is excluded
+        # from the count and cannot trigger a false burst.  A shirt filling
+        # several bottom-row holes on an empty board IS gravity-valid and will
+        # still fire the guard.  When burst fires, skip all additions this frame
+        # without touching _add_count so contamination doesn't accumulate.
+        def _gravity_valid(r, c):
+            for row_below in range(r + 1, 6):
+                if self._stable_board[row_below, c] == 0:
+                    return False
+            return True
+
+        new_candidates = [
+            (r, c)
+            for r in range(6) for c in range(7)
+            if self._stable_board[r, c] == 0
+            and board[r, c] != 0
+            and self._cell_was_empty[r, c]
+            and _gravity_valid(r, c)
+        ]
+        burst = len(new_candidates) > self.MAX_BURST_NEW
 
         for r in range(6):
             for c in range(7):
@@ -1695,12 +1740,21 @@ class LockedBoardDetector:
                 if stable == 0:
                     # Cell is currently empty in stable state
                     if detected != 0:
-                        # Candidate new piece — increment add counter
-                        self._add_count[r, c] += 1
-                        if self._add_count[r, c] >= self.ADD_THRESHOLD:
-                            self._stable_board[r, c] = detected
-                            self._add_count[r, c] = 0
-                            self._absent_count[r, c] = 0
+                        if not self._cell_was_empty[r, c]:
+                            # Never seen as empty since lock — persistent background
+                            # contamination (shirt at lock time). Ignore entirely.
+                            pass
+                        elif burst:
+                            # Too many simultaneous new detections — contamination
+                            # burst. Don't increment; wait for a clean frame.
+                            pass
+                        else:
+                            # Seen as empty before, single new detection: real candidate
+                            self._add_count[r, c] += 1
+                            if self._add_count[r, c] >= self.ADD_THRESHOLD:
+                                self._stable_board[r, c] = detected
+                                self._add_count[r, c] = 0
+                                self._absent_count[r, c] = 0
                     else:
                         # Still empty — reset add counter
                         self._add_count[r, c] = 0

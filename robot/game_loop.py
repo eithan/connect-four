@@ -212,6 +212,9 @@ class GameLoop:
         self._fps_t = time.time()
         self._fps_count = 0
 
+        self._winning_cells: list = []    # [(row, col), ...] — set at game over
+        self._win_anim_start: float = 0.0
+
         self._set_status_for_phase()
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -241,6 +244,8 @@ class GameLoop:
         self.last_result = None
         self._initialized = False
         self._lock_board_was_empty = False
+        self._winning_cells = []
+        self._win_anim_start = 0.0
         self._set_status_for_phase()
         self.ann.speak("New game. Your turn.", interrupt=True)
         print("\n" + "=" * 50)
@@ -352,6 +357,16 @@ class GameLoop:
                 self._set_status_for_phase()
                 return
 
+            # Reject wildly imbalanced counts before touching the tracker.
+            # Red=12 Yellow=0 is impossible in a real game — it means background
+            # contamination slipped through (shirt, etc.).  Reset and wait.
+            counts_balanced = abs(red_n - yellow_n) <= 1
+            if not counts_balanced and piece_n > 0:
+                print(f"Ignoring unbalanced initial detection "
+                      f"(Red={red_n} Yellow={yellow_n}) — background contamination?")
+                self.stable.reset(np.zeros_like(stable_board))
+                return
+
             self._initialized = True
             self.tracker.set_board(stable_board)
             # Update stable baseline so detector knows what "no change" looks like
@@ -365,24 +380,12 @@ class GameLoop:
                                 "winning_cells": self.tracker.state.winning_cells})
                 return
             # If it's already the AI's turn when we start, compute immediately.
-            # Guard: only do this if piece counts are plausible (|R-Y| ≤ 1).
-            # A large imbalance (e.g. Red=0 Yellow=3) means the initial detection
-            # caught phantom pieces — treat it as an empty board and let human go first.
-            counts_balanced = abs(red_n - yellow_n) <= 1
             if (self.tracker.state.current_player == self.ai_player_num
-                    and red_n + yellow_n > 0
-                    and counts_balanced):
+                    and piece_n > 0):
                 print("AI's turn on startup — computing move...")
                 self.phase = GamePhase.AI_TURN
                 self._run_ai(stable_board)
             else:
-                if not counts_balanced and red_n + yellow_n > 0:
-                    print(f"Ignoring unbalanced initial detection (Red={red_n} Yellow={yellow_n})"
-                          f" — treating as empty board, human goes first")
-                    self.tracker.reset()   # discard false-positive initial state
-                    self.stable.reset()    # require another clean stable detection
-                    self._initialized = False
-                    return
                 self._set_status_for_phase()
                 self.ann.speak("Your turn.", interrupt=True)
             return
@@ -561,6 +564,8 @@ class GameLoop:
             self.ann.speak("I win! Good game. Press R to play again.",
                            interrupt=True)
         if update.get("winning_cells"):
+            self._winning_cells = update["winning_cells"]
+            self._win_anim_start = time.time()
             print(f"  Winning cells: {update['winning_cells']}")
 
     def _set_status_for_phase(self):
@@ -579,6 +584,33 @@ class GameLoop:
                 cv2.circle(display, (cx, cy), 10, color, -1)
                 cv2.putText(display, label, (cx - 6, cy + 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+
+        if self._winning_cells and result.grid_centers is not None:
+            self._draw_win_animation(display, result.grid_centers)
+
+    def _draw_win_animation(self, display: np.ndarray, grid_centers: np.ndarray):
+        """Pulsing green rings and connecting line over the four winning pieces only."""
+        t = time.time() - self._win_anim_start
+
+        # Radius and brightness oscillate to create the pulse effect (~2.5 Hz)
+        pulse      = (np.sin(t * 5.0) + 1.0) / 2.0   # 0 → 1
+        radius     = int(14 + pulse * 8)               # 14 → 22 px
+        brightness = int(160 + pulse * 95)             # 160 → 255
+        ring_color = (0, brightness, 0)                # green, varying brightness
+
+        # Line connecting the four winning cells
+        pts = [(int(grid_centers[r, c, 0]), int(grid_centers[r, c, 1]))
+               for r, c in self._winning_cells]
+        for i in range(len(pts) - 1):
+            cv2.line(display, pts[i], pts[i + 1], ring_color, 3, cv2.LINE_AA)
+
+        # Outer pulsing ring + inner glow ring (slightly out of phase) per cell
+        for r, c in self._winning_cells:
+            cx = int(grid_centers[r, c, 0])
+            cy = int(grid_centers[r, c, 1])
+            cv2.circle(display, (cx, cy), radius, ring_color, 3, cv2.LINE_AA)
+            inner = int(8 + (1.0 - pulse) * 5)
+            cv2.circle(display, (cx, cy), inner, (0, 255, 180), 2, cv2.LINE_AA)
 
     def _draw_ai_column(self, display: np.ndarray, grid_centers: np.ndarray):
         col = self.ai_column

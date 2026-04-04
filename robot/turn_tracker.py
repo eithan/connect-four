@@ -58,6 +58,7 @@ class TurnTracker:
             self.state.winning_cells = win_cells
             result['game_over'] = True
             result['winner'] = new_value
+            result['winning_cells'] = win_cells  # needed by game_loop win animation
         elif np.sum(self.state.board == 0) == 0:
             self.state.game_over = True
             self.state.winner = 0
