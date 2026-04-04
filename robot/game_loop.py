@@ -1,8 +1,6 @@
 """
 Game Loop - Full cooperative Connect Four game via live camera.
 
-Phase 2.3 of the Connect Four Robot project.
-
 COOPERATIVE MODE: You place both your piece and the AI's piece.
 The system detects your move, the AI picks a column, and you drop the AI's
 piece there. The camera confirms the placement.
@@ -10,15 +8,15 @@ piece there. The camera confirms the placement.
 Usage:
     python3 game_loop.py
     python3 game_loop.py --camera 1
-    python3 game_loop.py --model ../web/public/alphazero-network-model.onnx
-    python3 game_loop.py --config hsv_config.json
     python3 game_loop.py --human-color yellow   # Play as yellow (AI is red)
-    python3 game_loop.py --stable-frames 5      # Frames to confirm a move
+    python3 game_loop.py --no-mirror            # Disable mirror flip
+    python3 game_loop.py --stable-seconds 1.5  # Slower confirmation
 
 Controls:
     q / ESC  - Quit
     r        - Reset game
     f        - Freeze / unfreeze frame
+    l        - Re-lock board detection
 """
 
 import cv2
@@ -301,7 +299,22 @@ class GameLoop:
         if self.phase == GamePhase.GAME_OVER:
             return
 
-        is_stable, stable_board = self.stable.update(result.board, result.confidence)
+        # Merge YOLO's view with the tracker's confirmed state.
+        # Once a piece is accepted by the tracker it is permanent (Connect Four
+        # pieces don't disappear mid-game), so we never let a transient YOLO
+        # miss or hand occlusion erase it.  YOLO can only ADD to what the
+        # tracker already knows.
+        detected = result.board
+        if self._initialized:
+            merged = self.tracker.state.board.copy()
+            for r in range(6):
+                for c in range(7):
+                    if merged[r, c] == 0 and detected[r, c] != 0:
+                        merged[r, c] = detected[r, c]
+        else:
+            merged = detected
+
+        is_stable, stable_board = self.stable.update(merged, result.confidence)
         if not is_stable:
             return
 
@@ -627,40 +640,35 @@ def load_config(path: str) -> DetectionConfig:
     return cfg
 
 
+_DEFAULT_MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "alphazero-network-model.onnx")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Connect Four — cooperative game loop")
     parser.add_argument("--camera", type=int, default=0)
-    parser.add_argument("--model", type=str, help="Path to AlphaZero ONNX model")
-    parser.add_argument("--config", type=str, help="HSV config JSON")
-    parser.add_argument("--screen", action="store_true",
-                        help="Use screen-optimised thresholds (phone/monitor display)")
+    parser.add_argument("--config", type=str, help="HSV config JSON (board detection tuning)")
     parser.add_argument("--yolo", type=str, metavar="MODEL",
-                        help="Path to YOLOv8 model (.pt or .engine) — uses YOLO detector")
+                        help="Path to a custom YOLO model (.pt or .engine); "
+                             "defaults to bundled weights")
     parser.add_argument("--human-color", choices=["red", "yellow"], default="red")
-    parser.add_argument("--stable-seconds", type=float, default=2.0,
-                        help="Seconds a board state must hold before accepting a move (default: 2.0). "
-                             "Auto-computes from --fps. Use lower (0.5-1.0) for faster play.")
-    parser.add_argument("--fps", type=float, default=8.0)
+    parser.add_argument("--stable-seconds", type=float, default=1.0,
+                        help="Seconds a board state must hold before accepting a move "
+                             "(default: 1.0)")
+    parser.add_argument("--fps", type=float, default=15.0,
+                        help="Frames per second to process (default: 15)")
     parser.add_argument("--no-tts", action="store_true",
                         help="Disable text-to-speech announcements")
-    parser.add_argument("--tts-rate", type=int, default=155,
-                        help="TTS speaking rate in words per minute (default: 155)")
-    parser.add_argument("--tts-voice", type=str, default="",
-                        help="pyttsx3 voice ID (leave blank for system default)")
-    parser.add_argument("--no-perspective-warp", action="store_true",
-                        help="Disable perspective warp (top-down rectification). "
-                             "Warp is ON by default for better grid alignment.")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
-    parser.add_argument("--mirror", action="store_true",
-                        help="Mirror (horizontally flip) the camera feed for selfie cameras. "
-                             "The flip is applied before ANY processing so detection, overlays, "
-                             "and column numbering all match the mirrored view.")
+    parser.add_argument("--no-mirror", action="store_true",
+                        help="Disable mirror flip (mirroring is ON by default for "
+                             "selfie/built-in cameras)")
     parser.add_argument("--verbose", action="store_true",
-                        help="Enable verbose debug logging (per-cell HSV, hole counts, "
-                             "cluster decisions). Off by default for clean logs.")
+                        help="Enable verbose debug logging")
     args = parser.parse_args()
 
+    mirror = not args.no_mirror
     human_player = 1 if args.human_color == "red" else 2
     ai_player_num = 3 - human_player
 
@@ -672,20 +680,11 @@ def main():
     print(f"  Settle time:   {args.stable_seconds}s")
     print()
 
-    if args.screen:
-        cfg = SCREEN_CONFIG
-        print("Screen mode: using display-optimised HSV thresholds")
-        print("NOTE: --screen is tuned for phone/monitor displays. For a real plastic board,")
-        print("      omit --screen and use --config hsv_config.json (or run without flags).")
-    else:
-        cfg = PHYSICAL_CONFIG
+    cfg = PHYSICAL_CONFIG
     if args.config and os.path.exists(args.config):
         cfg = load_config(args.config)
         print(f"HSV config: {args.config}")
     from dataclasses import replace
-    if args.no_perspective_warp:
-        cfg = replace(cfg, perspective_warp=False)
-        print("Perspective warp: DISABLED (using legacy grid fitting)")
     if args.verbose:
         cfg = replace(cfg, verbose=True)
 
@@ -695,20 +694,18 @@ def main():
         print(f"YOLO model override: {args.yolo}")
     else:
         print("YOLO-enhanced mode: using bundled model for piece classification")
-    # Compute stable_frames from seconds × fps (minimum 3 so it never feels broken)
+
+    # Compute stable_frames from seconds × fps (minimum 3)
     stable_frames = max(3, int(round(args.stable_seconds * args.fps)))
     print(f"Stable detection: {args.stable_seconds}s × {args.fps}fps = {stable_frames} frames")
 
-    # Set up logging (tees all stdout prints to a timestamped log file)
+    # Set up logging
     _log_path, _ss_dir, _tee = setup_logging("logs")
 
-    ai       = AIPlayer(model_path=args.model, use_heuristic=(args.model is None))
+    model_path = _DEFAULT_MODEL if os.path.exists(_DEFAULT_MODEL) else None
+    ai       = AIPlayer(model_path=model_path, use_heuristic=(model_path is None))
     tracker  = TurnTracker(robot_player=ai_player_num)
-    announcer = GameAnnouncer(
-        rate=args.tts_rate,
-        voice_id=args.tts_voice,
-        enabled=not args.no_tts,
-    )
+    announcer = GameAnnouncer(enabled=not args.no_tts)
     game = GameLoop(detector, ai, tracker,
                     human_player=human_player,
                     stable_frames=stable_frames,
@@ -726,6 +723,7 @@ def main():
     cw = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     ch = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print(f"Camera: {cw}x{ch}  |  AI: {'AlphaZero (ONNX)' if not ai.use_heuristic else 'Heuristic'}")
+    print(f"Mirror: {'ON' if mirror else 'OFF'}")
 
     # Discard the first 30 frames so the camera's auto-exposure and
     # auto-white-balance have time to settle before we attempt board detection.
@@ -746,7 +744,7 @@ def main():
         ret, frame = cap.read()
         if not ret:
             break
-        if args.mirror:
+        if mirror:
             frame = cv2.flip(frame, 1)
         orient_display = frame.copy()
         h_o, w_o = orient_display.shape[:2]
@@ -782,7 +780,7 @@ def main():
             if not ret:
                 print("Camera read failed")
                 break
-            if args.mirror:
+            if mirror:
                 frame = cv2.flip(frame, 1)
 
             now = time.time()

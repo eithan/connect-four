@@ -1220,13 +1220,16 @@ class LockedBoardDetector:
     GRID_GAP_MIN_FRAC = 0.55
     GRID_GAP_MAX_FRAC = 1.80
 
+    # New piece acceptance: must be seen this many consecutive frames before
+    # entering the stable board.  Filters transient YOLO hits from hands or
+    # face visible through empty holes (typically 1–2 frames).  A real piece
+    # once settled stays visible indefinitely, so 3 frames ≈ 0.2 s at 15 fps
+    # adds negligible latency while eliminating false additions.
+    ADD_THRESHOLD = 3
+
     # Piece removal requires this many consecutive absent frames.
-    # Fan/lighting flicker typically lasts 1–3 frames; real removals are
-    # permanent.  5 frames ≈ ~0.5 s at 10 fps — fast enough to track gameplay
-    # while ignoring shadows.
-    # 15 frames ≈ 2 seconds @ 7.5fps — a real piece removal (physical
-    # extraction) takes much longer.  Brief HSV dips from auto-exposure
-    # or hand shadows resolve well within 15 frames.
+    # 15 frames ≈ 1 s at 15 fps — real removals are permanent; brief YOLO
+    # misses from shadows or hand occlusion resolve well within 15 frames.
     REMOVE_THRESHOLD = 15
 
     # Post-lock quality verification.  If average confidence over the first
@@ -1252,6 +1255,7 @@ class LockedBoardDetector:
         self._last_board:    Optional[np.ndarray] = None  # for change detection
         self._stable_board:  Optional[np.ndarray] = None  # temporally-smoothed state
         self._absent_count:  np.ndarray = np.zeros((6, 7), dtype=np.int32)
+        self._add_count:     np.ndarray = np.zeros((6, 7), dtype=np.int32)
         self._verify_count: int   = 0
         self._verify_sum:   float = 0.0
         self._dump_next: bool = False  # dump all cell HSVs on next locked frame
@@ -1281,6 +1285,7 @@ class LockedBoardDetector:
         self._last_board   = None
         self._stable_board = None
         self._absent_count = np.zeros((6, 7), dtype=np.int32)
+        self._add_count    = np.zeros((6, 7), dtype=np.int32)
         self._verify_count = 0
         self._verify_sum   = 0.0
         self._empty_baselines = None
@@ -1667,16 +1672,19 @@ class LockedBoardDetector:
 
     def _temporal_smooth(self, board: np.ndarray) -> np.ndarray:
         """
-        Debounce piece removal.
+        Debounce both piece additions and removals.
 
-        New pieces are accepted immediately (1 frame).
-        A piece is only removed from the stable state after it has been
-        absent for REMOVE_THRESHOLD consecutive frames — this filters out
-        1–3 frame shadows from a spinning fan or momentary lighting changes.
+        Addition: a new piece must appear in ADD_THRESHOLD consecutive frames
+        before entering the stable board.  This blocks 1–2 frame YOLO hits
+        from hands or skin visible through empty holes.
+
+        Removal: a piece is only removed after REMOVE_THRESHOLD consecutive
+        absent frames, filtering shadows and brief YOLO misses.
         """
         if self._stable_board is None:
             self._stable_board = board.copy()
             self._absent_count = np.zeros((6, 7), dtype=np.int32)
+            self._add_count    = np.zeros((6, 7), dtype=np.int32)
             return self._stable_board.copy()
 
         for r in range(6):
@@ -1684,17 +1692,31 @@ class LockedBoardDetector:
                 detected = board[r, c]
                 stable   = self._stable_board[r, c]
 
-                if detected != 0:
-                    # Piece visible this frame — accept immediately
-                    self._stable_board[r, c] = detected
-                    self._absent_count[r, c] = 0
-                elif stable != 0:
-                    # Piece was there but not seen this frame
-                    self._absent_count[r, c] += 1
-                    if self._absent_count[r, c] >= self.REMOVE_THRESHOLD:
-                        self._stable_board[r, c] = 0   # confirmed gone
-                    # else: keep the piece in the stable state
-                # else: was empty, still empty — nothing to do
+                if stable == 0:
+                    # Cell is currently empty in stable state
+                    if detected != 0:
+                        # Candidate new piece — increment add counter
+                        self._add_count[r, c] += 1
+                        if self._add_count[r, c] >= self.ADD_THRESHOLD:
+                            self._stable_board[r, c] = detected
+                            self._add_count[r, c] = 0
+                            self._absent_count[r, c] = 0
+                    else:
+                        # Still empty — reset add counter
+                        self._add_count[r, c] = 0
+                else:
+                    # Cell has a piece in stable state
+                    if detected != 0:
+                        # Piece still visible (possibly different colour — accept update)
+                        self._stable_board[r, c] = detected
+                        self._absent_count[r, c] = 0
+                        self._add_count[r, c] = 0
+                    else:
+                        # Piece not seen this frame
+                        self._absent_count[r, c] += 1
+                        if self._absent_count[r, c] >= self.REMOVE_THRESHOLD:
+                            self._stable_board[r, c] = 0
+                            self._absent_count[r, c] = 0
 
         return self._stable_board.copy()
 
@@ -1757,7 +1779,7 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
         self,
         model_path: Optional[str] = None,
         config: Optional[DetectionConfig] = None,
-        min_piece_conf: float = 0.35,
+        min_piece_conf: float = 0.45,
     ):
         super().__init__(config)
         self._yolo_model = None
