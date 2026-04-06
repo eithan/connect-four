@@ -734,6 +734,14 @@ def main():
     # Set up logging
     _log_path, _ss_dir, _tee = setup_logging("logs")
 
+    # Log YOLO load status now that the tee is active (the load message printed
+    # before setup_logging, so it never appeared in previous log files).
+    yolo_active = getattr(detector, '_yolo_model', None) is not None
+    if yolo_active:
+        print(f"[YOLOEnhanced] YOLO model active — piece classification via YOLO")
+    else:
+        print("[YOLOEnhanced] YOLO model NOT loaded — falling back to HSV-only mode")
+
     model_path = _DEFAULT_MODEL if os.path.exists(_DEFAULT_MODEL) else None
     ai       = AIPlayer(model_path=model_path, use_heuristic=(model_path is None))
     tracker  = TurnTracker(robot_player=ai_player_num)

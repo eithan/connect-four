@@ -218,6 +218,30 @@ class BoardDetector:
         if self.config.perspective_warp:
             warp_info = self._compute_warp(board_cnt, bx, by, bw, bh)
 
+        # One cell of padding on each side of the blue bbox for hole search.
+        # When the blue-frame detection clips an outer column (e.g. right side
+        # lost to a bright monitor or shadow), the holes in that column are
+        # found here instead of being silently omitted.
+        img_h_px, img_w_px = hsv.shape[:2]
+        cell_pad = int(bw / 7.0)          # ≈ 1 cell width
+        hbx  = max(0,           bx - cell_pad)
+        hbw  = min(img_w_px - hbx, bw + 2 * cell_pad)
+
+        # Find holes now (needed by both paths) so we can detect a clipped bbox
+        # before committing to the perspective-warp code path.
+        holes = self._find_holes(hsv, hbx, by, hbw, bh, cell_est_override=bw / 7.0)
+
+        # When holes appear outside the blue bbox the contour is clipped and the
+        # warp matrix (derived from those narrow corners) would mis-place the
+        # outermost column(s) after inverse-warping.  Fall back to the non-warp
+        # path so the grid is fitted directly in image coordinates where the hole
+        # positions are exact.
+        if warp_info is not None and len(holes) > 0:
+            xs = [h[0] for h in holes]
+            half_cell = (bw / 7.0) * 0.5
+            if max(xs) > bx + bw + half_cell or min(xs) < bx - half_cell:
+                warp_info = None   # contour was clipped — skip warp this frame
+
         if warp_info is not None:
             M_fwd, M_inv, warp_w, warp_h = warp_info
 
@@ -230,12 +254,12 @@ class BoardDetector:
             # evenly-spaced grid.  No actual image warping required.
             #
             # Pipeline:
-            #   a) Find holes in original image (same as non-warp path)
+            #   a) Find holes in original image (padded bbox to catch clipped columns)
             #   b) Forward-warp hole positions into the canonical space
             #   c) Fit + regularise the grid in canonical space (both axes)
             #   d) Inverse-warp the regularised grid back to original coords
-
-            holes = self._find_holes(hsv, bx, by, bw, bh)
+            #
+            # `holes` already computed above (before the clipped-bbox check).
 
             cell_est_w = warp_w / 7.0
             fallback_used = False
@@ -263,9 +287,7 @@ class BoardDetector:
 
         else:
             # ── Standard (non-warped) pipeline ────────────────────────────────
-
-            # ── 2. Detect holes ───────────────────────────────────────────────
-            holes = self._find_holes(hsv, bx, by, bw, bh)
+            # `holes` already computed above (before the clipped-bbox check).
 
             # ── 3. Fit 6×7 grid ──────────────────────────────────────────────
             cell_est = bw / 7.0
@@ -273,7 +295,7 @@ class BoardDetector:
             grid_centers = None
 
             if len(holes) >= 8:
-                grid_centers = self._fit_grid(holes, cell_est, bx, bx + bw, by, by + bh)
+                grid_centers = self._fit_grid(holes, cell_est, hbx, hbx + hbw, by, by + bh)
 
             if grid_centers is None:
                 grid_centers = self._grid_from_bounds(bx, by, bw, bh)
@@ -290,10 +312,30 @@ class BoardDetector:
             confidence = min(confidence, 0.65)
         board = self._apply_gravity_filter(board_raw)
 
-        board_contour = np.array(
-            [[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]],
-            dtype=np.int32,
-        ).reshape(-1, 1, 2)
+        # Build board_contour from actual grid-center extent so the overlay
+        # rectangle matches the fitted grid, not the (potentially clipped) blue
+        # bounding box.  Add ~0.6-cell padding to include the physical frame
+        # around the outermost holes.
+        if grid_centers is not None:
+            gc_x = grid_centers[:, :, 0]
+            gc_y = grid_centers[:, :, 1]
+            c_spacing = max(int(np.median(np.diff(grid_centers[0, :, 0]))), 1)
+            r_spacing = max(int(np.median(np.diff(grid_centers[:, 0, 1]))), 1)
+            pad_x = int(c_spacing * 0.6)
+            pad_y = int(r_spacing * 0.6)
+            gx0 = max(0,           int(gc_x.min()) - pad_x)
+            gy0 = max(0,           int(gc_y.min()) - pad_y)
+            gx1 = min(img_w_px - 1, int(gc_x.max()) + pad_x)
+            gy1 = min(img_h_px - 1, int(gc_y.max()) + pad_y)
+            board_contour = np.array(
+                [[gx0, gy0], [gx1, gy0], [gx1, gy1], [gx0, gy1]],
+                dtype=np.int32,
+            ).reshape(-1, 1, 2)
+        else:
+            board_contour = np.array(
+                [[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]],
+                dtype=np.int32,
+            ).reshape(-1, 1, 2)
 
         debug_img = None
         if debug:
@@ -727,7 +769,8 @@ class BoardDetector:
     # ── Step 2: Hole detection ────────────────────────────────────────────────
 
     def _find_holes(self, hsv: np.ndarray,
-                     bx: int, by: int, bw: int, bh: int) -> List[Tuple[float, float]]:
+                     bx: int, by: int, bw: int, bh: int,
+                     cell_est_override: Optional[float] = None) -> List[Tuple[float, float]]:
         """
         Find hole circles within the board region.
 
@@ -757,8 +800,10 @@ class BoardDetector:
         k_noise = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         non_blue = cv2.morphologyEx(non_blue, cv2.MORPH_OPEN, k_noise)
 
-        # Expected hole area based on board width / 7 columns
-        cell_est  = bw / 7.0
+        # Expected hole area based on board width / 7 columns.
+        # Use override when the search bbox is wider than the actual board
+        # (e.g. padded to catch clipped outer columns) so area limits stay correct.
+        cell_est  = cell_est_override if cell_est_override is not None else bw / 7.0
         min_area  = np.pi * (cell_est * 0.18) ** 2
         max_area  = np.pi * (cell_est * 0.52) ** 2
 
@@ -1749,12 +1794,26 @@ class LockedBoardDetector:
                             # burst. Don't increment; wait for a clean frame.
                             pass
                         else:
-                            # Seen as empty before, single new detection: real candidate
-                            self._add_count[r, c] += 1
-                            if self._add_count[r, c] >= self.ADD_THRESHOLD:
-                                self._stable_board[r, c] = detected
+                            # Seen as empty before, single new detection: real candidate.
+                            # Gravity constraint: only accept if all cells below in this
+                            # column are already occupied in the stable board.  This
+                            # prevents skin/hand contamination from cascading up a column
+                            # (each newly-committed false piece would otherwise make the
+                            # row above gravity-valid, chaining false positives upward).
+                            gravity_ok = all(
+                                self._stable_board[row_below, c] != 0
+                                for row_below in range(r + 1, 6)
+                            )
+                            if gravity_ok:
+                                self._add_count[r, c] += 1
+                                if self._add_count[r, c] >= self.ADD_THRESHOLD:
+                                    self._stable_board[r, c] = detected
+                                    self._add_count[r, c] = 0
+                                    self._absent_count[r, c] = 0
+                            else:
+                                # Not gravity-valid — reset counter so transient hits
+                                # in upper rows don't accumulate across frames.
                                 self._add_count[r, c] = 0
-                                self._absent_count[r, c] = 0
                     else:
                         # Still empty — reset add counter
                         self._add_count[r, c] = 0
@@ -1823,6 +1882,7 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
     YOLO_CLASS_RED    = 1
     YOLO_CLASS_YELLOW = 2
 
+
     # Default model: bundled weights next to this file
     DEFAULT_MODEL_PATH = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
@@ -1858,24 +1918,55 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
 
     def _raw_board(self, image: np.ndarray, hsv: np.ndarray,
                    grid_centers: np.ndarray) -> np.ndarray:
-        """YOLO-only classification. No HSV fallback — avoids skin/background FPs."""
+        """
+        Hybrid classification: YOLO for positive piece detection, HSV for emptiness.
+
+        YOLO's piece detection (Red / Yellow) is reliable and robust to skin tones.
+        YOLO's absence of detection is NOT reliable — low confidence or small pieces
+        cause YOLO to flicker, which would prematurely evict real pieces from the
+        stable board.
+
+        Strategy per cell:
+          • YOLO conf ≥ min_piece_conf for Red or Yellow  → trust YOLO (authoritative)
+          • YOLO silent                                   → defer to HSV adaptive to
+            decide whether the cell is truly empty or holds a piece YOLO missed.
+
+        This means pieces already in the stable board are only removed when HSV
+        also confirms emptiness — preventing YOLO flicker from destabilising the board.
+        """
         if self._yolo_model is None:
             return super()._raw_board(image, hsv, grid_centers)
 
         yolo_board, yolo_confs = self._classify_with_yolo(image, grid_centers)
 
+        # HSV fallback: used for cells where YOLO reports nothing.
+        # Determines whether "no YOLO detection" means truly empty or just a miss.
+        hsv_board = (
+            self._classify_cells_adaptive(hsv, grid_centers)
+            if (self.config.adaptive and self._empty_baselines is not None)
+            else self.detector._classify_cells(hsv, grid_centers)
+        )
+
         board = np.zeros((6, 7), dtype=np.int8)
         for r in range(6):
             for c in range(7):
                 if yolo_board[r, c] != 0 and yolo_confs[r, c] >= self._min_piece_conf:
+                    # YOLO positively detected a piece — trust it over HSV.
                     board[r, c] = yolo_board[r, c]
+                else:
+                    # YOLO silent — fall back to HSV to confirm empty vs. missed piece.
+                    board[r, c] = hsv_board[r, c]
 
         if self.config.verbose:
             for r in range(6):
                 for c in range(7):
-                    if yolo_board[r, c] != 0 or board[r, c] != 0:
-                        sym = "." if board[r, c] == 0 else ("R" if board[r, c] == 1 else "Y")
-                        print(f"  [YOLOEnh {r},{c}] conf={yolo_confs[r,c]:.2f} -> {sym}")
+                    yolo_sym = "." if yolo_board[r, c] == 0 else ("R" if yolo_board[r, c] == 1 else "Y")
+                    hsv_sym  = "." if hsv_board[r, c]  == 0 else ("R" if hsv_board[r, c]  == 1 else "Y")
+                    out_sym  = "." if board[r, c]       == 0 else ("R" if board[r, c]       == 1 else "Y")
+                    if board[r, c] != 0 or yolo_board[r, c] != 0 or hsv_board[r, c] != 0:
+                        src = "YOLO" if (yolo_board[r, c] != 0 and yolo_confs[r, c] >= self._min_piece_conf) else "HSV"
+                        print(f"  [YOLOEnh {r},{c}] yolo={yolo_sym}({yolo_confs[r,c]:.2f})"
+                              f" hsv={hsv_sym} -> {out_sym} [{src}]")
 
         return board
 
