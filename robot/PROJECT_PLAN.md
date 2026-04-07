@@ -80,56 +80,112 @@ Hardware needed: Just your Mac
 - `test_images/` — Synthetic test images with ground truth
 - `requirements.txt` — Python dependencies
 
-### Phase 2: Live Camera Feed on Mac
+### Phase 2: Live Camera Feed on Mac 🔄 IN PROGRESS
 
 Goal: Replace static images with a live camera feed and validate real-time board detection.
 Timeline: 1–2 weeks
 Hardware needed: Mac + USB webcam (or Mac's built-in camera) + physical Connect Four board
 
-#### 2.1 — Live Camera Capture
+#### 2.1 — Live Camera Capture ✅
 
-- Use OpenCV VideoCapture to stream from a webcam
+- ✅ Use OpenCV VideoCapture to stream from a webcam
 
-- Add camera calibration for your specific setup (distance, angle, lighting)
+- ✅ Add camera calibration for your specific setup (distance, angle, lighting) — adaptive HSV baseline sampling at lock time
 
-- Implement frame rate throttling (no need to process every frame — 1–2 FPS is plenty)
+- ✅ Implement frame rate throttling
 
-#### 2.2 — Robust Detection Tuning
+#### 2.2 — Robust Detection Tuning ✅
 
-- Tune HSV thresholds for your specific lighting conditions
+- ✅ Tune HSV thresholds for your specific lighting conditions
 
-- Add adaptive thresholding or histogram equalization for varying light
+- ✅ Add adaptive thresholding for varying light — per-cell baseline sampling (ΔSaturation mode)
 
-- Handle partial occlusion (human's hand over the board while placing a piece)
+- ✅ Handle partial occlusion (human's hand over the board while placing a piece) — temporal smoother with ADD_THRESHOLD, burst guard, gravity-validity constraint
 
-- Add confidence scoring to board detection — only act on high-confidence frames
+- ✅ Add confidence scoring to board detection — only act on high-confidence frames
 
-- Implement a "stable state" detector: only accept a new board state after N consecutive frames agree
+- ✅ Implement a "stable state" detector: only accept a new board state after N consecutive frames agree (StableStateDetector, configurable via `--stable-seconds`)
 
-#### 2.3 — Game Loop
+- ✅ Shirt/face contamination guards — `_cell_was_empty` sentinel, burst detection cap, shirt-at-lock-time filtering
 
-- Build the full game loop:
+- ✅ Gravity-strict cascade prevention — `_add_count` only accumulates when all cells below in column are already occupied in stable board, preventing false pieces from chaining up a column
 
-  - Display "Waiting for human's move..."
+#### 2.3 — Game Loop ✅
 
-  - Detect when exactly one new piece appears → human has played
+- ✅ Full cooperative game loop (`game_loop.py`)
 
-  - Run AI inference → determine best column
+  - ✅ Display "Waiting for human's move..."
 
-  - Display "AI wants to play column X" (no arm yet — just prints/displays)
+  - ✅ Detect when exactly one new piece appears → human has played
 
-  - Wait for human to place the AI's piece (cooperative mode for now)
+  - ✅ Run AI inference → determine best column (AlphaZero ONNX)
 
-  - Detect the AI's piece was placed → go back to step 1
+  - ✅ Display "AI wants to play column X" with column indicator overlay and policy probability bars
 
-  - Handle game-over detection (win/draw) and reset
+  - ✅ Wait for human to place the AI's piece (cooperative mode)
+
+  - ✅ Detect the AI's piece was placed → go back to step 1
+
+  - ✅ Handle game-over detection (win/draw) with animated winning-piece highlight
+
+  - ✅ TTS announcements via macOS `say`
+
+  - ✅ Screenshot logging on every confirmed move; full game log with board state traces
+
+#### 2.4 — YOLO-Enhanced Piece Detection ✅
+
+- ✅ Trained YOLOv8 model on Connect4 dataset (3 classes: empty/red/yellow, fine-tuned at 640px)
+
+- ✅ `YOLOEnhancedBoardDetector` — drop-in replacement for `LockedBoardDetector`; YOLO runs on the locked frame, detections snapped to nearest grid centre (snap radius = 0.55× cell spacing)
+
+- ✅ Hybrid YOLO+HSV fusion: YOLO positive detections (Red/Yellow, conf ≥ 0.45) are authoritative; cells where YOLO sees nothing fall back to HSV adaptive to confirm empty vs. missed piece — prevents YOLO flicker from evicting real pieces while still blocking skin-tone false positives
+
+- ✅ YOLO load status logged after tee setup so every log file confirms whether YOLO was active
+
+#### 2.5 — Board Overlay Accuracy ✅
+
+- ✅ Hole search extended by one cell width beyond blue bbox on each side — catches columns the blue-frame contour clips (e.g. right column lost to a bright monitor or shadow)
+
+- ✅ Clipped-contour guard: if holes appear outside the original bbox, the perspective-warp path is bypassed for that frame and the grid is fitted directly in image coordinates (where the hole positions are exact), avoiding inverse-warp distortion
+
+- ✅ `board_contour` derived from actual grid-centre extents + frame padding rather than the blue bounding box — green overlay rectangle now accurately reflects the fitted grid
+
+#### 2.6 — Jetson Orin Nano Deployment TODO
+
+- [ ] Convert YOLO `.pt` model to TensorRT `.engine` for GPU-accelerated inference (`model.export(format="engine")`) — expected 3–5× speedup over PyTorch on device
+
+- [ ] Install Jetson-specific `onnxruntime-gpu` wheel (NVIDIA-provided) to enable CUDA execution provider for AlphaZero ONNX inference
+
+- [ ] Replace macOS TTS (`say` in `tts_announcer.py`) with Linux alternative (`espeak-ng` or `pyttsx3`)
+
+- [ ] Validate Orbbec depth camera via Orbbec Linux/Jetson SDK; confirm RGB stream accessible via `cv2.VideoCapture` as UVC fallback
+
+- [ ] Profile with `tegrastats` on first run — monitor shared CPU/GPU memory pressure (8GB Orin Nano recommended)
+
+#### 2.7 — Depth Camera Integration TODO
+
+- [ ] Sample board-plane depth at lock time (median Z across grid centres)
+
+- [ ] Compute `board_near_mm` / `board_far_mm` range (board plane ± ~30mm)
+
+- [ ] In `YOLOEnhancedBoardDetector._classify_with_yolo`: reject detections whose 3D centre falls outside the board depth range — eliminates shirt/face false positives that are physically behind or in front of the board
+
+#### 2.8 — Future Perception Improvements (Backlog)
+
+- [ ] Fine-tune YOLO on captured game-session data from your specific board, lighting, and background — highest ROI improvement, training data already exists in `logs/`
+
+- [ ] Replace YOLO per-cell classification with a lightweight CNN classifier: crop each locked grid cell to ~64×64, apply circular mask to remove blue frame corners, run 3-class (empty/red/yellow) inference — faster than full-frame YOLO, no snap-radius heuristic needed, straightforward to train from existing cell crops
 
 #### Deliverables
 
-- `camera_feed.py` — Live capture with board detection overlay
-- Updated `board_detector.py` with tuning parameters
-- `game_loop.py` — Full game state machine
-- Calibration utilities and documentation
+- ✅ `camera_feed.py` — Live capture with board detection overlay and HSV tuning UI
+- ✅ `board_detector.py` — Full OpenCV pipeline with adaptive colour, LockedBoardDetector, YOLOEnhancedBoardDetector
+- ✅ `board_detector_yolo.py` — Standalone YOLO-only detector (alternate pipeline)
+- ✅ `game_loop.py` — Full cooperative game state machine with overlay, TTS, logging
+- ✅ `turn_tracker.py` — Move validation, gravity checking, win detection
+- ✅ `logs/` — Per-session game logs and board-state screenshots
+- [ ] Jetson deployment instructions and TensorRT conversion script
+- [ ] Orbbec depth camera integration
 
 ### Phase 3: ROS2 Setup + Simulation
 
