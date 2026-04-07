@@ -154,8 +154,12 @@ class DetectionConfig:
     adaptive_yellow_min_v: int = 100
 
 
-# Physical board preset (default)
-PHYSICAL_CONFIG = DetectionConfig()
+# Physical board preset (default).
+# perspective_warp is OFF: the camera is roughly head-on to a physical board,
+# so fitting the grid directly in image coordinates (from detected hole centroids)
+# is more accurate than the warp path.  The warp path can mis-place the inverse-
+# warped grid by ~1 column when source-corner detection is slightly imperfect.
+PHYSICAL_CONFIG = DetectionConfig(perspective_warp=False)
 
 # Screen/phone display preset (emitted light — higher saturation)
 SCREEN_CONFIG = DetectionConfig(
@@ -220,28 +224,41 @@ class BoardDetector:
             warp_info = self._compute_warp(board_cnt, bx, by, bw, bh)
 
         # One cell of padding on each side of the blue bbox for hole search.
-        # When the blue-frame detection clips an outer column (e.g. right side
-        # lost to a bright monitor or shadow), the holes in that column are
-        # found here instead of being silently omitted.
+        # Purpose: detect when the blue bbox has been clipped (an outer column
+        # sits outside the detected frame).  The padded search finds those holes
+        # before we commit to the perspective-warp code path.
         img_h_px, img_w_px = hsv.shape[:2]
-        cell_pad = int(bw / 7.0)          # ≈ 1 cell width
+        cell_pad  = int(bw / 7.0)          # ≈ 1 cell width
+        half_cell = (bw / 7.0) * 0.5
         hbx  = max(0,           bx - cell_pad)
         hbw  = min(img_w_px - hbx, bw + 2 * cell_pad)
 
-        # Find holes now (needed by both paths) so we can detect a clipped bbox
-        # before committing to the perspective-warp code path.
-        holes = self._find_holes(hsv, hbx, by, hbw, bh, cell_est_override=bw / 7.0)
+        # Search the padded region to find holes that might be outside the bbox.
+        holes_padded = self._find_holes(hsv, hbx, by, hbw, bh, cell_est_override=bw / 7.0)
 
         # When holes appear outside the blue bbox the contour is clipped and the
         # warp matrix (derived from those narrow corners) would mis-place the
         # outermost column(s) after inverse-warping.  Fall back to the non-warp
         # path so the grid is fitted directly in image coordinates where the hole
         # positions are exact.
-        if warp_info is not None and len(holes) > 0:
-            xs = [h[0] for h in holes]
-            half_cell = (bw / 7.0) * 0.5
+        bbox_is_clipped = False
+        if warp_info is not None and len(holes_padded) > 0:
+            xs = [h[0] for h in holes_padded]
             if max(xs) > bx + bw + half_cell or min(xs) < bx - half_cell:
                 warp_info = None   # contour was clipped — skip warp this frame
+                bbox_is_clipped = True
+
+        # For grid fitting, restrict holes to within the actual board bounds
+        # (with half-cell tolerance) so false-positive circles in the padded
+        # area (face features, clothing beside the board) don't contaminate
+        # _fit_grid.  Only when the bbox was genuinely clipped do we keep the
+        # full padded set — those holes include columns that fell outside the
+        # detected blue frame and are needed for an accurate non-warp fit.
+        if bbox_is_clipped:
+            holes = holes_padded
+        else:
+            holes = [h for h in holes_padded
+                     if bx - half_cell <= h[0] <= bx + bw + half_cell]
 
         if warp_info is not None:
             M_fwd, M_inv, warp_w, warp_h = warp_info
@@ -255,12 +272,12 @@ class BoardDetector:
             # evenly-spaced grid.  No actual image warping required.
             #
             # Pipeline:
-            #   a) Find holes in original image (padded bbox to catch clipped columns)
+            #   a) Find holes in original image (filtered to board bounds)
             #   b) Forward-warp hole positions into the canonical space
             #   c) Fit + regularise the grid in canonical space (both axes)
             #   d) Inverse-warp the regularised grid back to original coords
             #
-            # `holes` already computed above (before the clipped-bbox check).
+            # `holes` already computed above (board-bounds-filtered, not clipped).
 
             cell_est_w = warp_w / 7.0
             fallback_used = False
@@ -296,7 +313,13 @@ class BoardDetector:
             grid_centers = None
 
             if len(holes) >= 8:
-                grid_centers = self._fit_grid(holes, cell_est, hbx, hbx + hbw, by, by + bh)
+                # When bbox was clipped, holes span the padded region → use
+                # padded bounds so extrapolation reaches clipped columns.
+                # Otherwise use original bbox bounds to prevent false positives
+                # from the padded area from pulling the grid off-center.
+                lo_x = hbx if bbox_is_clipped else bx
+                hi_x = (hbx + hbw) if bbox_is_clipped else (bx + bw)
+                grid_centers = self._fit_grid(holes, cell_est, lo_x, hi_x, by, by + bh)
 
             if grid_centers is None:
                 grid_centers = self._grid_from_bounds(bx, by, bw, bh)

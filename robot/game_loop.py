@@ -173,12 +173,13 @@ class GameLoop:
     WINDOW = "Connect Four - Game"
 
     # Startup first-move guard: after locking an empty board, the human's
-    # first piece must remain in the stable board for this many consecutive
-    # frames before the game accepts it.  ADD_THRESHOLD (3) commits the piece
-    # to stable board, then STARTUP_PIECE_HOLD_FRAMES is an additional dwell
-    # requirement.  At ~30 fps this is ≈0.5 s of confirmed presence — long
-    # enough to outlast a face/hand transient moving past the board.
-    STARTUP_PIECE_HOLD_FRAMES = 15
+    # first piece must remain stable for this many consecutive stable-detector
+    # windows before the game accepts it.  Each window requires `stable_frames`
+    # (default 5) confident identical frames, so 2 windows ≈ 10 frames ≈ 0.3 s
+    # — long enough to outlast a face/hand transient without feeling sluggish.
+    # NOTE: after each window we reset the stable baseline to empty so the
+    # detector keeps firing; without that reset the counter stalls at 1.
+    STARTUP_PIECE_HOLD_FRAMES = 2
 
     COLOR_NAMES = {1: "Red", 2: "Yellow"}
     PIECE_COLORS = {
@@ -418,13 +419,21 @@ class GameLoop:
                         if self._startup_piece_hold >= self.STARTUP_PIECE_HOLD_FRAMES:
                             print("Accepting startup first move after empty lock"
                                   f" — human piece detected in column {col}"
-                                  f" (held {self._startup_piece_hold} frames)")
+                                  f" (held {self._startup_piece_hold} windows)")
                             self._initialized = True
                             empty_board = np.zeros_like(stable_board)
                             self.tracker.set_board(empty_board)
                             self.stable.reset(empty_board)
                             self._handle_human_turn(stable_board)
-                        # else: piece seen but not yet confirmed long enough — keep waiting
+                        else:
+                            # Piece seen but not yet confirmed long enough.
+                            # Reset stable baseline to empty so the detector
+                            # fires again on the next stable window — without
+                            # this the counter stalls at 1 forever because
+                            # StableStateDetector only fires once per state change.
+                            print(f"Startup piece hold {self._startup_piece_hold}"
+                                  f"/{self.STARTUP_PIECE_HOLD_FRAMES} — waiting...")
+                            self.stable.reset(np.zeros_like(stable_board))
                         return
 
                 # Piece present but not matching expected startup conditions —
