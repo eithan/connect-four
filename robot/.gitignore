@@ -2,3 +2,4 @@ data
 proposals
 runs
 logs/
+.claude/worktrees/
