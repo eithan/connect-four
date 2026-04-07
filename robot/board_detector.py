@@ -177,13 +177,14 @@ SCREEN_CONFIG = DetectionConfig(
 
 @dataclass
 class DetectionResult:
-    board:          np.ndarray                    # (6, 7) int8: 0=empty 1=red 2=yellow
+    board:          np.ndarray                    # (6, 7) int8: 0=empty 1=red 2=yellow (post temporal-smooth)
     confidence:     float                         # 0.0 – 1.0
     grid_centers:   Optional[np.ndarray] = None   # (6, 7, 2) int32
     board_contour:  Optional[np.ndarray] = None   # for display
     debug_image:    Optional[np.ndarray] = None
     fallback_used:  bool = False
     errors:         List[str] = field(default_factory=list)
+    raw_board:      Optional[np.ndarray] = None   # (6, 7) pre-temporal-smooth per-frame classification
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1452,6 +1453,7 @@ class LockedBoardDetector:
             grid_centers=self._locked_centers,
             board_contour=self._locked_contour,
             debug_image=debug_img,
+            raw_board=board_raw,
         )
 
     # ── Pre-lock detection ────────────────────────────────────────────────────
@@ -1993,6 +1995,9 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
             int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0])
         ))
         max_snap = cell_spacing * 0.55
+        # Size guard: a real game piece fits inside roughly one cell.
+        # Anything much larger (face, hand, torso) is rejected before snapping.
+        max_piece_diameter = cell_spacing * 1.5
 
         for box in results.boxes:
             cls  = int(box.cls[0])
@@ -2003,6 +2008,10 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
                 continue  # cheap pre-filter before distance calculation
 
             x1, y1, x2, y2 = box.xyxy[0].tolist()
+            bw = x2 - x1
+            bh = y2 - y1
+            if bw > max_piece_diameter or bh > max_piece_diameter:
+                continue  # bounding box too large to be a game piece (face/hand/body)
             bx = (x1 + x2) * 0.5
             by = (y1 + y2) * 0.5
 

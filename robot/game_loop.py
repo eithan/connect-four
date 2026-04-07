@@ -172,6 +172,14 @@ class GamePhase(Enum):
 class GameLoop:
     WINDOW = "Connect Four - Game"
 
+    # Startup first-move guard: after locking an empty board, the human's
+    # first piece must remain in the stable board for this many consecutive
+    # frames before the game accepts it.  ADD_THRESHOLD (3) commits the piece
+    # to stable board, then STARTUP_PIECE_HOLD_FRAMES is an additional dwell
+    # requirement.  At ~30 fps this is ≈0.5 s of confirmed presence — long
+    # enough to outlast a face/hand transient moving past the board.
+    STARTUP_PIECE_HOLD_FRAMES = 15
+
     COLOR_NAMES = {1: "Red", 2: "Yellow"}
     PIECE_COLORS = {
         1: (0, 0, 255),       # Red  → BGR
@@ -207,6 +215,7 @@ class GameLoop:
         self._ss_dir:  str = ""   # screenshot directory (set via set_screenshot_dir)
         self._ss_count: int = 0
         self._last_periodic_ss: float = 0.0   # timestamp of last periodic screenshot
+        self._session_start:  datetime = datetime.now()   # for manifest
 
         self.fps_actual = 0.0
         self._fps_t = time.time()
@@ -214,6 +223,7 @@ class GameLoop:
 
         self._winning_cells: list = []    # [(row, col), ...] — set at game over
         self._win_anim_start: float = 0.0
+        self._startup_piece_hold: int = 0  # consecutive frames startup piece has been stable
 
         self._set_status_for_phase()
 
@@ -223,15 +233,76 @@ class GameLoop:
         self._ss_dir = path
 
     def _save_screenshot(self, label: str = "event"):
-        """Save the current overlay frame to the screenshot directory."""
+        """Save event screenshots and a JSON sidecar for replay/testing.
+
+        Writes three files per event:
+          NNNN_label.jpg         — overlay/display frame (visual debug)
+          NNNN_label_raw.jpg     — raw camera frame (used by replay_test.py)
+          NNNN_label.json        — metadata sidecar (raw_board, stable_board, etc.)
+        """
         if not self._ss_dir:
             return
-        img = self._latest_display if self._latest_display is not None else self._latest_frame
-        if img is None:
+        display = self._latest_display if self._latest_display is not None else self._latest_frame
+        raw = self._latest_frame
+        if display is None and raw is None:
             return
         self._ss_count += 1
-        name = f"{self._ss_count:04d}_{label}.jpg"
-        cv2.imwrite(os.path.join(self._ss_dir, name), img)
+        base = os.path.join(self._ss_dir, f"{self._ss_count:04d}_{label}")
+
+        if display is not None:
+            cv2.imwrite(base + ".jpg", display)
+        if raw is not None:
+            cv2.imwrite(base + "_raw.jpg", raw)
+
+        meta = self._build_frame_meta(label)
+        with open(base + ".json", "w") as f:
+            json.dump(meta, f, indent=2)
+
+    def _build_frame_meta(self, event: str) -> dict:
+        """Collect per-frame metadata for the JSON sidecar."""
+        result = self.last_result
+        raw_board = None
+        stable_board = None
+        confidence = 0.0
+        if result is not None:
+            raw_board    = (result.raw_board.tolist()
+                            if result.raw_board is not None
+                            else result.board.tolist())
+            stable_board = result.board.tolist()
+            confidence   = float(result.confidence)
+        return {
+            "seq":          self._ss_count,
+            "event":        event,
+            "timestamp":    datetime.now().isoformat(),
+            "game_phase":   self.phase.name,
+            "raw_board":    raw_board,
+            "stable_board": stable_board,
+            "confidence":   round(confidence, 4),
+            "human_color":  self.human_player,
+        }
+
+    def _write_manifest(self, quit_reason: str = "unknown"):
+        """Write session manifest.json into the screenshot directory."""
+        if not self._ss_dir:
+            return
+        try:
+            raw_frames = sorted(
+                f for f in os.listdir(self._ss_dir)
+                if f.endswith("_raw.jpg")
+            )
+            manifest = {
+                "session":     os.path.basename(self._ss_dir),
+                "started":     self._session_start.isoformat(),
+                "ended":       datetime.now().isoformat(),
+                "complete":    self.phase == GamePhase.GAME_OVER,
+                "quit_reason": quit_reason,
+                "human_color": self.human_player,
+                "raw_frames":  raw_frames,
+            }
+            with open(os.path.join(self._ss_dir, "manifest.json"), "w") as f:
+                json.dump(manifest, f, indent=2)
+        except Exception as exc:
+            print(f"[WARN] Could not write manifest: {exc}")
 
     def reset(self):
         self.tracker.reset()
@@ -246,6 +317,7 @@ class GameLoop:
         self._lock_board_was_empty = False
         self._winning_cells = []
         self._win_anim_start = 0.0
+        self._startup_piece_hold = 0
         self._set_status_for_phase()
         self.ann.speak("New game. Your turn.", interrupt=True)
         print("\n" + "=" * 50)
@@ -330,10 +402,11 @@ class GameLoop:
             piece_n  = red_n + yellow_n
 
             # If lock-time detection looked empty, a single piece in the very
-            # first stable startup board is usually a phantom caused by skin /
-            # clothing showing through the transparent slot. Keep waiting from
-            # an empty baseline so a real first move can still be accepted a
-            # moment later if the piece genuinely remains on the board.
+            # first stable startup board requires extra confirmation before the
+            # game accepts it as the human's first move.  ADD_THRESHOLD commits
+            # the piece to the stable board quickly (3 frames); we then require
+            # STARTUP_PIECE_HOLD_FRAMES MORE consecutive frames of stable presence
+            # (~0.5 s) to weed out faces/hands moving past the board.
             if self._lock_board_was_empty and piece_n == 1:
                 piece_pos = np.argwhere(stable_board != 0)
                 if len(piece_pos) == 1:
@@ -341,21 +414,31 @@ class GameLoop:
                     piece_player = int(stable_board[row, col])
                     expected_row = 5
                     if piece_player == self.human_player and row == expected_row:
-                        print("Accepting startup first move after empty lock"
-                              f" — human piece detected in column {col}")
-                        self._initialized = True
-                        empty_board = np.zeros_like(stable_board)
-                        self.tracker.set_board(empty_board)
-                        self.stable.reset(empty_board)
-                        self._handle_human_turn(stable_board)
+                        self._startup_piece_hold += 1
+                        if self._startup_piece_hold >= self.STARTUP_PIECE_HOLD_FRAMES:
+                            print("Accepting startup first move after empty lock"
+                                  f" — human piece detected in column {col}"
+                                  f" (held {self._startup_piece_hold} frames)")
+                            self._initialized = True
+                            empty_board = np.zeros_like(stable_board)
+                            self.tracker.set_board(empty_board)
+                            self.stable.reset(empty_board)
+                            self._handle_human_turn(stable_board)
+                        # else: piece seen but not yet confirmed long enough — keep waiting
                         return
 
+                # Piece present but not matching expected startup conditions —
+                # reset to empty and keep waiting.
+                self._startup_piece_hold = 0
                 print("Ignoring suspicious startup piece after empty lock"
                       " — waiting for clean empty board or a persistent first move")
                 self.tracker.reset()
                 self.stable.reset(np.zeros_like(stable_board))
                 self._set_status_for_phase()
                 return
+            else:
+                # No piece (or wrong piece count) — reset hold counter
+                self._startup_piece_hold = 0
 
             # Reject wildly imbalanced counts before touching the tracker.
             # Red=12 Yellow=0 is impossible in a real game — it means background
@@ -857,6 +940,12 @@ def main():
                 print("Frozen" if game.frozen else "Resumed")
 
     finally:
+        # Capture final frame if the game didn't finish (error cases, early quit)
+        if game.phase != GamePhase.GAME_OVER:
+            game._save_screenshot("quit_incomplete")
+        quit_reason = "game_over" if game.phase == GamePhase.GAME_OVER else "user_quit"
+        game._write_manifest(quit_reason=quit_reason)
+
         cap.release()
         cv2.destroyAllWindows()
         announcer.stop()
