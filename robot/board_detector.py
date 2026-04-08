@@ -155,10 +155,16 @@ class DetectionConfig:
 
 
 # Physical board preset (default).
-# perspective_warp is OFF: the camera is roughly head-on to a physical board,
-# so fitting the grid directly in image coordinates (from detected hole centroids)
-# is more accurate than the warp path.  The warp path can mis-place the inverse-
-# warped grid by ~1 column when source-corner detection is slightly imperfect.
+# perspective_warp is OFF: the non-warp path fits the grid directly from
+# detected hole centroids.  Columns are regularised (even spacing) and missing
+# columns are extrapolated from median spacing — this handles partial board
+# visibility (e.g. monitor reflection washing out rightmost columns) far better
+# than the warp path, which computes a homography from the clipped contour
+# corners and then shifts the entire inverse-warped grid.
+# Row spacing is left as raw cluster positions (not regularised), which matches
+# the actual row layout even when perspective makes rows uneven.
+# The looser GRID_GAP_MIN_FRAC (0.30) handles angled-camera row spacing without
+# the warp path being needed.
 PHYSICAL_CONFIG = DetectionConfig(perspective_warp=False)
 
 # Screen/phone display preset (emitted light — higher saturation)
@@ -223,12 +229,18 @@ class BoardDetector:
         if self.config.perspective_warp:
             warp_info = self._compute_warp(board_cnt, bx, by, bw, bh)
 
-        # One cell of padding on each side of the blue bbox for hole search.
-        # Purpose: detect when the blue bbox has been clipped (an outer column
-        # sits outside the detected frame).  The padded search finds those holes
-        # before we commit to the perspective-warp code path.
+        # Two cells of padding on each side of the blue bbox for hole search.
+        # Purpose: detect when the blue bbox has been clipped (outer columns
+        # sit outside the detected frame).  Two cells (instead of one) handles
+        # the case where a nearby blue object (e.g. the Connect Four game box)
+        # merges with the board contour, shifting bx left and making bw too
+        # narrow — the rightmost 1–2 columns end up beyond bx+bw+half_cell and
+        # would never be found with only 1 cell of padding.  When holes are
+        # found beyond that threshold, bbox_is_clipped fires and the grid is
+        # fitted from the full padded hole set, forcing both missing columns to
+        # extrapolate rightward instead of leftward.
         img_h_px, img_w_px = hsv.shape[:2]
-        cell_pad  = int(bw / 7.0)          # ≈ 1 cell width
+        cell_pad  = int(bw / 7.0 * 2)     # ≈ 2 cell widths
         half_cell = (bw / 7.0) * 0.5
         hbx  = max(0,           bx - cell_pad)
         hbw  = min(img_w_px - hbx, bw + 2 * cell_pad)
@@ -1286,8 +1298,13 @@ class LockedBoardDetector:
     CANDIDATE_RESET = 20     # Consecutive bad frames to drop candidate entirely
     UNLOCK_FRAMES   = 20     # Consecutive bad locked frames → unlock
     CANDIDATE_GEOM_MAX_SHIFT_FRAC = 0.35  # max median centre shift vs cell spacing
-    GRID_GAP_MIN_FRAC = 0.55
-    GRID_GAP_MAX_FRAC = 1.80
+    # Allow perspective-distorted spacing: when the board is at an angle, near
+    # rows/columns have larger gaps than far ones.  0.30 tolerates even moderate
+    # angles where the near/far gap ratio is up to ~3:1.  Severely extrapolated
+    # grids (wrong column count, collapsed clusters) still fail because their
+    # gaps deviate much further — outside [0.30, 2.50] of the median.
+    GRID_GAP_MIN_FRAC = 0.30
+    GRID_GAP_MAX_FRAC = 2.50
 
     # New piece acceptance: must be seen this many consecutive frames before
     # entering the stable board.  Filters transient YOLO hits from hands or
@@ -1584,16 +1601,21 @@ class LockedBoardDetector:
         row_gaps = np.diff(row_means)
         col_gaps = np.diff(col_means)
 
-        def gaps_ok(gaps: np.ndarray) -> bool:
+        def gaps_ok(gaps: np.ndarray, label: str) -> bool:
             if len(gaps) == 0:
                 return False
             med = float(np.median(gaps))
             if med <= 1.0:
                 return False
-            return (float(np.min(gaps)) >= med * self.GRID_GAP_MIN_FRAC and
-                    float(np.max(gaps)) <= med * self.GRID_GAP_MAX_FRAC)
+            lo = float(np.min(gaps)) / med
+            hi = float(np.max(gaps)) / med
+            ok = lo >= self.GRID_GAP_MIN_FRAC and hi <= self.GRID_GAP_MAX_FRAC
+            if not ok:
+                print(f"[Board] {label} gap ratios: min={lo:.2f} max={hi:.2f} "
+                      f"(need [{self.GRID_GAP_MIN_FRAC:.2f}, {self.GRID_GAP_MAX_FRAC:.2f}])")
+            return ok
 
-        return gaps_ok(row_gaps) and gaps_ok(col_gaps)
+        return gaps_ok(row_gaps, "row") and gaps_ok(col_gaps, "col")
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 

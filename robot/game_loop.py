@@ -76,7 +76,7 @@ def setup_logging(log_dir: str = "logs") -> tuple:
     return log_path, ss_dir, tee
 
 
-from board_detector import BoardDetector, LockedBoardDetector, YOLOEnhancedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG, board_confidence
+from board_detector import BoardDetector, LockedBoardDetector, YOLOEnhancedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG
 from turn_tracker import TurnTracker
 from ai_player import AIPlayer
 from tts_announcer import GameAnnouncer
@@ -226,6 +226,7 @@ class GameLoop:
         self._win_anim_start: float = 0.0
         self._startup_piece_hold: int = 0  # consecutive frames startup piece has been stable
         self._ai_cell_stable_count: int = 0  # focused cell tracker for AI_TURN
+        self._human_cell_counts = np.zeros(7, dtype=int)  # focused cell tracker for HUMAN_TURN
 
         self._set_status_for_phase()
 
@@ -321,6 +322,7 @@ class GameLoop:
         self._win_anim_start = 0.0
         self._startup_piece_hold = 0
         self._ai_cell_stable_count = 0
+        self._human_cell_counts[:] = 0
         # Force the board detector to re-lock after reset.  This discards the
         # per-cell adaptive HSV baselines from the previous game.  Baselines
         # are re-captured on the next lock (board must be empty at that point),
@@ -380,6 +382,7 @@ class GameLoop:
             self._initialized = False
             self._lock_board_was_empty = False
             self._ai_cell_stable_count = 0
+            self._human_cell_counts[:] = 0
             self.stable.reset()
 
         if self.phase == GamePhase.GAME_OVER:
@@ -419,23 +422,18 @@ class GameLoop:
                 self._handle_ai_placement(stable_board_ai)
             return
 
-        # During active gameplay (HUMAN_TURN after init) use the merged/gravity-
-        # filtered board's confidence rather than the raw-detection confidence.
-        # board_raw often contains spurious pieces that the temporal smoother
-        # rejects as gravity-invalid (nothing below them), but they still lower
-        # result.confidence and can permanently block the stable detector.
-        # board_confidence(merged) only sees pieces that actually survived
-        # temporal smoothing, so those ghosts are invisible to it.
-        # Pre-init keeps result.confidence for strict initial-board validation.
-        # Near-full boards can have gravity-valid spurious pieces that look
-        # clean to board_confidence; if merged has 2+ new pieces vs confirmed
-        # state, fall back to raw confidence so stable never fires on junk.
-        if self._initialized:
-            new_pieces = int(np.sum((merged != 0) & (self.tracker.state.board == 0)))
-            conf = board_confidence(merged) if new_pieces <= 1 else result.confidence
-        else:
-            conf = result.confidence
-        is_stable, stable_board = self.stable.update(merged, conf)
+        # ── HUMAN_TURN (post-init): focused per-column cell tracker ─────────────
+        # Watch only the gravity-valid candidate cell per column (lowest empty
+        # row).  Mirrors the AI_TURN focused tracker: spurious detections
+        # anywhere else on the board are completely ignored, so they cannot
+        # block detection of the human's real move.
+        if self._initialized and self.phase == GamePhase.HUMAN_TURN:
+            self._update_human_cell_tracker(detected)
+            return
+
+        # Pre-init: use raw confidence and the whole-board stable detector to
+        # seed the tracker with the initial board state.
+        is_stable, stable_board = self.stable.update(merged, result.confidence)
         if not is_stable:
             return
 
@@ -527,10 +525,9 @@ class GameLoop:
                 self.ann.speak("Your turn.", interrupt=True)
             return
 
+        # Pre-init path: seed the tracker once we have a stable initial board.
         if self.phase == GamePhase.HUMAN_TURN:
             self._handle_human_turn(stable_board)
-        elif self.phase == GamePhase.AI_TURN:
-            self._handle_ai_placement(stable_board)
 
     def draw(self, frame: np.ndarray) -> np.ndarray:
         """Render the full game overlay onto a camera frame."""
@@ -563,9 +560,13 @@ class GameLoop:
         cv2.putText(display, f"Conf:{conf:.2f}  FPS:{self.fps_actual:.1f}  {lock_label}",
                     (10, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.55, lock_color, 1)
 
-        # Stability progress indicator
-        if self.stable.progress > 0:
-            pct = self.stable.progress / self.stable.required_frames
+        # Stability progress indicator — use human cell tracker during HUMAN_TURN
+        if self._initialized and self.phase == GamePhase.HUMAN_TURN:
+            detect_progress = int(np.max(self._human_cell_counts))
+        else:
+            detect_progress = self.stable.progress
+        if detect_progress > 0:
+            pct = detect_progress / self.stable.required_frames
             bar_w = int(200 * pct)
             cv2.rectangle(display, (10, 34), (210, 48), (50, 50, 50), -1)
             cv2.rectangle(display, (10, 34), (10 + bar_w, 48), (0, 200, 100), -1)
@@ -659,6 +660,35 @@ class GameLoop:
             self._ai_cell_stable_count = 0
 
         return False
+
+    def _update_human_cell_tracker(self, detected: np.ndarray):
+        """Focused per-column stability check for HUMAN_TURN.
+
+        Watches only the gravity-valid candidate cell in each column (the
+        lowest empty row).  Accepts the first column whose cell holds the
+        human player's color for required_frames consecutive frames, then
+        calls _handle_human_turn with the exactly-correct single-piece board.
+
+        Spurious detections in any non-candidate cell are completely ignored,
+        so they cannot block the human's real move.
+        """
+        for col in range(7):
+            expected_row = self.tracker._lowest_empty_row(
+                self.tracker.state.board, col)
+            if expected_row is None:
+                self._human_cell_counts[col] = 0
+                continue
+            cell = int(detected[expected_row, col])
+            if cell == self.human_player:
+                self._human_cell_counts[col] += 1
+                if self._human_cell_counts[col] >= self.stable.required_frames:
+                    self._human_cell_counts[:] = 0
+                    confirmed = self.tracker.state.board.copy()
+                    confirmed[expected_row, col] = self.human_player
+                    self._handle_human_turn(confirmed)
+                    return
+            else:
+                self._human_cell_counts[col] = 0
 
     def _handle_ai_placement(self, board: np.ndarray):
         preview = self.tracker.analyze_transition(board)
