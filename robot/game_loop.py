@@ -76,7 +76,7 @@ def setup_logging(log_dir: str = "logs") -> tuple:
     return log_path, ss_dir, tee
 
 
-from board_detector import BoardDetector, LockedBoardDetector, YOLOEnhancedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG
+from board_detector import BoardDetector, LockedBoardDetector, YOLOEnhancedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG, board_confidence
 from turn_tracker import TurnTracker
 from ai_player import AIPlayer
 from tts_announcer import GameAnnouncer
@@ -321,6 +321,11 @@ class GameLoop:
         self._win_anim_start = 0.0
         self._startup_piece_hold = 0
         self._ai_cell_stable_count = 0
+        # Force the board detector to re-lock after reset.  This discards the
+        # per-cell adaptive HSV baselines from the previous game.  Baselines
+        # are re-captured on the next lock (board must be empty at that point),
+        # ensuring reflections from old pieces don't pollute new-piece detection.
+        self.detector.unlock()
         self._set_status_for_phase()
         self.ann.speak("New game. Your turn.", interrupt=True)
         print("\n" + "=" * 50)
@@ -414,7 +419,16 @@ class GameLoop:
                 self._handle_ai_placement(stable_board_ai)
             return
 
-        is_stable, stable_board = self.stable.update(merged, result.confidence)
+        # During active gameplay (HUMAN_TURN after init) use the merged/gravity-
+        # filtered board's confidence rather than the raw-detection confidence.
+        # board_raw often contains spurious pieces that the temporal smoother
+        # rejects as gravity-invalid (nothing below them), but they still lower
+        # result.confidence and can permanently block the stable detector.
+        # board_confidence(merged) only sees pieces that actually survived
+        # temporal smoothing, so those ghosts are invisible to it.
+        # Pre-init keeps result.confidence for strict initial-board validation.
+        conf = board_confidence(merged) if self._initialized else result.confidence
+        is_stable, stable_board = self.stable.update(merged, conf)
         if not is_stable:
             return
 
