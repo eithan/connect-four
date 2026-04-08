@@ -427,7 +427,14 @@ class GameLoop:
         # board_confidence(merged) only sees pieces that actually survived
         # temporal smoothing, so those ghosts are invisible to it.
         # Pre-init keeps result.confidence for strict initial-board validation.
-        conf = board_confidence(merged) if self._initialized else result.confidence
+        # Near-full boards can have gravity-valid spurious pieces that look
+        # clean to board_confidence; if merged has 2+ new pieces vs confirmed
+        # state, fall back to raw confidence so stable never fires on junk.
+        if self._initialized:
+            new_pieces = int(np.sum((merged != 0) & (self.tracker.state.board == 0)))
+            conf = board_confidence(merged) if new_pieces <= 1 else result.confidence
+        else:
+            conf = result.confidence
         is_stable, stable_board = self.stable.update(merged, conf)
         if not is_stable:
             return
