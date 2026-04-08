@@ -225,6 +225,7 @@ class GameLoop:
         self._winning_cells: list = []    # [(row, col), ...] — set at game over
         self._win_anim_start: float = 0.0
         self._startup_piece_hold: int = 0  # consecutive frames startup piece has been stable
+        self._ai_cell_stable_count: int = 0  # focused cell tracker for AI_TURN
 
         self._set_status_for_phase()
 
@@ -319,6 +320,7 @@ class GameLoop:
         self._winning_cells = []
         self._win_anim_start = 0.0
         self._startup_piece_hold = 0
+        self._ai_cell_stable_count = 0
         self._set_status_for_phase()
         self.ann.speak("New game. Your turn.", interrupt=True)
         print("\n" + "=" * 50)
@@ -372,6 +374,7 @@ class GameLoop:
             # Board was lost — reset so the next lock re-seeds the tracker.
             self._initialized = False
             self._lock_board_was_empty = False
+            self._ai_cell_stable_count = 0
             self.stable.reset()
 
         if self.phase == GamePhase.GAME_OVER:
@@ -391,6 +394,25 @@ class GameLoop:
                         merged[r, c] = detected[r, c]
         else:
             merged = detected
+
+        # ── AI_TURN: focused single-cell tracker ─────────────────────────────────
+        # During AI_TURN we don't run the whole-board stable detector at all.
+        # Instead we watch only the one cell where the AI piece should land
+        # (lowest empty row of ai_column), using the raw gravity-filtered
+        # detected board (not merged).  This is immune to:
+        #   • spurious pieces in other columns driving down raw confidence
+        #   • gravity-compressed false detections above a freshly placed piece
+        #     (which survive the gravity filter when there is now a real piece
+        #      below them and would create "Multiple changes detected" errors)
+        if self._initialized and self.phase == GamePhase.AI_TURN:
+            if self._update_ai_cell_tracker(detected):
+                return
+            # Wrong-column fallback: run stable detection so _handle_ai_placement
+            # can warn the user (uses raw confidence — naturally low when wrong).
+            is_stable_ai, stable_board_ai = self.stable.update(merged, result.confidence)
+            if is_stable_ai:
+                self._handle_ai_placement(stable_board_ai)
+            return
 
         is_stable, stable_board = self.stable.update(merged, result.confidence)
         if not is_stable:
@@ -413,8 +435,10 @@ class GameLoop:
                 if len(piece_pos) == 1:
                     row, col = map(int, piece_pos[0])
                     piece_player = int(stable_board[row, col])
-                    expected_row = 5
-                    if piece_player == self.human_player and row == expected_row:
+                    # Accept pieces at the physical bottom of the board (rows 4–5).
+                    # Hard-coding row 5 silently dropped first moves when the
+                    # camera's grid mapping places the physical bottom at row 4.
+                    if piece_player == self.human_player and row >= 4:
                         self._startup_piece_hold += 1
                         if self._startup_piece_hold >= self.STARTUP_PIECE_HOLD_FRAMES:
                             print("Accepting startup first move after empty lock"
@@ -579,6 +603,41 @@ class GameLoop:
 
         # Trigger AI
         self._run_ai(board)
+
+    def _update_ai_cell_tracker(self, detected: np.ndarray) -> bool:
+        """Focused per-cell stability check for AI_TURN.
+
+        Watches only the single cell where the AI piece must land (lowest empty
+        row of ai_column).  Returns True once the cell has held the correct
+        color for required_frames consecutive frames, then calls
+        _handle_ai_placement with the exactly-correct board.
+
+        This bypasses whole-board confidence entirely, so spurious detections
+        in other columns — or gravity-compressed false positives above a newly
+        placed piece — cannot block confirmation.
+        """
+        ai_col = self.ai_column
+        if ai_col is None:
+            return False
+
+        expected_row = self.tracker._lowest_empty_row(self.tracker.state.board, ai_col)
+        if expected_row is None:
+            return False
+
+        cell = int(detected[expected_row, ai_col])
+        if cell == self.ai_player_num:
+            self._ai_cell_stable_count += 1
+            if self._ai_cell_stable_count >= self.stable.required_frames:
+                self._ai_cell_stable_count = 0
+                # Build the single-piece board the tracker expects and confirm.
+                confirmed = self.tracker.state.board.copy()
+                confirmed[expected_row, ai_col] = self.ai_player_num
+                self._handle_ai_placement(confirmed)
+                return True
+        else:
+            self._ai_cell_stable_count = 0
+
+        return False
 
     def _handle_ai_placement(self, board: np.ndarray):
         preview = self.tracker.analyze_transition(board)

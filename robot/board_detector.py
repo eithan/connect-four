@@ -1877,6 +1877,29 @@ def board_to_string(board: np.ndarray) -> str:
     return "\n".join(lines)
 
 
+def board_confidence(board: np.ndarray) -> float:
+    """Compute detection confidence from a board array (gravity-filtered or merged).
+
+    Same formula as BoardDetector._compute_confidence: penalises column gaps and
+    piece-count imbalance.  Exposed as a module-level function so callers can
+    re-score the merged/gravity-filtered board rather than the raw detection.
+    """
+    confidence = 1.0
+    for col in range(7):
+        piece_rows = [r for r in range(6) if board[r, col] != 0]
+        if len(piece_rows) < 2:
+            continue
+        piece_rows.sort()
+        for i in range(len(piece_rows) - 1):
+            if piece_rows[i + 1] - piece_rows[i] > 1:
+                confidence -= 0.15
+    red    = int(np.sum(board == 1))
+    yellow = int(np.sum(board == 2))
+    if abs(red - yellow) > 1:
+        confidence -= 0.2
+    return max(0.0, min(1.0, confidence))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # YOLO-enhanced detector
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1913,6 +1936,14 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
         os.path.dirname(os.path.abspath(__file__)),
         "yolo-detect", "detect", "train", "weights", "best.pt",
     )
+
+    # YOLO confidence below which HSV corroboration is required.
+    # Genuine pieces typically score > 0.70; reflections and skin-tone
+    # artifacts that sit directly above an existing piece tend to score
+    # in the 0.45–0.65 range.  Requiring the adaptive-HSV layer to also
+    # fire for medium-confidence detections eliminates most false positives
+    # while keeping real pieces (which have high ΔSaturation vs. baseline).
+    YOLO_CORROBORATION_CONF: float = 0.70
 
     def __init__(
         self,
@@ -1975,9 +2006,19 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
         board = np.zeros((6, 7), dtype=np.int8)
         for r in range(6):
             for c in range(7):
-                if yolo_board[r, c] != 0 and yolo_confs[r, c] >= self._min_piece_conf:
-                    # YOLO positively detected a piece — trust it over HSV.
-                    board[r, c] = yolo_board[r, c]
+                yc = yolo_confs[r, c]
+                yp = yolo_board[r, c]
+                if yp != 0 and yc >= self._min_piece_conf:
+                    if yc >= self.YOLO_CORROBORATION_CONF or hsv_board[r, c] != 0:
+                        # High-confidence YOLO, OR medium-confidence YOLO corroborated
+                        # by HSV: trust the detection.
+                        board[r, c] = yp
+                    else:
+                        # Medium-confidence YOLO but HSV sees the cell as empty.
+                        # This pattern matches reflections and light artifacts above
+                        # a recently placed piece (low ΔSaturation vs. baseline).
+                        # Treat as empty and let temporal smoothing sort it out.
+                        board[r, c] = 0
                 else:
                     # YOLO silent — fall back to HSV to confirm empty vs. missed piece.
                     board[r, c] = hsv_board[r, c]
@@ -1989,7 +2030,11 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
                     hsv_sym  = "." if hsv_board[r, c]  == 0 else ("R" if hsv_board[r, c]  == 1 else "Y")
                     out_sym  = "." if board[r, c]       == 0 else ("R" if board[r, c]       == 1 else "Y")
                     if board[r, c] != 0 or yolo_board[r, c] != 0 or hsv_board[r, c] != 0:
-                        src = "YOLO" if (yolo_board[r, c] != 0 and yolo_confs[r, c] >= self._min_piece_conf) else "HSV"
+                        yc = yolo_confs[r, c]
+                        if yolo_board[r, c] != 0 and yc >= self._min_piece_conf:
+                            src = f"YOLO({'hi' if yc >= self.YOLO_CORROBORATION_CONF else 'corr'})"
+                        else:
+                            src = "HSV"
                         print(f"  [YOLOEnh {r},{c}] yolo={yolo_sym}({yolo_confs[r,c]:.2f})"
                               f" hsv={hsv_sym} -> {out_sym} [{src}]")
 
