@@ -1341,6 +1341,7 @@ class LockedBoardDetector:
         self._locked_contour: Optional[np.ndarray] = None
         self._cand_centers:   Optional[np.ndarray] = None
         self._cand_contour:   Optional[np.ndarray] = None
+        self._cand_center_history: List[np.ndarray] = []  # fresh grids during streak
         self._good_count  = 0
         self._bad_streak  = 0
         self._lock_bad    = 0
@@ -1375,6 +1376,7 @@ class LockedBoardDetector:
         self._locked_contour = None
         self._cand_centers   = None
         self._cand_contour   = None
+        self._cand_center_history.clear()
         self._good_count  = 0
         self._bad_streak  = 0
         self._lock_bad    = 0
@@ -1519,8 +1521,14 @@ class LockedBoardDetector:
                     print("[Board] Candidate geometry changed too much — restarting lock streak")
                     self._good_count = 0
                     self._bad_streak = 0
+                    self._cand_center_history.clear()
                 self._cand_centers = result.grid_centers.copy()
                 self._cand_contour = result.board_contour.copy()
+                # Accumulate fresh grids for median-averaging at lock time.
+                # Capped at 20 to bound memory; older frames are less relevant anyway.
+                self._cand_center_history.append(result.grid_centers.copy())
+                if len(self._cand_center_history) > 20:
+                    self._cand_center_history.pop(0)
                 fresh_supports_candidate = True
             elif fresh_conf >= self.LOCK_MIN_CONF:
                 print("[Board] Rejecting implausible grid spacing before lock")
@@ -1538,17 +1546,27 @@ class LockedBoardDetector:
             result.board         = cand_board     # gravity-filtered
             result.confidence    = cand_conf
 
-            # A pre-lock frame only counts when the *current* fresh detection
-            # also supports the candidate grid. This prevents a stale candidate
-            # from reaching LOCK_FRAMES while fresh fits on later frames have
-            # already gone off the rails.
+            # Progress toward lock only when the fresh detection agrees with the
+            # candidate position. This prevents a stale candidate from reaching
+            # LOCK_FRAMES while subsequent fresh fits have gone off the rails.
             is_good = cand_conf >= self.LOCK_MIN_CONF and fresh_supports_candidate
 
             if is_good:
                 self._bad_streak = 0
                 self._good_count += 1
                 if self._good_count >= self.LOCK_FRAMES:
-                    self._locked_centers = self._cand_centers.copy()
+                    # Lock on the pixel-wise median of all fresh-detection grids
+                    # accumulated during this streak.  Averaging multiple frames
+                    # smooths out single-frame hole-detection noise and gives a
+                    # significantly more accurate grid than any individual frame.
+                    if len(self._cand_center_history) >= 2:
+                        stacked = np.stack(self._cand_center_history)
+                        self._locked_centers = np.round(
+                            np.median(stacked, axis=0)
+                        ).astype(np.int32)
+                    else:
+                        self._locked_centers = self._cand_centers.copy()
+                    self._cand_center_history.clear()
                     self._locked_contour = self._cand_contour.copy()
                     self.is_locked    = True
                     self._good_count  = 0
@@ -1562,14 +1580,22 @@ class LockedBoardDetector:
                 else:
                     print(f"[Board] Good frame {self._good_count}/{self.LOCK_FRAMES} "
                           f"— conf {cand_conf:.2f}")
-            else:
+            elif cand_conf < self.LOCK_MIN_CONF:
+                # Board is genuinely not visible at the candidate position
+                # (confidence dropped, not just a missed blue-frame detection).
+                # Only in this case count toward the candidate-drop threshold.
                 self._bad_streak += 1
                 if self._bad_streak >= self.CANDIDATE_RESET:
                     print(f"[Board] Candidate dropped ({self._bad_streak} bad frames)")
                     self._cand_centers = None
                     self._cand_contour = None
+                    self._cand_center_history.clear()
                     self._good_count   = 0
                     self._bad_streak   = 0
+            # else: fresh blue detection failed but candidate position still
+            # classifies well — board is visible but HSV didn't find the blue
+            # frame this frame (glare, lighting shift).  Don't reset the streak
+            # or increment bad_streak; just wait for the next frame.
 
         return result
 
@@ -1947,25 +1973,19 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
     ``yolo-detect/detect/train/weights/best.pt`` relative to this file.
     """
 
-    # Class indices in the Connect4 YOLO model (yolo-detect/detect/train)
-    YOLO_CLASS_EMPTY  = 0
-    YOLO_CLASS_RED    = 1
-    YOLO_CLASS_YELLOW = 2
+    # Class indices in the fine-tuned 2-class model (best_v2.pt)
+    # names: ['red piece', 'yellow piece']  (from data.yaml)
+    YOLO_CLASS_RED    = 0
+    YOLO_CLASS_YELLOW = 1
 
-
-    # Default model: bundled weights next to this file
+    # Default model: prefer fine-tuned v2, fall back to original
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DEFAULT_MODEL_PATH = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "yolo-detect", "detect", "train", "weights", "best.pt",
+        _BASE_DIR, "yolo-detect", "detect", "train", "weights", "best_v2.pt",
     )
-
-    # YOLO confidence below which HSV corroboration is required.
-    # Genuine pieces typically score > 0.70; reflections and skin-tone
-    # artifacts that sit directly above an existing piece tend to score
-    # in the 0.45–0.65 range.  Requiring the adaptive-HSV layer to also
-    # fire for medium-confidence detections eliminates most false positives
-    # while keeping real pieces (which have high ΔSaturation vs. baseline).
-    YOLO_CORROBORATION_CONF: float = 0.70
+    _FALLBACK_MODEL_PATH = os.path.join(
+        _BASE_DIR, "yolo-detect", "detect", "train", "weights", "best.pt",
+    )
 
     def __init__(
         self,
@@ -1976,7 +1996,12 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
         super().__init__(config)
         self._yolo_model = None
         self._min_piece_conf = min_piece_conf
-        path = model_path if model_path is not None else self.DEFAULT_MODEL_PATH
+        if model_path is not None:
+            path = model_path
+        elif os.path.exists(self.DEFAULT_MODEL_PATH):
+            path = self.DEFAULT_MODEL_PATH
+        else:
+            path = self._FALLBACK_MODEL_PATH
         if os.path.exists(path):
             self._load_yolo(path)
         else:
@@ -1997,33 +2022,18 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
     def _raw_board(self, image: np.ndarray, hsv: np.ndarray,
                    grid_centers: np.ndarray) -> np.ndarray:
         """
-        Hybrid classification: YOLO for positive piece detection, HSV for emptiness.
+        YOLO-only classification: fine-tuned model is the sole ground truth.
 
-        YOLO's piece detection (Red / Yellow) is reliable and robust to skin tones.
-        YOLO's absence of detection is NOT reliable — low confidence or small pieces
-        cause YOLO to flicker, which would prematurely evict real pieces from the
-        stable board.
+        YOLO conf ≥ min_piece_conf → red or yellow piece.
+        YOLO silent or below threshold → empty.
 
-        Strategy per cell:
-          • YOLO conf ≥ min_piece_conf for Red or Yellow  → trust YOLO (authoritative)
-          • YOLO silent                                   → defer to HSV adaptive to
-            decide whether the cell is truly empty or holds a piece YOLO missed.
-
-        This means pieces already in the stable board are only removed when HSV
-        also confirms emptiness — preventing YOLO flicker from destabilising the board.
+        Temporal smoothing (REMOVE_THRESHOLD) in the parent class absorbs any
+        single-frame misses without destabilising the stable board.
         """
         if self._yolo_model is None:
             return super()._raw_board(image, hsv, grid_centers)
 
         yolo_board, yolo_confs = self._classify_with_yolo(image, grid_centers)
-
-        # HSV fallback: used for cells where YOLO reports nothing.
-        # Determines whether "no YOLO detection" means truly empty or just a miss.
-        hsv_board = (
-            self._classify_cells_adaptive(hsv, grid_centers)
-            if (self.config.adaptive and self._empty_baselines is not None)
-            else self.detector._classify_cells(hsv, grid_centers)
-        )
 
         board = np.zeros((6, 7), dtype=np.int8)
         for r in range(6):
@@ -2031,34 +2041,15 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
                 yc = yolo_confs[r, c]
                 yp = yolo_board[r, c]
                 if yp != 0 and yc >= self._min_piece_conf:
-                    if yc >= self.YOLO_CORROBORATION_CONF or hsv_board[r, c] != 0:
-                        # High-confidence YOLO, OR medium-confidence YOLO corroborated
-                        # by HSV: trust the detection.
-                        board[r, c] = yp
-                    else:
-                        # Medium-confidence YOLO but HSV sees the cell as empty.
-                        # This pattern matches reflections and light artifacts above
-                        # a recently placed piece (low ΔSaturation vs. baseline).
-                        # Treat as empty and let temporal smoothing sort it out.
-                        board[r, c] = 0
-                else:
-                    # YOLO silent — fall back to HSV to confirm empty vs. missed piece.
-                    board[r, c] = hsv_board[r, c]
+                    board[r, c] = yp
 
         if self.config.verbose:
             for r in range(6):
                 for c in range(7):
-                    yolo_sym = "." if yolo_board[r, c] == 0 else ("R" if yolo_board[r, c] == 1 else "Y")
-                    hsv_sym  = "." if hsv_board[r, c]  == 0 else ("R" if hsv_board[r, c]  == 1 else "Y")
-                    out_sym  = "." if board[r, c]       == 0 else ("R" if board[r, c]       == 1 else "Y")
-                    if board[r, c] != 0 or yolo_board[r, c] != 0 or hsv_board[r, c] != 0:
-                        yc = yolo_confs[r, c]
-                        if yolo_board[r, c] != 0 and yc >= self._min_piece_conf:
-                            src = f"YOLO({'hi' if yc >= self.YOLO_CORROBORATION_CONF else 'corr'})"
-                        else:
-                            src = "HSV"
-                        print(f"  [YOLOEnh {r},{c}] yolo={yolo_sym}({yolo_confs[r,c]:.2f})"
-                              f" hsv={hsv_sym} -> {out_sym} [{src}]")
+                    if board[r, c] != 0 or yolo_board[r, c] != 0:
+                        yolo_sym = "." if yolo_board[r, c] == 0 else ("R" if yolo_board[r, c] == self.YOLO_CLASS_RED else "Y")
+                        out_sym  = "." if board[r, c]       == 0 else ("R" if board[r, c]       == 1 else "Y")
+                        print(f"  [YOLOEnh {r},{c}] yolo={yolo_sym}({yolo_confs[r,c]:.2f}) -> {out_sym}")
 
         return board
 

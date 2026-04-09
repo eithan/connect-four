@@ -226,7 +226,9 @@ class GameLoop:
         self._win_anim_start: float = 0.0
         self._startup_piece_hold: int = 0  # consecutive frames startup piece has been stable
         self._ai_cell_stable_count: int = 0  # focused cell tracker for AI_TURN
-        self._human_cell_counts = np.zeros(7, dtype=int)  # focused cell tracker for HUMAN_TURN
+        self._ai_stuck_frames: int = 0       # frames spent waiting for AI piece to confirm
+        self._human_cell_counts = np.zeros(7, dtype=int)   # focused cell tracker for HUMAN_TURN
+        self._human_cell_gate  = np.zeros(7, dtype=bool)   # True once candidate cell seen empty
 
         self._set_status_for_phase()
 
@@ -322,7 +324,9 @@ class GameLoop:
         self._win_anim_start = 0.0
         self._startup_piece_hold = 0
         self._ai_cell_stable_count = 0
+        self._ai_stuck_frames = 0
         self._human_cell_counts[:] = 0
+        self._human_cell_gate[:] = False
         # Force the board detector to re-lock after reset.  This discards the
         # per-cell adaptive HSV baselines from the previous game.  Baselines
         # are re-captured on the next lock (board must be empty at that point),
@@ -383,6 +387,7 @@ class GameLoop:
             self._lock_board_was_empty = False
             self._ai_cell_stable_count = 0
             self._human_cell_counts[:] = 0
+            self._human_cell_gate[:] = False
             self.stable.reset()
 
         if self.phase == GamePhase.GAME_OVER:
@@ -414,6 +419,24 @@ class GameLoop:
         #      below them and would create "Multiple changes detected" errors)
         if self._initialized and self.phase == GamePhase.AI_TURN:
             if self._update_ai_cell_tracker(detected):
+                self._ai_stuck_frames = 0
+                return
+            self._ai_stuck_frames += 1
+            # Safety timeout: if the cell tracker can't confirm after ~40 s the
+            # detector is persistently misclassifying the cell (e.g. a false-
+            # positive red piece where yellow should land).  Force-advance by
+            # trusting the tracker's view of the board — the physical piece was
+            # almost certainly placed; we just can't verify the colour.
+            if self._ai_stuck_frames >= 200:
+                self._ai_stuck_frames = 0
+                ai_col = self.ai_column
+                if ai_col is not None:
+                    fr = self.tracker._lowest_empty_row(self.tracker.state.board, ai_col)
+                    if fr is not None:
+                        print(f"[AI] Stuck timeout — force-confirming col {ai_col} row {fr}")
+                        forced = self.tracker.state.board.copy()
+                        forced[fr, ai_col] = self.ai_player_num
+                        self._handle_ai_placement(forced)
                 return
             # Wrong-column fallback: run stable detection so _handle_ai_placement
             # can warn the user (uses raw confidence — naturally low when wrong).
@@ -623,41 +646,76 @@ class GameLoop:
         # detector doesn't re-trigger on the same position next turn.
         self.stable.reset(self.tracker.state.board)
 
+        # Build the board view passed to the AI.  Start from the just-accepted
+        # tracker board, then overlay any extra occupied cells the detector
+        # currently sees.  This prevents the AI from picking a column whose top
+        # slot the detector already shows as filled (e.g. a persistent false-
+        # positive at the last empty row of a nearly-full column), which would
+        # leave the user unable to confirm the piece and the game stuck.
+        ai_board = board.copy()
+        if self.last_result is not None and self.last_result.board is not None:
+            det = self.last_result.board
+            for r in range(6):
+                for c in range(7):
+                    if ai_board[r, c] == 0 and det[r, c] != 0:
+                        ai_board[r, c] = int(det[r, c])
+
         # Trigger AI
-        self._run_ai(board)
+        self._run_ai(ai_board)
 
     def _update_ai_cell_tracker(self, detected: np.ndarray) -> bool:
-        """Focused per-cell stability check for AI_TURN.
+        """Focused column-scan stability check for AI_TURN.
 
-        Watches only the single cell where the AI piece must land (lowest empty
-        row of ai_column).  Returns True once the cell has held the correct
-        color for required_frames consecutive frames, then calls
-        _handle_ai_placement with the exactly-correct board.
+        Scans the target column bottom-to-top for the AI piece at any
+        gravity-valid row that is empty in the tracker board.  This handles
+        cases where an untracked piece below the tracker-predicted row causes
+        the physical piece to land one or more rows higher than expected.
 
-        This bypasses whole-board confidence entirely, so spurious detections
-        in other columns — or gravity-compressed false positives above a newly
-        placed piece — cannot block confirmation.
+        Returns True once the target cell has held the correct color for
+        required_frames consecutive frames, then calls _handle_ai_placement.
         """
         ai_col = self.ai_column
         if ai_col is None:
             return False
 
-        expected_row = self.tracker._lowest_empty_row(self.tracker.state.board, ai_col)
-        if expected_row is None:
+        # Scan bottom-to-top for the AI color at any tracker-empty row that
+        # passes a gravity check (all tracker-empty rows below it are non-empty
+        # in the detected board, indicating untracked pieces sitting there).
+        target_row = None
+        for row in range(5, -1, -1):
+            if self.tracker.state.board[row, ai_col] != 0:
+                continue  # tracker already shows a piece here — skip
+            if int(detected[row, ai_col]) == self.ai_player_num:
+                # Gravity validity: every tracker-empty row below must be
+                # non-empty in detected (untracked piece sitting there).
+                gravity_ok = all(
+                    detected[r, ai_col] != 0
+                    for r in range(row + 1, 6)
+                    if self.tracker.state.board[r, ai_col] == 0
+                )
+                if gravity_ok:
+                    target_row = row
+                    break
+
+        if target_row is None:
+            self._ai_cell_stable_count = 0
             return False
 
-        cell = int(detected[expected_row, ai_col])
-        if cell == self.ai_player_num:
-            self._ai_cell_stable_count += 1
-            if self._ai_cell_stable_count >= self.stable.required_frames:
-                self._ai_cell_stable_count = 0
-                # Build the single-piece board the tracker expects and confirm.
-                confirmed = self.tracker.state.board.copy()
-                confirmed[expected_row, ai_col] = self.ai_player_num
-                self._handle_ai_placement(confirmed)
-                return True
-        else:
+        self._ai_cell_stable_count += 1
+        if self._ai_cell_stable_count >= self.stable.required_frames:
             self._ai_cell_stable_count = 0
+            confirmed = self.tracker.state.board.copy()
+            confirmed[target_row, ai_col] = self.ai_player_num
+            # If the piece landed above the tracker-predicted row, there are
+            # untracked pieces below it.  Patch them in from detected so the
+            # tracker board stays consistent with gravity.
+            expected_row = self.tracker._lowest_empty_row(self.tracker.state.board, ai_col)
+            if expected_row is not None and target_row < expected_row:
+                for r in range(target_row + 1, expected_row + 1):
+                    if confirmed[r, ai_col] == 0 and detected[r, ai_col] != 0:
+                        confirmed[r, ai_col] = int(detected[r, ai_col])
+            self._handle_ai_placement(confirmed)
+            return True
 
         return False
 
@@ -677,17 +735,29 @@ class GameLoop:
                 self.tracker.state.board, col)
             if expected_row is None:
                 self._human_cell_counts[col] = 0
+                self._human_cell_gate[col] = False
                 continue
             cell = int(detected[expected_row, col])
-            if cell == self.human_player:
+            if cell == 0:
+                # Cell is genuinely empty — open the gate, reset any partial count.
+                self._human_cell_gate[col] = True
+                self._human_cell_counts[col] = 0
+            elif cell == self.human_player:
+                if not self._human_cell_gate[col]:
+                    # Gate is closed: cell was already showing human color when
+                    # HUMAN_TURN started (or we never saw it empty).  This is a
+                    # persistent false positive — do not count it.
+                    continue
                 self._human_cell_counts[col] += 1
                 if self._human_cell_counts[col] >= self.stable.required_frames:
                     self._human_cell_counts[:] = 0
+                    self._human_cell_gate[:] = False
                     confirmed = self.tracker.state.board.copy()
                     confirmed[expected_row, col] = self.human_player
                     self._handle_human_turn(confirmed)
                     return
             else:
+                # AI color or noise — spurious; reset count but keep gate state.
                 self._human_cell_counts[col] = 0
 
     def _handle_ai_placement(self, board: np.ndarray):
@@ -696,9 +766,13 @@ class GameLoop:
         if not preview["changed"]:
             if preview["error"]:
                 print(f"[tracker] AI placement candidate rejected: {preview['error']}")
-                # Stay anchored to the last accepted position and wait for a
-                # cleaner stable board instead of treating noise as a move.
-                self.stable.reset(self.tracker.state.board)
+                # Only reset the stable detector on single-piece mismatches
+                # (wrong color).  For multi-piece noise ("Multiple changes") the
+                # reset just restarts the 5-frame countdown with the same noisy
+                # merged board, causing a tight rejection loop.  Let the stable
+                # detector naturally evolve instead.
+                if "Multiple changes" not in preview["error"]:
+                    self.stable.reset(self.tracker.state.board)
             return
 
         placed_col = preview["move_col"]

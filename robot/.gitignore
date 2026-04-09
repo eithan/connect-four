@@ -3,3 +3,4 @@ proposals
 runs
 logs/
 .claude/worktrees/
+training_export/
