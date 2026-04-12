@@ -1652,10 +1652,12 @@ class LockedBoardDetector:
         Sample median HSV at each grid cell position and store as the
         empty-board baseline.  Called once at lock time.
 
-        If the board isn't fully empty (e.g. pieces pre-placed), cells that
-        the fixed-threshold classifier detects as occupied get a sentinel
-        baseline of (-1, -1, -1) — adaptive mode falls back to fixed
-        thresholds for those cells.
+        Baselines are captured unconditionally for every cell — we do NOT
+        skip cells that appear occupied to the fixed-threshold classifier.
+        Different cameras (e.g. Orbbec Astra) render empty board holes with
+        HSV values that the fixed yellow range flags as pieces.  Capturing
+        the true per-cell baseline lets the adaptive ΔS classifier work
+        correctly regardless of the camera's color rendering.
         """
         centers = self._locked_centers
         h_img, w_img = hsv.shape[:2]
@@ -1663,14 +1665,9 @@ class LockedBoardDetector:
         spacing = abs(int(centers[0, 1, 0]) - int(centers[0, 0, 0]))
         radius  = max(int(spacing * 0.28), 8)
 
-        # Run fixed-threshold classification to identify pre-existing pieces
-        fixed_board = self.detector._classify_cells(hsv, centers)
-
         empty_count = 0
         for r in range(6):
             for c in range(7):
-                if fixed_board[r, c] != 0:
-                    continue  # cell has a piece — skip, leave sentinel
                 cx = int(centers[r, c, 0])
                 cy = int(centers[r, c, 1])
                 if not (0 <= cx < w_img and 0 <= cy < h_img):

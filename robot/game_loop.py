@@ -83,6 +83,58 @@ from tts_announcer import GameAnnouncer
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ROS2 publisher (optional — publishes AI column to /connect_four/drop_column)
+# Only active when --ros flag is passed; gracefully absent if rclpy not installed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class RosPublisher:
+    """
+    Thin wrapper around a rclpy publisher node.  Lazy-imports rclpy so
+    game_loop.py still works on machines without ROS2 installed.
+
+    Usage:
+        pub = RosPublisher()   # inits rclpy + creates node
+        pub.send_column(3)
+        pub.close()
+    """
+
+    def __init__(self):
+        import threading
+        try:
+            import rclpy
+            from rclpy.node import Node
+            from std_msgs.msg import Int32 as _Int32
+        except ImportError:
+            raise RuntimeError(
+                "rclpy not found — source your ROS2 setup.bash before running with --ros"
+            )
+
+        rclpy.init()
+        self._node = rclpy.create_node("game_loop_ros_publisher")
+        self._pub = self._node.create_publisher(_Int32, "/connect_four/drop_column", 10)
+        self._Int32 = _Int32
+        self._rclpy = rclpy
+
+        # Spin in background so DDS can flush outgoing messages
+        self._thread = threading.Thread(target=rclpy.spin, args=(self._node,), daemon=True)
+        self._thread.start()
+        print("[ROS] Publisher ready → /connect_four/drop_column")
+
+    def send_column(self, col: int):
+        msg = self._Int32()
+        msg.data = col
+        self._pub.publish(msg)
+        print(f"[ROS] Published column {col}")
+
+    def close(self):
+        try:
+            self._node.destroy_node()
+            self._rclpy.shutdown()
+        except Exception:
+            pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Stable-state detector
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -190,13 +242,15 @@ class GameLoop:
 
     def __init__(self, detector: LockedBoardDetector, ai: AIPlayer, tracker: TurnTracker,
                  human_player: int = 1, stable_frames: int = 5,
-                 announcer: Optional["GameAnnouncer"] = None):
+                 announcer: Optional["GameAnnouncer"] = None,
+                 ros_bridge: Optional[RosPublisher] = None):
         self.detector = detector
         self.ai = ai
         self.tracker = tracker
         self.human_player = human_player
         self.ai_player_num = 3 - human_player
         self.ann = announcer or GameAnnouncer(enabled=False)   # silent no-op if omitted
+        self.ros_bridge = ros_bridge
 
         self.stable = StableStateDetector(required_frames=stable_frames,
                                           min_confidence=0.75)
@@ -623,6 +677,9 @@ class GameLoop:
         col_name = "middle column four" if col_1 == 4 else f"column {col_1}"
         self.ann.speak(f"{ai_color} in {col_name}.", interrupt=True)
 
+        if self.ros_bridge is not None:
+            self.ros_bridge.send_column(ai_col)
+
     def _handle_human_turn(self, board: np.ndarray):
         update = self.tracker.update(board)
 
@@ -974,6 +1031,9 @@ def main():
                              "selfie/built-in cameras)")
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose debug logging")
+    parser.add_argument("--ros", action="store_true",
+                        help="Publish AI column picks to /connect_four/drop_column via rclpy "
+                             "(requires ROS2 sourced; run on Ubuntu alongside column_mover)")
     args = parser.parse_args()
 
     mirror = not args.no_mirror
@@ -1022,10 +1082,16 @@ def main():
     ai       = AIPlayer(model_path=model_path, use_heuristic=(model_path is None))
     tracker  = TurnTracker(robot_player=ai_player_num)
     announcer = GameAnnouncer(enabled=not args.no_tts)
+
+    ros_bridge = None
+    if args.ros:
+        ros_bridge = RosPublisher()
+
     game = GameLoop(detector, ai, tracker,
                     human_player=human_player,
                     stable_frames=stable_frames,
-                    announcer=announcer)
+                    announcer=announcer,
+                    ros_bridge=ros_bridge)
     game.set_screenshot_dir(_ss_dir)
 
     print(f"Opening camera {args.camera}...")
@@ -1142,6 +1208,8 @@ def main():
         cap.release()
         cv2.destroyAllWindows()
         announcer.stop()
+        if ros_bridge is not None:
+            ros_bridge.close()
         sys.stdout = _tee._term   # restore real stdout before close
         _tee.close()
         print("Done. Log saved to:", _log_path)

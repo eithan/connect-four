@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>connect_four_arm</name>
+  <version>0.1.0</version>
+  <description>Connect Four robot arm ROS2 package</description>
+  <maintainer email="eithan@localhost.local">eithan</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher_gui</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>moveit_resources_panda_description</exec_depend>
+  <exec_depend>moveit_ros_planning_interface</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
