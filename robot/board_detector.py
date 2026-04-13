@@ -76,7 +76,7 @@ class DetectionConfig:
     # enter the red mask, but piece_threshold (0.38) blocks false
     # positives — background covers <20% of the sample circle.
     red_hsv_low1:  Tuple[int, int, int] = (0,   130, 80)
-    red_hsv_high1: Tuple[int, int, int] = (12,  255, 255)
+    red_hsv_high1: Tuple[int, int, int] = (18,  255, 255)  # raised 12→18: Astra red reads H=12-15
     red_hsv_low2:  Tuple[int, int, int] = (158, 130, 80)
     red_hsv_high2: Tuple[int, int, int] = (180, 255, 255)
 
@@ -102,13 +102,16 @@ class DetectionConfig:
     min_board_area_ratio: float = 0.02
 
     # Fraction of the sample circle that must be piece-colour to call it a piece.
-    # 0.18 → too loose (background through empty holes easily hits 18%)
-    # 0.60 → too strict (piece viewed at a slight angle or with minor grid
-    #          offset may only cover 50-55% of the sample circle → missed)
     # 0.38 → catches real pieces (≥40% even with grid jitter or dim lighting)
-    #          while blocking patchy background (≤30%).  Lowered from 0.45
-    #          because dim/different lighting reduces sample coverage to ~35-45%.
-    piece_threshold: float = 0.38
+    #          while blocking patchy background (≤30%).  Lowered from 0.45.
+    # 0.18 → minimum for Astra camera under daylight; red pieces give
+    #          red_r ≈ 0.19-0.33 depending on lighting.  Empty cells give 0.00
+    #          because the red mask requires S≥130 which empty holes never reach.
+    #          Chair/background false positives blocked by YOLO gating in
+    #          YOLOEnhancedBoardDetector.  In Connect Four gravity is enforced
+    #          so contamination (piece bleeding into cell above) only occurs when
+    #          the cell above is also filled — not a false positive in practice.
+    piece_threshold: float = 0.18
 
     # Hole circularity minimum (0–1; 1 = perfect circle)
     min_circularity: float = 0.40
@@ -179,6 +182,171 @@ SCREEN_CONFIG = DetectionConfig(
     yellow_hsv_high=(85, 255, 255),
     min_board_area_ratio=0.01,
 )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Depth provider  (optional — Orbbec Astra or any OpenNI2/pyorbbecsdk camera)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class DepthProvider:
+    """
+    Null depth provider — returns None every time.
+
+    This is the default so RGB-only cameras (Mac FaceTime, regular webcams)
+    work without any changes.  Depth filtering activates only when a real
+    DepthProvider is passed to YOLOEnhancedBoardDetector.
+    """
+
+    def get_depth_frame(self) -> Optional[np.ndarray]:
+        """Return the latest depth image (uint16, mm, H×W) or None."""
+        return None
+
+    def close(self) -> None:
+        pass
+
+
+class OrbbekAstraDepthProvider(DepthProvider):
+    """
+    Depth frames from an Orbbec Astra / Astra Pro Plus.
+
+    Tries pyorbbecsdk (official SDK) first, then openni2.  The depth image
+    is hardware-registered to the RGB frame so (x, y) pixel coordinates are
+    directly comparable — with a scale factor when the depth resolution
+    differs from the RGB resolution.
+
+    Minimum usable range is ~450 mm; keep the camera at least 50 cm from
+    the board or depth reads will be 0 (invalid/saturated).
+
+    Usage:
+        depth = OrbbekAstraDepthProvider()
+        detector = YOLOEnhancedBoardDetector(depth_provider=depth)
+        # … game loop …
+        depth.close()
+    """
+
+    def __init__(self, device_index: int = 0):
+        self._backend: Optional[str] = None
+        self._pipeline  = None   # pyorbbecsdk Pipeline
+        self._oni_stream = None  # openni2 VideoStream
+        self._last_depth: Optional[np.ndarray] = None
+        self._depth_h = 480
+        self._depth_w = 640
+
+        exc_pyorb: Optional[Exception] = None
+        exc_oni2:  Optional[Exception] = None
+
+        try:
+            self._init_pyorbbecsdk()
+            self._backend = "pyorbbecsdk"
+            print("[Depth] Orbbec depth stream opened via pyorbbecsdk")
+            return
+        except Exception as e:
+            exc_pyorb = e
+
+        try:
+            self._init_openni2()
+            self._backend = "openni2"
+            print("[Depth] Orbbec depth stream opened via openni2")
+            return
+        except Exception as e:
+            exc_oni2 = e
+
+        raise RuntimeError(
+            f"Could not open Orbbec depth stream.\n"
+            f"  pyorbbecsdk: {exc_pyorb}\n"
+            f"  openni2:     {exc_oni2}\n"
+            f"Install pyorbbecsdk or openni2 and ensure the camera is connected."
+        )
+
+    # ── Backend initialisers ─────────────────────────────────────────────────
+
+    def _init_pyorbbecsdk(self) -> None:
+        from pyorbbecsdk import Pipeline, Config, OBSensorType  # type: ignore
+        pipeline = Pipeline()
+        config   = Config()
+        profiles = pipeline.get_stream_profile_list(OBSensorType.DEPTH)
+        profile  = profiles.get_default_video_stream_profile()
+        config.enable_stream(profile)
+        # Hardware depth-to-colour alignment (may not be available on all firmware)
+        try:
+            from pyorbbecsdk import OBAlignMode  # type: ignore
+            config.set_align_mode(OBAlignMode.HW_MODE)
+        except Exception:
+            pass
+        pipeline.start(config)
+        self._pipeline = pipeline
+        # Record depth frame size
+        w = profile.get_width()
+        h = profile.get_height()
+        if w and h:
+            self._depth_w, self._depth_h = w, h
+
+    def _init_openni2(self) -> None:
+        import openni2  # type: ignore
+        openni2.initialize()
+        dev = openni2.Device.open_any()
+        try:
+            dev.set_image_registration_mode(
+                openni2.IMAGE_REGISTRATION_DEPTH_TO_COLOR
+            )
+        except Exception:
+            pass
+        stream = dev.create_depth_stream()
+        stream.start()
+        # Record depth frame size
+        frame = stream.read_frame()
+        self._depth_h  = frame.height
+        self._depth_w  = frame.width
+        self._oni_stream = stream
+
+    # ── Frame retrieval ──────────────────────────────────────────────────────
+
+    def get_depth_frame(self) -> Optional[np.ndarray]:
+        try:
+            if self._backend == "pyorbbecsdk":
+                return self._grab_pyorbbecsdk()
+            if self._backend == "openni2":
+                return self._grab_openni2()
+        except Exception:
+            pass
+        return self._last_depth  # return stale frame rather than None
+
+    def _grab_pyorbbecsdk(self) -> Optional[np.ndarray]:
+        frames = self._pipeline.wait_for_frames(timeout_ms=50)
+        if frames is None:
+            return self._last_depth
+        df = frames.get_depth_frame()
+        if df is None:
+            return self._last_depth
+        h = df.get_height()
+        w = df.get_width()
+        scale = float(df.get_depth_scale())   # usually 1.0 → already in mm
+        raw   = np.frombuffer(df.get_data(), dtype=np.uint16).reshape(h, w)
+        depth_mm = (raw.astype(np.float32) * scale).astype(np.uint16)
+        self._last_depth = depth_mm
+        self._depth_h, self._depth_w = h, w
+        return depth_mm
+
+    def _grab_openni2(self) -> Optional[np.ndarray]:
+        frame = self._oni_stream.read_frame()
+        data  = np.frombuffer(frame.get_buffer_as_uint16(), dtype=np.uint16)
+        depth_mm = data.reshape(frame.height, frame.width).copy()
+        self._last_depth = depth_mm
+        return depth_mm
+
+    # ── Cleanup ──────────────────────────────────────────────────────────────
+
+    def close(self) -> None:
+        try:
+            if self._pipeline is not None:
+                self._pipeline.stop()
+        except Exception:
+            pass
+        try:
+            if self._oni_stream is not None:
+                self._oni_stream.stop()
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1575,6 +1743,8 @@ class LockedBoardDetector:
                     # Capture per-cell HSV baselines for adaptive mode
                     if self.config.adaptive:
                         self._capture_empty_baselines(hsv)
+                    # Subclass hook — e.g. depth baseline capture
+                    self._on_locked(hsv)
                     print("[Board] Locked ✓")
                     self._print_board(cand_board)
                 else:
@@ -1643,6 +1813,10 @@ class LockedBoardDetector:
 
         return gaps_ok(row_gaps, "row") and gaps_ok(col_gaps, "col")
 
+    def _on_locked(self, hsv: np.ndarray) -> None:
+        """Called once immediately after the board locks. Override in subclasses."""
+        pass
+
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     # ── Adaptive colour detection ──────────────────────────────────────────
@@ -1676,9 +1850,21 @@ class LockedBoardDetector:
                 cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
                 roi_pixels = hsv[roi_mask > 0]
                 if len(roi_pixels) > 0:
-                    baselines[r, c, 0] = np.median(roi_pixels[:, 0])
-                    baselines[r, c, 1] = np.median(roi_pixels[:, 1])
-                    baselines[r, c, 2] = np.median(roi_pixels[:, 2])
+                    h_med = float(np.median(roi_pixels[:, 0]))
+                    s_med = float(np.median(roi_pixels[:, 1]))
+                    v_med = float(np.median(roi_pixels[:, 2]))
+                    # Skip cells that clearly have a piece at lock time so we
+                    # don't corrupt the baseline with piece-HSV values.
+                    # Astra Orbbec: pieces have S>100 with red/yellow hue.
+                    # Red piece:    (H<20 or H>158) AND S>100
+                    # Yellow piece: 15≤H≤45 AND S>70
+                    if (h_med < 20 or h_med > 158) and s_med > 100:
+                        continue   # red piece present at lock time
+                    if 15 <= h_med <= 45 and s_med > 70:
+                        continue   # yellow piece present at lock time
+                    baselines[r, c, 0] = h_med
+                    baselines[r, c, 1] = s_med
+                    baselines[r, c, 2] = v_med
                     empty_count += 1
 
         self._empty_baselines = baselines
@@ -1989,10 +2175,17 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
         model_path: Optional[str] = None,
         config: Optional[DetectionConfig] = None,
         min_piece_conf: float = 0.45,
+        depth_provider: Optional[DepthProvider] = None,
     ):
         super().__init__(config)
         self._yolo_model = None
         self._min_piece_conf = min_piece_conf
+        # Depth filtering (None = disabled, works with any RGB-only camera)
+        self._depth_provider   = depth_provider
+        self._board_near_mm:   Optional[int] = None
+        self._board_far_mm:    Optional[int] = None
+        self._depth_tolerance  = 55  # mm each side of board plane
+        self._current_depth:   Optional[np.ndarray] = None
         if model_path is not None:
             path = model_path
         elif os.path.exists(self.DEFAULT_MODEL_PATH):
@@ -2014,39 +2207,120 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
         except Exception as exc:
             print(f"[YOLOEnhanced] Model load error ({exc}) — HSV-only mode")
 
+    # ── Lock-time depth baseline ──────────────────────────────────────────────
+
+    def _on_locked(self, hsv: np.ndarray) -> None:
+        """Sample board-plane depth at lock time and set the accept window."""
+        if self._depth_provider is None:
+            return
+        depth_frame = self._depth_provider.get_depth_frame()
+        if depth_frame is None or self._locked_centers is None:
+            print("[Depth] No depth frame at lock time — depth filtering disabled")
+            return
+
+        dh, dw = depth_frame.shape[:2]
+        ih, iw = hsv.shape[:2]
+        sx = dw / iw
+        sy = dh / ih
+
+        samples = []
+        for r in range(6):
+            for c in range(7):
+                cx = int(round(self._locked_centers[r, c, 0] * sx))
+                cy = int(round(self._locked_centers[r, c, 1] * sy))
+                if 0 <= cx < dw and 0 <= cy < dh:
+                    d = int(depth_frame[cy, cx])
+                    if d > 0:
+                        samples.append(d)
+
+        if len(samples) < 10:
+            print(f"[Depth] Too few valid depth samples ({len(samples)}/42) "
+                  f"— keep camera ≥50 cm from board; depth filtering disabled")
+            self._board_near_mm = None
+            self._board_far_mm  = None
+            return
+
+        board_depth = int(np.median(samples))
+        self._board_near_mm = board_depth - self._depth_tolerance
+        self._board_far_mm  = board_depth + self._depth_tolerance
+        print(f"[Depth] Board plane {board_depth} mm  "
+              f"(accept {self._board_near_mm}–{self._board_far_mm} mm, "
+              f"n={len(samples)})")
+
     # ── Override: classification step ────────────────────────────────────────
 
     def _raw_board(self, image: np.ndarray, hsv: np.ndarray,
                    grid_centers: np.ndarray) -> np.ndarray:
         """
-        YOLO-only classification: fine-tuned model is the sole ground truth.
+        Fused classification: YOLO detects presence + HSV adaptive cross-validates.
 
-        YOLO conf ≥ min_piece_conf → red or yellow piece.
-        YOLO silent or below threshold → empty.
+        Two-tier fusion (per cell):
 
-        Temporal smoothing (REMOVE_THRESHOLD) in the parent class absorbs any
-        single-frame misses without destabilising the stable board.
+          Tier 1 — high-confidence YOLO (≥ min_piece_conf, default 0.45):
+            YOLO fires + HSV agrees   → accept, use HSV colour
+            YOLO fires + HSV silent   → reject (YOLO false positive on empty hole)
+
+          Tier 2 — moderate-confidence YOLO (≥ min_piece_conf × 0.6, default 0.27):
+            YOLO uncertain + HSV agrees → accept, use HSV colour
+              (catches real pieces under changed lighting where YOLO is less certain)
+            YOLO uncertain + HSV silent → reject
+
+          Below tier-2 threshold / YOLO fully silent:
+            HSV alone fires → reject (environmental false positive: chair, warm
+            background, etc. YOLO correctly ignores these entirely)
+
+        This means every accepted piece requires at least a weak YOLO signal AND
+        HSV confirmation — blocking pure-HSV environmental false positives while
+        tolerating lighting-induced YOLO confidence drops on real pieces.
         """
         if self._yolo_model is None:
             return super()._raw_board(image, hsv, grid_centers)
 
+        # Cache a single depth frame for this entire board-classification call
+        # so _classify_with_yolo doesn't need to call the SDK a second time.
+        if self._depth_provider is not None:
+            self._current_depth = self._depth_provider.get_depth_frame()
+        else:
+            self._current_depth = None
+
         yolo_board, yolo_confs = self._classify_with_yolo(image, grid_centers)
+        hsv_board = super()._raw_board(image, hsv, grid_centers)
 
         board = np.zeros((6, 7), dtype=np.int8)
         for r in range(6):
             for c in range(7):
                 yc = yolo_confs[r, c]
                 yp = yolo_board[r, c]
+                hp = hsv_board[r, c]
+
                 if yp != 0 and yc >= self._min_piece_conf:
-                    board[r, c] = yp
+                    # Tier 1: high-confidence YOLO
+                    if hp != 0:
+                        board[r, c] = hp   # both agree — use HSV for colour
+                    # else: YOLO fires, HSV doesn't → YOLO false positive on empty hole
+                elif yp != 0 and yc >= self._min_piece_conf * 0.6 and hp != 0:
+                    # Tier 2: moderate YOLO + HSV agreement → real piece under
+                    # varied lighting (YOLO less certain but not silent).
+                    # Still blocks chair/background because YOLO never fires on those.
+                    board[r, c] = hp
+                elif hp != 0 and self._empty_baselines is not None and self._empty_baselines[r, c, 1] < 0:
+                    # Tier 3: sentinel cell (piece was present at lock time — no adaptive
+                    # baseline captured).  YOLO silence cannot be used as a veto here
+                    # because the adaptive ΔS check that normally catches false positives
+                    # is unavailable.  Trust the fixed-threshold HSV result directly.
+                    # Chair/background still blocked: they have an adaptive baseline so
+                    # they hit the normal YOLO-gated path, not this one.
+                    board[r, c] = hp
+                # YOLO fully silent + adaptive baseline exists → reject regardless of HSV
 
         if self.config.verbose:
             for r in range(6):
                 for c in range(7):
-                    if board[r, c] != 0 or yolo_board[r, c] != 0:
+                    if board[r, c] != 0 or yolo_board[r, c] != 0 or hsv_board[r, c] != 0:
                         yolo_sym = "." if yolo_board[r, c] == 0 else ("R" if yolo_board[r, c] == self.YOLO_CLASS_RED else "Y")
+                        hsv_sym  = "." if hsv_board[r, c]  == 0 else ("R" if hsv_board[r, c]  == 1 else "Y")
                         out_sym  = "." if board[r, c]       == 0 else ("R" if board[r, c]       == 1 else "Y")
-                        print(f"  [YOLOEnh {r},{c}] yolo={yolo_sym}({yolo_confs[r,c]:.2f}) -> {out_sym}")
+                        print(f"  [YOLOEnh {r},{c}] yolo={yolo_sym}({yolo_confs[r,c]:.2f}) hsv={hsv_sym} -> {out_sym}")
 
         return board
 
@@ -2063,15 +2337,31 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
         board = np.zeros((6, 7), dtype=np.int8)
         confs = np.zeros((6, 7), dtype=np.float32)
 
-        results = self._yolo_model.predict(image, imgsz=640, verbose=False)[0]
+        # ── Crop to board region before YOLO inference ────────────────────────
+        # Running YOLO on the full 1280×720 frame is wasteful — the board
+        # occupies maybe 40% of the image. Cropping to a padded bounding box
+        # around the locked grid significantly reduces the inference workload.
+        ih, iw = image.shape[:2]
+        cell_spacing = float(abs(
+            int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0])
+        ))
+        pad = int(cell_spacing * 0.8)
+        gx_min = int(grid_centers[:, :, 0].min()) - pad
+        gx_max = int(grid_centers[:, :, 0].max()) + pad
+        gy_min = int(grid_centers[:, :, 1].min()) - pad
+        gy_max = int(grid_centers[:, :, 1].max()) + pad
+        crop_x1 = max(0, gx_min)
+        crop_y1 = max(0, gy_min)
+        crop_x2 = min(iw, gx_max)
+        crop_y2 = min(ih, gy_max)
+        crop = image[crop_y1:crop_y2, crop_x1:crop_x2]
+
+        results = self._yolo_model.predict(crop, imgsz=320, verbose=False)[0]
         if results.boxes is None or len(results.boxes) == 0:
             return board, confs
 
         # Snap radius: detections whose centre is more than half a cell away
         # from every grid centre are treated as background noise.
-        cell_spacing = float(abs(
-            int(grid_centers[0, 1, 0]) - int(grid_centers[0, 0, 0])
-        ))
         max_snap = cell_spacing * 0.55
         # Size guard: a real game piece fits inside roughly one cell.
         # Anything much larger (face, hand, torso) is rejected before snapping.
@@ -2090,8 +2380,9 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
             bh = y2 - y1
             if bw > max_piece_diameter or bh > max_piece_diameter:
                 continue  # bounding box too large to be a game piece (face/hand/body)
-            bx = (x1 + x2) * 0.5
-            by = (y1 + y2) * 0.5
+            # Translate crop-relative coords back to full-frame coords
+            bx = (x1 + x2) * 0.5 + crop_x1
+            by = (y1 + y2) * 0.5 + crop_y1
 
             best_r, best_c, best_d = -1, -1, float("inf")
             for r in range(6):
@@ -2105,6 +2396,27 @@ class YOLOEnhancedBoardDetector(LockedBoardDetector):
 
             if best_r < 0 or best_d > max_snap:
                 continue  # too far from any cell
+
+            # ── Depth filter (Orbbec Astra or similar) ───────────────────────
+            # Reject detections not at the locked board-plane depth.
+            # Pieces sit at ~board depth; background objects (chairs, shirts,
+            # walls) are further away.  Skipped when no depth provider is set
+            # (RGB-only cameras work unchanged).
+            if (self._board_near_mm is not None
+                    and self._current_depth is not None):
+                dh, dw = self._current_depth.shape[:2]
+                ih, iw = image.shape[:2]
+                dx = int(round(bx * dw / iw))
+                dy = int(round(by * dh / ih))
+                if 0 <= dx < dw and 0 <= dy < dh:
+                    d_mm = int(self._current_depth[dy, dx])
+                    if d_mm == 0 or not (self._board_near_mm <= d_mm <= self._board_far_mm):
+                        if self.config.verbose:
+                            sym = "R" if cls == self.YOLO_CLASS_RED else "Y"
+                            print(f"  [Depth reject {best_r},{best_c}] "
+                                  f"{sym}({conf:.2f}) depth={d_mm}mm "
+                                  f"outside [{self._board_near_mm},{self._board_far_mm}]")
+                        continue  # not at board plane — background object
 
             piece = 1 if cls == self.YOLO_CLASS_RED else 2
             if conf > confs[best_r, best_c]:

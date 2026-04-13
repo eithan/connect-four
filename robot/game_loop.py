@@ -27,6 +27,14 @@ import time
 import os
 import sys
 import traceback
+
+# Ensure pyorbbecsdk's bundled OrbbecSDK (2.7.6) is loaded instead of any
+# system/ROS version (e.g. ROS Jazzy ships 2.5.5 which has an incompatible API).
+# Must be done before importing board_detector / pyorbbecsdk.
+_site = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     ".venv", "lib", "python3.12", "site-packages")
+if os.path.isdir(_site):
+    os.environ["LD_LIBRARY_PATH"] = _site + ":" + os.environ.get("LD_LIBRARY_PATH", "")
 from datetime import datetime
 from enum import Enum
 from typing import Optional
@@ -76,7 +84,10 @@ def setup_logging(log_dir: str = "logs") -> tuple:
     return log_path, ss_dir, tee
 
 
-from board_detector import BoardDetector, LockedBoardDetector, YOLOEnhancedBoardDetector, DetectionConfig, SCREEN_CONFIG, PHYSICAL_CONFIG
+from board_detector import (BoardDetector, LockedBoardDetector,
+                            YOLOEnhancedBoardDetector, DetectionConfig,
+                            SCREEN_CONFIG, PHYSICAL_CONFIG,
+                            DepthProvider, OrbbekAstraDepthProvider)
 from turn_tracker import TurnTracker
 from ai_player import AIPlayer
 from tts_announcer import GameAnnouncer
@@ -1034,6 +1045,10 @@ def main():
     parser.add_argument("--ros", action="store_true",
                         help="Publish AI column picks to /connect_four/drop_column via rclpy "
                              "(requires ROS2 sourced; run on Ubuntu alongside column_mover)")
+    parser.add_argument("--depth", action="store_true",
+                        help="Enable Orbbec Astra depth filtering — rejects YOLO detections "
+                             "not at the board-plane depth (requires pyorbbecsdk or openni2; "
+                             "keep camera ≥50 cm from board)")
     args = parser.parse_args()
 
     mirror = not args.no_mirror
@@ -1057,7 +1072,17 @@ def main():
         cfg = replace(cfg, verbose=True)
 
     yolo_path = args.yolo if args.yolo else None
-    detector = YOLOEnhancedBoardDetector(model_path=yolo_path, config=cfg)
+
+    depth_provider: DepthProvider = DepthProvider()   # null / no-op by default
+    if args.depth:
+        try:
+            depth_provider = OrbbekAstraDepthProvider()
+        except Exception as exc:
+            print(f"[Depth] WARNING: Could not open depth camera ({exc})")
+            print("[Depth] Continuing without depth filtering")
+
+    detector = YOLOEnhancedBoardDetector(model_path=yolo_path, config=cfg,
+                                         depth_provider=depth_provider)
     if args.yolo:
         print(f"YOLO model override: {args.yolo}")
     else:
@@ -1208,6 +1233,7 @@ def main():
         cap.release()
         cv2.destroyAllWindows()
         announcer.stop()
+        depth_provider.close()
         if ros_bridge is not None:
             ros_bridge.close()
         sys.stdout = _tee._term   # restore real stdout before close
