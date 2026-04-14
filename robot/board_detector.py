@@ -1111,6 +1111,12 @@ class BoardDetector:
             hsv, np.array(cfg.yellow_hsv_low), np.array(cfg.yellow_hsv_high)
         )
 
+        # Allocate mask buffers once and reuse across all 42 cells.
+        # Drawing/undrawing the circle (~2800 px) is far cheaper than
+        # allocating+zeroing a new 1280×720 buffer per cell.
+        roi_mask = np.zeros((h_img, w_img), dtype=np.uint8)
+        and_buf  = np.zeros((h_img, w_img), dtype=np.uint8)
+
         for r in range(6):
             for c in range(7):
                 cx = int(grid_centers[r, c, 0])
@@ -1127,14 +1133,16 @@ class BoardDetector:
                             bby - margin <= cy <= bby + bbh + margin):
                         continue
 
-                roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
                 cv2.circle(roi_mask, (cx, cy), sample_radius, 255, -1)
                 total = cv2.countNonZero(roi_mask)
                 if total == 0:
+                    cv2.circle(roi_mask, (cx, cy), sample_radius, 0, -1)
                     continue
 
-                red_r = cv2.countNonZero(red_mask    & roi_mask) / total
-                yel_r = cv2.countNonZero(yellow_mask & roi_mask) / total
+                cv2.bitwise_and(red_mask, roi_mask, and_buf)
+                red_r = cv2.countNonZero(and_buf) / total
+                cv2.bitwise_and(yellow_mask, roi_mask, and_buf)
+                yel_r = cv2.countNonZero(and_buf) / total
 
                 if red_r > cfg.piece_threshold and red_r > yel_r:
                     board[r, c] = 1
@@ -1158,6 +1166,8 @@ class BoardDetector:
                         print(f"  [cell {r},{c}] red={red_r:.2f} yel={yel_r:.2f}"
                               f"  cx={cx} cy={cy}"
                               f"  HSV=({h_med},{s_med},{v_med}) -> {detected}")
+
+                cv2.circle(roi_mask, (cx, cy), sample_radius, 0, -1)  # undo for next cell
 
         return board   # raw, un-filtered — caller applies gravity filter
 
@@ -1724,6 +1734,13 @@ class LockedBoardDetector:
         min_ds = cfg.adaptive_min_delta_s
         hue_bnd = cfg.adaptive_hue_boundary
 
+        # Allocate mask buffers once and reuse across all 42 cells (draw/undo).
+        roi_mask = np.zeros((h_img, w_img), dtype=np.uint8)
+        # Sentinel-path buffers — lazily allocated only if a sentinel cell exists.
+        _sent_and_buf:  Optional[np.ndarray] = None
+        _sent_red_mask: Optional[np.ndarray] = None
+        _sent_yel_mask: Optional[np.ndarray] = None
+
         for r in range(6):
             for c in range(7):
                 cx = int(grid_centers[r, c, 0])
@@ -1738,10 +1755,10 @@ class LockedBoardDetector:
                             bby - margin <= cy <= bby + bbh + margin):
                         continue
 
-                roi_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
                 cv2.circle(roi_mask, (cx, cy), radius, 255, -1)
                 roi_pixels = hsv[roi_mask > 0]
                 if len(roi_pixels) == 0:
+                    cv2.circle(roi_mask, (cx, cy), radius, 0, -1)
                     continue
 
                 h_med = float(np.median(roi_pixels[:, 0]))
@@ -1754,23 +1771,28 @@ class LockedBoardDetector:
 
                 # Sentinel baseline (-1) → no empty reference for this cell.
                 # Fall back to fixed-threshold mask classification.
+                # roi_mask already has the circle drawn — reuse it directly.
                 if base_s < 0:
-                    cfg_f = self.config
-                    roi_mask2 = np.zeros(hsv.shape[:2], dtype=np.uint8)
-                    cv2.circle(roi_mask2, (cx, cy), radius, 255, -1)
-                    total = cv2.countNonZero(roi_mask2)
+                    total = cv2.countNonZero(roi_mask)
                     if total > 0:
-                        red_mask = (
-                            cv2.inRange(hsv, np.array(cfg_f.red_hsv_low1), np.array(cfg_f.red_hsv_high1)) |
-                            cv2.inRange(hsv, np.array(cfg_f.red_hsv_low2), np.array(cfg_f.red_hsv_high2))
-                        )
-                        yel_mask = cv2.inRange(hsv, np.array(cfg_f.yellow_hsv_low), np.array(cfg_f.yellow_hsv_high))
-                        red_r = cv2.countNonZero(red_mask & roi_mask2) / total
-                        yel_r = cv2.countNonZero(yel_mask & roi_mask2) / total
-                        if red_r > cfg_f.piece_threshold and red_r > yel_r:
+                        # Lazily build fixed-threshold masks and scratch buffer
+                        # the first time a sentinel cell is encountered.
+                        if _sent_red_mask is None:
+                            _sent_and_buf  = np.zeros((h_img, w_img), dtype=np.uint8)
+                            _sent_red_mask = (
+                                cv2.inRange(hsv, np.array(cfg.red_hsv_low1), np.array(cfg.red_hsv_high1)) |
+                                cv2.inRange(hsv, np.array(cfg.red_hsv_low2), np.array(cfg.red_hsv_high2))
+                            )
+                            _sent_yel_mask = cv2.inRange(hsv, np.array(cfg.yellow_hsv_low), np.array(cfg.yellow_hsv_high))
+                        cv2.bitwise_and(_sent_red_mask, roi_mask, _sent_and_buf)
+                        red_r = cv2.countNonZero(_sent_and_buf) / total
+                        cv2.bitwise_and(_sent_yel_mask, roi_mask, _sent_and_buf)
+                        yel_r = cv2.countNonZero(_sent_and_buf) / total
+                        if red_r > cfg.piece_threshold and red_r > yel_r:
                             board[r, c] = 1
-                        elif yel_r > cfg_f.piece_threshold and yel_r > red_r:
+                        elif yel_r > cfg.piece_threshold and yel_r > red_r:
                             board[r, c] = 2
+                    cv2.circle(roi_mask, (cx, cy), radius, 0, -1)  # undo
                     continue
 
                 delta_s = s_med - base_s
@@ -1808,6 +1830,8 @@ class LockedBoardDetector:
                               f"  base=({base_h:.0f},{base_s:.0f},{base_v:.0f})"
                               f" -> {detected}")
 
+                cv2.circle(roi_mask, (cx, cy), radius, 0, -1)  # undo for next cell
+
         return board
 
     # ── Temporal smoothing ───────────────────────────────────────────────────
@@ -1830,7 +1854,7 @@ class LockedBoardDetector:
             self._stable_board = np.zeros((6, 7), dtype=np.int8)
             self._absent_count = np.zeros((6, 7), dtype=np.int32)
             self._add_count    = np.zeros((6, 7), dtype=np.int32)
-            return self._stable_board.copy()
+            return self._stable_board
 
         # Burst detection — only count gravity-valid new candidates.
         # "Gravity-valid" = lowest empty slot in its column (all rows below
@@ -1910,7 +1934,7 @@ class LockedBoardDetector:
                             self._stable_board[r, c] = 0
                             self._absent_count[r, c] = 0
 
-        return self._stable_board.copy()
+        return self._stable_board
 
     @staticmethod
     def _print_board(board: np.ndarray):

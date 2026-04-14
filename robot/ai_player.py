@@ -24,6 +24,9 @@ class AIPlayer:
         self.use_heuristic = use_heuristic
         self.input_name = None
 
+        # Pre-allocated input buffer — reused every move to avoid per-move malloc.
+        self._input_buf = np.zeros((1, 3, ROWS, COLS), dtype=np.float32)
+
         if not use_heuristic:
             self._try_load_model(model_path)
         if self.session is None and not use_heuristic:
@@ -75,10 +78,10 @@ class AIPlayer:
 
     def _onnx_move(self, board, player, valid_moves):
         opponent = 3 - player
-        inp = np.zeros((1, 3, ROWS, COLS), dtype=np.float32)
-        inp[0, 0] = (board == player).astype(np.float32)    # channel 0: current player
-        inp[0, 1] = (board == 0).astype(np.float32)         # channel 1: empty
-        inp[0, 2] = (board == opponent).astype(np.float32)  # channel 2: opponent
+        inp = self._input_buf
+        inp[0, 0] = (board == player)    # channel 0: current player (bool→float32)
+        inp[0, 1] = (board == 0)         # channel 1: empty
+        inp[0, 2] = (board == opponent)  # channel 2: opponent
 
         try:
             outputs = self.session.get_outputs()
