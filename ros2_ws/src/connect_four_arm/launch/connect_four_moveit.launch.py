@@ -1,47 +1,87 @@
 """
 connect_four_moveit.launch.py
 
-Starts MoveIt2 (with RViz2) and the column mover node.
-Run AFTER connect_four_sim.launch.py is up and stable.
-
-The column mover waits 12 seconds for MoveIt2 to finish initializing
-before it tries to connect — adjust the timer if your machine is slower.
-
-Launch:
-    ros2 launch connect_four_arm connect_four_moveit.launch.py
-
-Test:
-    ros2 topic pub --once /connect_four/drop_column std_msgs/Int32 "{data: 3}"
+Starts a local MoveIt2 stack for the UR simulation using the Connect Four RViz
+profile and a controller mapping that matches the Gazebo simulation.
 """
 
+import os
+from pathlib import Path
+
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, Shutdown
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import RegisterEventHandler
+from launch.event_handlers import OnProcessExit
 from launch_ros.actions import Node
+from moveit_configs_utils import MoveItConfigsBuilder
 from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    moveit = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            get_package_share_directory("ur_moveit_config"),
-            "/launch/ur_moveit.launch.py",
-        ]),
-        launch_arguments={
-            "ur_type": "ur5e",
-            "launch_rviz": "false",  # we launch RViz2 ourselves for clean shutdown
-            "use_sim_time": "true",
-        }.items(),
+    pkg = get_package_share_directory("connect_four_arm")
+    rviz_config = os.path.join(pkg, "config", "connect_four.rviz")
+    warehouse_sqlite_path = os.path.expanduser("~/.ros/warehouse_ros.sqlite")
+
+    moveit_config = (
+        MoveItConfigsBuilder(robot_name="ur", package_name="ur_moveit_config")
+        .robot_description_semantic(Path("srdf") / "ur.srdf.xacro", {"name": "ur"})
+        .trajectory_execution(
+            Path(pkg) / "config" / "connect_four_moveit_controllers.yaml",
+            moveit_manage_controllers=True,
+        )
+        .to_moveit_configs()
+    )
+
+    warehouse_ros_config = {
+        "warehouse_plugin": "warehouse_ros_sqlite::DatabaseConnection",
+        "warehouse_host": warehouse_sqlite_path,
+    }
+
+    wait_robot_description = Node(
+        package="ur_robot_driver",
+        executable="wait_for_robot_description",
+        output="screen",
+    )
+
+    move_group = Node(
+        package="moveit_ros_move_group",
+        executable="move_group",
+        output="screen",
+        parameters=[
+            moveit_config.to_dict(),
+            warehouse_ros_config,
+            {
+                "use_sim_time": True,
+                "publish_robot_description_semantic": True,
+            },
+        ],
     )
 
     rviz2 = Node(
         package="rviz2",
         executable="rviz2",
-        name="rviz2",
-        arguments=["-d", "/opt/ros/jazzy/share/ur_moveit_config/config/moveit.rviz"],
-        parameters=[{"use_sim_time": True}],
+        name="connect_four_rviz",
+        arguments=["-d", rviz_config],
+        parameters=[
+            moveit_config.robot_description,
+            moveit_config.robot_description_semantic,
+            moveit_config.robot_description_kinematics,
+            moveit_config.planning_pipelines,
+            moveit_config.joint_limits,
+            moveit_config.trajectory_execution,
+            warehouse_ros_config,
+            {"use_sim_time": True},
+        ],
         output="screen",
-        on_exit=Shutdown(),  # closing RViz2 window shuts down this terminal cleanly
     )
 
-    return LaunchDescription([moveit, rviz2])
+    return LaunchDescription(
+        [
+            wait_robot_description,
+            RegisterEventHandler(
+                OnProcessExit(
+                    target_action=wait_robot_description,
+                    on_exit=[move_group, rviz2],
+                )
+            ),
+        ]
+    )

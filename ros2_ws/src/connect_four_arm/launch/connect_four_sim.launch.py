@@ -20,10 +20,13 @@ def generate_launch_description():
     )
 
     # Gazebo + ros2_control + joint controllers (headless, no GUI)
+    # initial_joint_controller must match what MoveIt2 and column_mover expect.
     gazebo_sim = ExecuteProcess(
         cmd=[
             "ros2", "launch", "ur_simulation_gz", "ur_sim_control.launch.py",
-            "ur_type:=ur5e", "gazebo_gui:=false", "use_sim_time:=true",
+            "ur_type:=ur5e", "gazebo_gui:=false", "launch_rviz:=false",
+            "initial_joint_controller:=joint_trajectory_controller",
+            "use_sim_time:=true",
         ],
         additional_env={"DISPLAY": ":99", "GZ_IP": "127.0.0.1"},
         output="screen",

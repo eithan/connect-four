@@ -19,6 +19,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from std_msgs.msg import Int32, ColorRGBA
 from geometry_msgs.msg import Point, Vector3
 from visualization_msgs.msg import Marker, MarkerArray
@@ -75,24 +76,43 @@ class ColumnMover(Node):
     def __init__(self):
         super().__init__("column_mover")
 
+        # pymoveit2 action/service callbacks live in this group.
         cb_group = ReentrantCallbackGroup()
+        # The drop_column subscription gets its OWN group so that pymoveit2's
+        # action callbacks can never starve it — they compete for the same
+        # executor threads only within their own group.
+        self._sub_cb_group = ReentrantCallbackGroup()
 
+        # use_move_group_action=False: plan via /plan_kinematic_path service,
+        # execute via /execute_trajectory action (MoveGroup routes to
+        # joint_trajectory_controller per connect_four_moveit_controllers.yaml).
+        # follow_joint_trajectory_action_name is intentionally omitted —
+        # newer pymoveit2 ignores it and uses /execute_trajectory regardless.
         self._moveit2 = MoveIt2(
             node=self,
             joint_names=UR5E_JOINTS,
             base_link_name="base_link",
             end_effector_name="tool0",
             group_name="ur_manipulator",
-            execute_via_moveit=True,
+            use_move_group_action=False,
             callback_group=cb_group,
         )
+        self._moveit2.max_velocity_scaling_factor = 0.5
+        self._moveit2.max_acceleration_scaling_factor = 0.25
         self._moveit2.planner_id = "RRTConnect"
         self._moveit2.allowed_planning_time = 10.0
 
         self._lock = threading.Lock()
 
+        # Transient Local (latched): RViz receives the last message even if it
+        # subscribes after markers are first published.
+        _marker_qos = QoSProfile(
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
         self._marker_pub = self.create_publisher(
-            MarkerArray, "/connect_four/markers", 10
+            MarkerArray, "/connect_four/markers", _marker_qos
         )
         self._markers: MarkerArray | None = None  # cached after first build
 
@@ -101,26 +121,36 @@ class ColumnMover(Node):
             "/connect_four/drop_column",
             self._on_column,
             10,
-            callback_group=cb_group,
+            callback_group=self._sub_cb_group,
         )
 
         self._busy = False   # True while a move is in progress
 
-        # Build markers once after 3 s, then republish every 2 s so RViz2 always gets them
+        # Publish the visual board immediately so RViz can show it even while
+        # MoveIt is still starting. Poll separately for MoveIt readiness before
+        # attempting the first arm motion.
+        self._publish_markers()
         self._setup_timer = self.create_timer(
-            3.0, self._setup_scene, callback_group=cb_group
+            1.0, self._wait_for_moveit, callback_group=cb_group
         )
         self._marker_timer = self.create_timer(
             2.0, self._republish_markers, callback_group=cb_group
         )
 
         self.get_logger().info(
-            "ColumnMover ready — publish column index (0-6) to /connect_four/drop_column"
+            "ColumnMover ready — waiting for MoveIt2 (/compute_ik)..."
         )
 
-    def _setup_scene(self):
-        self._setup_timer.cancel()  # run once only
+    def _wait_for_moveit(self):
+        """Poll until /compute_ik service exists, then move the arm home once."""
+        services = dict(self.get_service_names_and_types())
+        if "/compute_ik" not in services:
+            return  # try again next tick
+        self._setup_timer.cancel()
+        self.get_logger().info("MoveIt2 ready — moving to home position")
+        threading.Thread(target=self._go_home, daemon=True).start()
 
+    def _publish_markers(self):
         markers = MarkerArray()
 
         def make_header():
@@ -164,15 +194,13 @@ class ColumnMover(Node):
         self._marker_pub.publish(self._markers)
         self.get_logger().info("Connect Four board markers published")
 
-        # Move to home after scene is set up
-        threading.Thread(target=self._go_home, daemon=True).start()
-
     def _republish_markers(self):
         if self._markers is not None:
             self._marker_pub.publish(self._markers)
 
     def _on_column(self, msg: Int32):
         col = msg.data
+        self.get_logger().info(f"Received drop_column request: {col}")
         if not 0 <= col <= 6:
             self.get_logger().error(f"Column {col} out of range — must be 0-6")
             return
@@ -181,17 +209,35 @@ class ColumnMover(Node):
             return
         threading.Thread(target=self._move, args=(col,), daemon=True).start()
 
-    def _wait_idle(self, timeout: float = MOVE_TIMEOUT):
-        """Block until MoveIt2 is IDLE or timeout expires."""
+    def _wait_executed(self):
+        """Wait for the current move to complete using state polling only.
+
+        Does NOT call wait_until_executed() — in some pymoveit2 versions that
+        method calls rclpy.spin_once() internally, which corrupts the
+        MultiThreadedExecutor and silently kills all future subscription and
+        timer callbacks (including _on_column).
+
+        Phase 1: wait up to 2 s for state to leave IDLE, confirming the goal
+                 was accepted by the action server.
+        Phase 2: wait up to MOVE_TIMEOUT for state to return to IDLE,
+                 confirming execution completed.
+        """
+        if not _HAS_STATE:
+            time.sleep(MOVE_TIMEOUT)
+            return
+
+        # Phase 1 — wait for goal to be accepted (state leaves IDLE)
+        deadline = time.time() + 2.0
+        while self._moveit2.query_state() == MoveIt2State.IDLE and time.time() < deadline:
+            time.sleep(0.05)
+
+        # Phase 2 — wait for execution to finish (state returns to IDLE)
         start = time.time()
-        if _HAS_STATE:
-            while (
-                self._moveit2.query_state() != MoveIt2State.IDLE
-                and time.time() - start < timeout
-            ):
-                time.sleep(0.1)
-        else:
-            time.sleep(timeout)
+        while (
+            self._moveit2.query_state() != MoveIt2State.IDLE
+            and time.time() - start < MOVE_TIMEOUT
+        ):
+            time.sleep(0.1)
 
     def _go_home(self):
         """Move arm to the safe home configuration."""
@@ -200,8 +246,10 @@ class ColumnMover(Node):
             try:
                 self.get_logger().info("Moving to home position")
                 self._moveit2.move_to_configuration(HOME_JOINTS)
-                self._wait_idle()
+                self._wait_executed()
                 self.get_logger().info("Home position reached")
+            except Exception as exc:
+                self.get_logger().error(f"Home move failed: {exc}")
             finally:
                 self._busy = False
 
@@ -218,14 +266,14 @@ class ColumnMover(Node):
                     quat_xyzw=QUAT_DOWN,
                     cartesian=False,
                 )
-                self._wait_idle()
-                self.get_logger().info(f"Column {col} reached")
+                self._wait_executed()
+                self.get_logger().info(f"Column {col} reached — returning home")
 
-                # Return to home after drop
-                self.get_logger().info("Returning to home position")
                 self._moveit2.move_to_configuration(HOME_JOINTS)
-                self._wait_idle()
+                self._wait_executed()
                 self.get_logger().info("Home position reached")
+            except Exception as exc:
+                self.get_logger().error(f"Column {col} move failed: {exc}")
             finally:
                 self._busy = False
 
