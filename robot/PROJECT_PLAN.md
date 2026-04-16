@@ -4,73 +4,72 @@
 
 Build a robot arm that can play Connect Four against a human opponent by:
 
-Viewing a standard store-bought Connect Four board with a depth camera
-
+- Viewing a standard store-bought Connect Four board with a depth camera
 - Detecting the board state and determining whose turn it is
-
 - Calling into your existing AlphaZero AI model to choose the best move
-
 - Physically picking up a piece and dropping it into the correct column
-
 - Waiting for the human to play, then repeating
 
-Your stack: Apple Silicon Mac (development) → Jetson Orin Nano (deployment) → ROS2 + Python + ONNX
+Your stack: Apple Silicon Mac (development) → Ubuntu 24.04 runtime machine → ROS2 Jazzy + Gazebo Harmonic + MoveIt2 + Python + ONNX → real arm (TBD)
+
+---
 
 ## Robot Arm Recommendations
 
 ### Budget Tier (~$200–$400): Hiwonder ArmPi Ultra (Raspberry Pi version)
 
 - Price: ~$300–$400 depending on configuration
-
 - Specs: 6-DOF, bus servos (25 KG torque), 3D depth camera included, ROS2 compatible
-
-- Pros: Comes with a depth camera out of the box, extensive tutorials, Python/OpenCV support, ROS2 ready. Affordable entry point.
-
-- Cons: Raspberry Pi based (not Jetson), so you'd need to either use the Pi or swap controllers. Lower torque than JetArm. Smaller community than Elephant Robotics.
-
-- Best for: Getting started quickly at low cost if you're okay with Raspberry Pi as the brain (or using it as a remote-controlled arm from your Jetson).
+- Pros: Comes with a depth camera out of the box, extensive tutorials, Python/OpenCV support, ROS2 ready.
+- Cons: Raspberry Pi based (not Jetson), lower torque. Smaller community than Elephant Robotics.
+- Best for: Getting started quickly at low cost.
 
 ### Mid Tier (~$500–$800): Elephant Robotics myCobot 280
 
-- Price: ~$650–$800 depending on version (M5Stack, Pi, or Jetson Nano variants)
-
-- Specs: 6-DOF, 250g payload, 280mm reach, ±0.5mm repeatability, ~850g weight
-
-- Pros: Largest community of any hobby arm, excellent ROS1/ROS2 + MoveIt support, Python/C++/C# APIs, 90+ control interfaces, drag-and-teach, LEGO-compatible ends. Jetson Nano version available. Huge ecosystem of accessories (grippers, cameras, suction cups). Well-documented Gitbook.
-
-- Cons: 250g payload is light (Connect Four pieces are ~5g each, so this is fine, but limits future projects). No depth camera included — you'd add your own (e.g., Intel RealSense or the one from your Orin Nano setup). The Jetson Nano version uses the older Nano, not Orin Nano — you'd pair the M5Stack version with your existing Orin Nano as the brain.
-
-- Best for: Best overall balance of community support, documentation, and ROS2 integration. Strong recommendation if you want a well-supported path.
+- Price: ~$650–$800 depending on version
+- Specs: 6-DOF, 250g payload, 280mm reach, ±0.5mm repeatability
+- Pros: Largest community of any hobby arm, excellent ROS2 + MoveIt support. Huge ecosystem of accessories.
+- Cons: 250g payload is light. No depth camera included.
+- Best for: Best overall balance of community support, documentation, and ROS2 integration.
 
 ### High Tier (~$700–$1,100+): Hiwonder JetArm (Jetson Orin Nano version)
 
-- Price: ~$700–$1,100+ depending on kit tier (Advanced vs Ultimate) and Orin Nano memory (4GB vs 8GB). Note: this price includes the Jetson Orin Nano board.
-
-- Specs: 6-DOF, bus servos (35 KG torque), 3D depth camera (Gemini) included, 6-mic array, ROS1 + ROS2, Gazebo simulation support, MoveIt, inverse kinematics source code provided
-
-- Pros: Natively designed for Jetson Orin Nano — this is the arm built for your exact controller. Includes a 3D depth camera with RGB+D fusion. Comes with working examples for color recognition, AprilTag detection, 3D spatial grasping, sorting, and tracking. Full inverse kinematics source code and DH model provided. Gazebo simulation included. Comprehensive wiki and video tutorials. All-metal construction.
-
-- Cons: Higher price (though it includes the Orin Nano). Hiwonder's ecosystem is less community-driven than Elephant Robotics — you're more reliant on their tutorials. The software stack is opinionated (their custom ROS packages).
-
-- Best for: If you want the most turnkey "Jetson Orin Nano + arm + depth camera + ROS2" experience with the least integration work, this is it. Since you already use an Orin Nano, this is the path of least resistance.
+- Price: ~$700–$1,100+ (includes Jetson Orin Nano board)
+- Specs: 6-DOF, bus servos (35 KG torque), 3D depth camera (Gemini) included, 6-mic array, ROS2 + MoveIt
+- Pros: Natively designed for Jetson Orin Nano. Includes 3D depth camera. Working examples for 3D spatial grasping. Full IK source code and Gazebo simulation included.
+- Cons: Higher price. More reliant on Hiwonder's own tutorials/packages.
+- Best for: Most turnkey "Jetson + arm + depth camera + ROS2" experience.
 
 ### Honorable Mention: Seeed Studio reBot Arm B601
 
 - Price: Target sub-$1,000 build cost (open source, you source parts)
-
 - Specs: 6-DOF + gripper, 650mm reach, 1.5kg payload
 
-**Recommendation:** Go with the Hiwonder JetArm (Orin Nano 8GB version) — specifically the "Advanced Kit with Orin Nano 8GB". It's purpose-built for your controller, includes the depth camera you need, and comes with working 3D grasping examples that are directly relevant to picking up Connect Four pieces. The 8GB Orin Nano provides 40 TOPS of AI performance (double the 4GB's 20 TOPS), 1024 CUDA cores, and 32 Tensor cores — critical headroom for running vision + AI inference + ROS2 + MoveIt concurrently, and essential for future natural language processing capabilities. The Elephant Robotics myCobot 280 is the runner-up — better community but more integration work since you'd need to add your own camera and bridge it to your Orin Nano.
+**Recommendation:** Go with the Hiwonder JetArm (Orin Nano 8GB version) for the most integrated experience, or the Elephant Robotics myCobot 280 for the best community/ROS2 support.
 
-**End effector:** Parallel gripper (the JetArm's default servo-driven claw). While a suction cup would be simpler for Connect Four discs specifically, the gripper is far more general-purpose and will support future tasks like picking up blocks, bottles, and other objects. The gripper requires more careful calibration for the thin Connect Four discs (~33mm diameter, ~8mm thick) but handles a much wider range of objects for future projects.
+---
+
+## End Effector: Robotiq 2F-85 Parallel Gripper
+
+**Recommendation: Robotiq 2F-85** (or a compatible open-source clone for cheaper arms).
+
+- **Why fingers over suction:** Fingers are far more general-purpose, required for picking up pieces stacked vertically in a supply tray, and better suited for VLA training data diversity.
+- **Why Robotiq 2F-85 specifically:**
+  - Industry standard — massive ROS2/Gazebo ecosystem, well-maintained URDF and MoveIt configs
+  - 85mm open width is ideal for Connect Four discs (~33mm diameter) — plenty of clearance
+  - Adaptive fingers conform to object shape for reliable grasp
+  - Excellent sim-to-real transfer: the Gazebo model behaves like the real hardware
+  - Compatible with UR5e (which is what the simulation uses)
+- **For cheap real arm:** An open-source Robotiq-inspired 2-finger gripper (~$50–200 for servo-driven clone) or the myCobot's included gripper accessory. The VLA model trained on Robotiq 2F-85 in sim should transfer reasonably well to any parallel gripper with similar geometry.
+- **Connect Four piece grip strategy:** Approach from above with fingers spread slightly wider than 33mm, lower onto the disc (pieces stored flat in a tray), close fingers to ~25mm to grip the disc by its edge.
+
+---
 
 ## Phased Project Plan
 
 ### Phase 1: Vision Pipeline on Mac (No ROS2, No Arm) ✅ COMPLETE
 
 Goal: Build and test the computer vision system that can look at a Connect Four board image and extract the full board state.
-Timeline: 2–3 weeks
-Hardware needed: Just your Mac
 
 #### Deliverables ✅
 - `board_detector.py` — OpenCV board state extraction
@@ -80,342 +79,266 @@ Hardware needed: Just your Mac
 - `test_images/` — Synthetic test images with ground truth
 - `requirements.txt` — Python dependencies
 
-### Phase 2: Live Camera Feed on Mac 🔄 IN PROGRESS
+---
+
+### Phase 2: Live Camera Feed on Mac 🔄 MOSTLY COMPLETE
 
 Goal: Replace static images with a live camera feed and validate real-time board detection.
-Timeline: 1–2 weeks
-Hardware needed: Mac + USB webcam (or Mac's built-in camera) + physical Connect Four board
 
 #### 2.1 — Live Camera Capture ✅
-
-- ✅ Use OpenCV VideoCapture to stream from a webcam
-
-- ✅ Add camera calibration for your specific setup (distance, angle, lighting) — adaptive HSV baseline sampling at lock time
-
-- ✅ Implement frame rate throttling
+- ✅ OpenCV VideoCapture streaming, camera calibration, adaptive HSV baseline sampling at lock time, frame rate throttling
 
 #### 2.2 — Robust Detection Tuning ✅
-
-- ✅ Tune HSV thresholds for your specific lighting conditions
-
-- ✅ Add adaptive thresholding for varying light — per-cell baseline sampling (ΔSaturation mode)
-
-- ✅ Handle partial occlusion (human's hand over the board while placing a piece) — temporal smoother with ADD_THRESHOLD, burst guard, gravity-validity constraint
-
-- ✅ Add confidence scoring to board detection — only act on high-confidence frames
-
-- ✅ Implement a "stable state" detector: only accept a new board state after N consecutive frames agree (StableStateDetector, configurable via `--stable-seconds`)
-
-- ✅ Shirt/face contamination guards — `_cell_was_empty` sentinel, burst detection cap, shirt-at-lock-time filtering
-
-- ✅ Gravity-strict cascade prevention — `_add_count` only accumulates when all cells below in column are already occupied in stable board, preventing false pieces from chaining up a column
+- ✅ Adaptive thresholding, temporal smoother, burst guard, gravity-validity constraint
+- ✅ `StableStateDetector` (configurable via `--stable-seconds`)
+- ✅ Shirt/face contamination guards, gravity-strict cascade prevention
 
 #### 2.3 — Game Loop ✅
-
-- ✅ Full cooperative game loop (`game_loop.py`)
-
-  - ✅ Display "Waiting for human's move..."
-
-  - ✅ Detect when exactly one new piece appears → human has played
-
-  - ✅ Run AI inference → determine best column (AlphaZero ONNX)
-
-  - ✅ Display "AI wants to play column X" with column indicator overlay and policy probability bars
-
-  - ✅ Wait for human to place the AI's piece (cooperative mode)
-
-  - ✅ Detect the AI's piece was placed → go back to step 1
-
-  - ✅ Handle game-over detection (win/draw) with animated winning-piece highlight
-
-  - ✅ TTS announcements via macOS `say`
-
-  - ✅ Screenshot logging on every confirmed move; full game log with board state traces
+- ✅ Full cooperative game loop (`game_loop.py`) with AI inference, overlay, TTS, logging
 
 #### 2.4 — YOLO-Enhanced Piece Detection ✅
-
-- ✅ Trained YOLOv8 model on Connect4 dataset (3 classes: empty/red/yellow, fine-tuned at 640px)
-
-- ✅ `YOLOEnhancedBoardDetector` — drop-in replacement for `LockedBoardDetector`; YOLO runs on the locked frame, detections snapped to nearest grid centre (snap radius = 0.55× cell spacing)
-
-- ✅ Hybrid YOLO+HSV fusion: YOLO positive detections (Red/Yellow, conf ≥ 0.45) are authoritative; cells where YOLO sees nothing fall back to HSV adaptive to confirm empty vs. missed piece — prevents YOLO flicker from evicting real pieces while still blocking skin-tone false positives
-
-- ✅ YOLO load status logged after tee setup so every log file confirms whether YOLO was active
+- ✅ Fine-tuned YOLOv8, `YOLOEnhancedBoardDetector`, hybrid YOLO+HSV fusion
 
 #### 2.5 — Board Overlay Accuracy ✅
+- ✅ Extended hole search, clipped-contour guard, accurate board overlay
 
-- ✅ Hole search extended by one cell width beyond blue bbox on each side — catches columns the blue-frame contour clips (e.g. right column lost to a bright monitor or shadow)
+#### 2.6 — Jetson Orin Nano Deployment ⏸ DEPRIORITIZED
+*Deferred until after VLA model is working in simulation (Phase 3C). The vision pipeline already works well on Ubuntu; Jetson deployment is an optimization, not a blocker.*
 
-- ✅ Clipped-contour guard: if holes appear outside the original bbox, the perspective-warp path is bypassed for that frame and the grid is fitted directly in image coordinates (where the hole positions are exact), avoiding inverse-warp distortion
+- [ ] Convert YOLO `.pt` to TensorRT `.engine`
+- [ ] Install Jetson-specific `onnxruntime-gpu` wheel
+- [ ] Replace macOS TTS with Linux alternative (`espeak-ng` or `pyttsx3`)
+- [ ] Validate Orbbec depth camera via Linux/Jetson SDK
 
-- ✅ `board_contour` derived from actual grid-centre extents + frame padding rather than the blue bounding box — green overlay rectangle now accurately reflects the fitted grid
+#### 2.7 — Depth Camera Integration ⏸ DEPRIORITIZED
+*Deferred until after VLA model is working. The VLA model will use wrist/scene cameras for grasping; the Orbbec is primarily for board-state detection which works well without depth already.*
 
-#### 2.6 — Jetson Orin Nano Deployment TODO
-
-- [ ] Convert YOLO `.pt` model to TensorRT `.engine` for GPU-accelerated inference (`model.export(format="engine")`) — expected 3–5× speedup over PyTorch on device
-
-- [ ] Install Jetson-specific `onnxruntime-gpu` wheel (NVIDIA-provided) to enable CUDA execution provider for AlphaZero ONNX inference
-
-- [ ] Replace macOS TTS (`say` in `tts_announcer.py`) with Linux alternative (`espeak-ng` or `pyttsx3`)
-
-- [ ] Validate Orbbec depth camera via Orbbec Linux/Jetson SDK; confirm RGB stream accessible via `cv2.VideoCapture` as UVC fallback
-
-- [ ] Profile with `tegrastats` on first run — monitor shared CPU/GPU memory pressure (8GB Orin Nano recommended)
-
-#### 2.7 — Depth Camera Integration TODO
-
-- [ ] Sample board-plane depth at lock time (median Z across grid centres)
-
-- [ ] Compute `board_near_mm` / `board_far_mm` range (board plane ± ~30mm)
-
-- [ ] In `YOLOEnhancedBoardDetector._classify_with_yolo`: reject detections whose 3D centre falls outside the board depth range — eliminates shirt/face false positives that are physically behind or in front of the board
+- [ ] Sample board-plane depth at lock time
+- [ ] Compute `board_near_mm` / `board_far_mm` range
+- [ ] Reject YOLO detections outside board depth range
 
 #### 2.8 — Future Perception Improvements (Backlog)
+- [ ] Fine-tune YOLO on captured game-session data
+- [ ] Lightweight CNN cell classifier as YOLO replacement
 
-- [ ] Fine-tune YOLO on captured game-session data from your specific board, lighting, and background — highest ROI improvement, training data already exists in `logs/`
+---
 
-- [ ] Replace YOLO per-cell classification with a lightweight CNN classifier: crop each locked grid cell to ~64×64, apply circular mask to remove blue frame corners, run 3-class (empty/red/yellow) inference — faster than full-frame YOLO, no snap-radius heuristic needed, straightforward to train from existing cell crops
+### Phase 3: ROS2 Simulation — Core Infrastructure ✅ COMPLETE
+
+Goal: Working Gazebo + MoveIt2 simulation with the arm reaching all 7 columns reliably.
+
+#### Status: Complete as of 2026-04-16
+
+- ✅ Ubuntu 24.04 machine running ROS2 Jazzy
+- ✅ Package `connect_four_arm` builds and launches via `connect_four.launch.py`
+- ✅ Full stack: Gazebo Harmonic (headless) + ros2_control + MoveIt2 + pymoveit2 client
+- ✅ Arm reaches all 7 columns deterministically (IK precomputed at startup, joint-space planning)
+- ✅ Visual board/column markers in RViz2
+- ✅ Home → column → home sequence working
+- ✅ `game_loop.py` ROS integration (`--ros` flag publishes to `/connect_four/drop_column`)
+- ✅ `HOME_JOINTS = [0, -π/2, 0, -π/2, 0, 0]`; arm homes on startup and after each drop
+
+#### Key files
+```
+ros2_ws/src/connect_four_arm/
+  launch/
+    connect_four.launch.py         # Single-command full stack launch
+    connect_four_sim.launch.py     # Gazebo + Xvfb
+    connect_four_moveit.launch.py  # MoveIt2 + RViz2
+  scripts/
+    column_mover.py                # Arm control node (IK precompute + joint-space planning)
+  config/
+    connect_four_moveit_controllers.yaml
+```
+
+#### Board & Column Geometry
+```
+BOARD_X        = 0.65 m
+BOARD_WIDTH    = 0.292 m  (7 cols × 42 mm)
+BOARD_HEIGHT   = 0.254 m  (6 rows × 42 mm)
+DROP_Z         = 0.304 m  (50 mm above board top)
+Column y positions: (3 - i) * COL_SPACING, i = 0..6
+  col 0 (left):   y = +0.125 m
+  col 3 (center): y =  0.000 m
+  col 6 (right):  y = -0.125 m
+```
+
+---
+
+### Phase 3B: VLA-Ready Simulation 🔲 NEXT
+
+Goal: Upgrade the Gazebo scene to be physically accurate and capable of collecting VLA training demonstrations. Success = arm can execute a scripted pick-place-release sequence in sim with realistic physics.
+
+#### 3B.1 — Realistic Gazebo Scene
+- [ ] Add a table/surface at the correct height in the Gazebo world SDF
+- [ ] Create Connect Four board collision mesh (292mm × 254mm × 64mm box with 7 column slots — simplified as a solid box with a slot top surface)
+- [ ] Create Connect Four piece SDF models: red and yellow cylinders (31mm diameter × 7mm thick), correct mass/inertia, appropriate friction coefficients
+- [ ] Spawn 7 pieces of each color in a supply tray next to the board at known positions within the arm's workspace
+- [ ] Verify pieces fall and stack realistically in Gazebo physics
+
+#### 3B.2 — Robotiq 2F-85 Gripper Integration
+- [ ] Add `robotiq_description` package to the workspace (ROS2 Jazzy compatible fork)
+- [ ] Attach Robotiq 2F-85 URDF to UR5e `tool0` link
+- [ ] Configure gripper MoveIt group and controllers in `connect_four_moveit_controllers.yaml`
+- [ ] Verify gripper open/close in Gazebo via ROS2 action interface
+- [ ] Test that closed fingers can contact and hold a piece cylinder (physics contact working)
+
+#### 3B.3 — Full Pick-Place-Release Sequence
+- [ ] Define pick pose for each supply tray position (above piece → descend → grasp → lift)
+- [ ] Precompute IK for supply tray positions (same approach as column IK)
+- [ ] Extend `column_mover.py` (or new node) to accept "pick piece color X, drop in column N" commands
+- [ ] Full motion sequence: home → above_piece → descend → grasp → lift → above_column → descend → release → home
+- [ ] Test all 7 columns with both red and yellow pieces
+
+#### 3B.4 — Scene Camera Setup
+- [ ] Mount a wrist camera on the UR5e (Intel RealSense D435 or similar SDF model)
+- [ ] Mount an overhead/scene camera fixed in the Gazebo world
+- [ ] Publish camera topics from Gazebo plugins
+- [ ] Verify images show gripper, pieces, and board clearly — these will be VLA observations
 
 #### Deliverables
+- Updated Gazebo world SDF with table, board, pieces, cameras
+- Connect Four piece SDF models (red + yellow)
+- UR5e + Robotiq 2F-85 combined URDF
+- Extended `column_mover.py` with full pick-place sequence
+- RViz2 config updated to show gripper and piece markers
 
-- ✅ `camera_feed.py` — Live capture with board detection overlay and HSV tuning UI
-- ✅ `board_detector.py` — Full OpenCV pipeline with adaptive colour, LockedBoardDetector, YOLOEnhancedBoardDetector
-- ✅ `board_detector_yolo.py` — Standalone YOLO-only detector (alternate pipeline)
-- ✅ `game_loop.py` — Full cooperative game state machine with overlay, TTS, logging
-- ✅ `turn_tracker.py` — Move validation, gravity checking, win detection
-- ✅ `logs/` — Per-session game logs and board-state screenshots
-- [ ] Jetson deployment instructions and TensorRT conversion script
-- [ ] Orbbec depth camera integration
+---
 
-### Phase 3: ROS2 Setup + Simulation
+### Phase 3C: VLA Training & Deployment 🔲
 
-Goal: Port the vision pipeline to ROS2 nodes and set up a simulated robot arm in Gazebo.
-Timeline: 3–4 weeks
-Hardware needed: Mac (Docker or RoboStack for ROS2) or Jetson Orin Nano
+Goal: Train a Vision-Language-Action model that can interpret a natural language command ("Pick up a red piece and drop it in column 1") and execute it in simulation. Success = command works reliably in sim across varied piece positions.
 
-#### 3.1 — ROS2 Environment Setup
+#### 3C.1 — Demonstration Collection
+- [ ] Build a scripted demonstration collector: runs the pick-place sequence with small random offsets to piece positions (±5–10mm), records joint trajectories + wrist camera images + language command
+- [ ] Collect ~100–200 demonstrations per piece color (200–400 total)
+- [ ] Store demonstrations in LeRobot or RLDS format (standard for VLA training)
+- [ ] Validate demonstration quality: replay a subset and verify they look correct
 
-- On Mac: Install ROS2 Jazzy via RoboStack (conda-based, works on Apple Silicon) or use Docker with GUI forwarding. RoboStack is recommended for development — it gives you native ROS2 + Gazebo in a conda environment.
+#### 3C.2 — VLA Model Selection & Fine-Tuning
 
-- On Jetson Orin Nano: Install ROS2 Humble or Jazzy natively (Ubuntu-based, straightforward). This will be the deployment target.
+Candidate models (in order of recommendation):
+- **OpenVLA** (Stanford) — open-source, strong language grounding, fine-tunable on custom demos
+- **ACT (Action Chunking Transformer)** — simpler, fast inference, great for repetitive tasks
+- **Diffusion Policy** — best for contact-rich tasks, higher compute
 
-- Verify: `ros2 topic list`, `rviz2`, basic pub/sub working
+Recommended path: Start with ACT (fastest to get working), then upgrade to OpenVLA for language grounding.
 
-#### 3.2 — ROS2 Node Architecture
+- [ ] Set up training environment (CUDA, PyTorch, model-specific dependencies)
+- [ ] Format demonstration data for chosen model
+- [ ] Fine-tune model on collected demonstrations
+- [ ] Evaluate: does the model successfully pick the correct color piece and drop in the correct column?
 
-Create these ROS2 nodes (Python):
+#### 3C.3 — Sim Deployment
+- [ ] Build a ROS2 node that takes a natural language command, runs VLA inference, and publishes joint trajectory commands
+- [ ] Test in Gazebo: "Pick up a red piece and drop it in column 3"
+- [ ] Evaluate success rate across all 7 columns and both colors
+
+#### Deliverables
+- Demonstration dataset (joint trajectories + images + language commands)
+- Fine-tuned VLA model checkpoint
+- ROS2 VLA inference node
+- Evaluation report (success rate per column/color)
+
+---
+
+### Phase 4: Real Hardware Integration 🔲
+
+Goal: Transfer the working simulation to a real robot arm. The VLA model trained in sim should transfer with minimal additional calibration.
+
+#### 4.1 — Hardware Assembly
+- [ ] Mount chosen arm on a stable surface
+- [ ] Position Connect Four board within arm's reach (matching sim geometry: board center at ~650mm from base, table height matching sim)
+- [ ] Set up piece supply tray at simulated position
+- [ ] Mount wrist camera and overhead camera matching sim placement
+
+#### 4.2 — ROS2 Driver Setup
+- [ ] Install arm-specific ROS2 driver (UR5e driver or arm vendor package)
+- [ ] Verify arm responds to MoveIt2 commands
+- [ ] Install Robotiq 2F-85 ROS2 driver (or equivalent real gripper driver)
+- [ ] Verify gripper open/close on real hardware
+
+#### 4.3 — Sim-to-Real Calibration
+- [ ] Camera extrinsic calibration (wrist camera to tool0 frame, overhead camera to base frame)
+- [ ] Verify piece positions in real tray match sim coordinates (adjust `COLUMN_POSES` and tray pose if needed)
+- [ ] Tune gripper closing force and width for real Connect Four pieces
+- [ ] Test drop accuracy: does piece land in the correct column slot?
+
+#### 4.4 — VLA Sim-to-Real Transfer
+- [ ] Run VLA model in real environment; evaluate success rate
+- [ ] Collect ~20–30 real-world demonstrations if sim-to-real gap is too large
+- [ ] Fine-tune VLA on mixed sim + real data if needed
+
+#### 4.5 — Full Game Test
+- [ ] Wire up `game_loop.py --ros` with real hardware
+- [ ] Play complete games end-to-end: camera detects board → AI decides column → VLA picks piece + drops
+- [ ] Handle edge cases: piece supply runs out, dropped piece bounces, board shifts
+
+#### Deliverables
+- Real hardware calibration data (camera transforms, tray positions)
+- Sim-to-real tuning notes
+- Full game demonstration video
+
+---
+
+### Phase 5: Vision Integration for Board Detection 🔲
+
+*This phase was previously higher priority. It is now sequenced after the VLA model is working because the board detection pipeline (Phase 2) already works well via the game_loop's camera feed, and the Orbbec/ROS integration is only needed for fully autonomous operation.*
+
+#### 5.1 — ROS2 Node Architecture
+Create ROS2 nodes to replace the standalone `game_loop.py`:
 
 | Node | Subscribes To | Publishes | Purpose |
 |------|--------------|-----------|---------|
 | `camera_node` | — | `/camera/image_raw`, `/camera/depth` | Captures from depth camera |
 | `board_detector_node` | `/camera/image_raw` | `/connect_four/board_state` | Detects board state from image |
-| `game_manager_node` | `/connect_four/board_state` | `/connect_four/ai_move`, `/connect_four/game_status` | Tracks turns, calls AI, manages game state |
-| `arm_controller_node` | `/connect_four/ai_move` | `/arm/joint_commands` | Translates "play column X" into arm motions |
-
-- Define custom messages: `BoardState.msg` (int8[42] board, int8 current_player), `AiMove.msg` (int8 column)
-
-- Each node is independently testable
-
-#### 3.3 — Gazebo Simulation
-
-- Load or create a URDF/SDF model of your chosen robot arm
-
-  - If using JetArm: Hiwonder provides Gazebo models
-
-  - If using myCobot 280: Elephant Robotics has URDF + MoveIt configs on GitHub
-
-- Add a simulated Connect Four board to the Gazebo world (simple colored cylinders in a grid)
-
-- Add a simulated depth camera on or near the arm
-
-- Verify you can move the arm in simulation via ROS2 commands
-
-- Use MoveIt 2 for motion planning — set up the arm's MoveIt config (kinematics solver, planning scene, collision objects)
-
-#### 3.4 — Simulated Game Loop
-
-- Wire up all nodes in simulation
-
-- Use the simulated camera to detect the (simulated) board
-
-- Manually place pieces in Gazebo to simulate human moves
-
-- Verify the AI responds with correct column choices
-
-- Arm moves to the correct column in simulation (doesn't need to actually grasp yet — just move to position)
-
-#### Deliverables
-
-- ROS2 workspace (`connect_four_ws/`) with all nodes
-- Custom message definitions
-- Gazebo world file with arm + board
-- MoveIt 2 configuration for the arm
-- Launch files for simulation and real hardware
-
-### Phase 4: Arm Motion Planning
-
-Goal: Teach the arm the specific motions needed for Connect Four: pick up a piece from a supply, move to the correct column, and drop it in.
-Timeline: 2–3 weeks
-Hardware needed: Robot arm (physical or simulated)
-
-#### 4.1 — Define Key Poses
-
-The arm needs these named poses/waypoints:
-
-- **Home:** Resting position, out of the camera's view of the board
-
-- **Piece supply:** Position above the spare pieces pile (keep spare pieces in a tray next to the board)
-
-- **Grasp:** Lower to grab a piece from the supply
-
-- **Column 0–6 approach:** Position above each of the 7 columns
-
-- **Drop:** Release the piece into the column slot
-
-#### 4.2 — Motion Sequences
-
-For each AI move (column N):
-
-1. Home → Piece supply approach (move above tray)
-2. Lower → Grasp piece (close gripper)
-3. Lift → Clear height (avoid hitting the board)
-4. Move to Column N approach position (above the correct slot)
-5. Release piece (open gripper — piece drops into slot)
-6. Return to Home
-
-- Use MoveIt 2 for path planning with collision avoidance (the board frame is a collision object)
-
-- Define the board's physical location relative to the arm's base frame via calibration
-
-- Each column's drop position is computed from the board's known geometry (columns are evenly spaced)
-
-#### 4.3 — Gripper Strategy
-
-- Connect Four pieces are small discs (~33mm diameter, ~8mm thick)
-
-- Using parallel gripper (JetArm's default servo-driven claw) for general-purpose versatility
-
-- Grip approach: come from the side and pinch the disc by its edges, or from above if pieces are standing upright in a supply tray
-
-- Calibration needed: grip width (just wider than 33mm to approach, close to ~30mm to grip), grip force (firm enough to hold, gentle enough not to launch the piece)
-
-- For the piece supply tray: orient spare pieces standing upright in a row so the gripper can approach from the front and pinch each one
-
-#### 4.4 — Calibration
-
-- Camera-to-arm calibration: Determine the transform between the camera frame and the arm's base frame. Use a checkerboard or AprilTag-based calibration.
-
-- Board localization: Detect the board's position in 3D space using the depth camera. Mark the board's corners or use the grid itself as reference.
-
-- Column positions: Compute the 3D coordinates of each column's drop point from the board localization.
-
-#### Deliverables
-
-- Named pose configurations (YAML)
-- Motion sequence scripts for pick-and-place
-- Gripper control integration
-- Camera-to-arm calibration procedure
-- Board localization and column mapping
-
-### Phase 5: Integration + Real Hardware
-
-Goal: Run the full system on the Jetson Orin Nano with the physical arm and board.
-Timeline: 2–3 weeks
-Hardware needed: Robot arm, Jetson Orin Nano, depth camera, Connect Four board, piece supply tray
-
-#### 5.1 — Hardware Assembly
-
-- Mount the arm on a stable surface
-
-- Position the Connect Four board within the arm's reach
-
-- Set up the piece supply tray (a simple 3D-printed or cardboard tray holding spare pieces in a known position)
-
-- Mount the depth camera (fixed mount recommended for Connect Four — consistent top-down or angled view)
-
-#### 5.2 — Deploy to Jetson Orin Nano
-
-- Clone the ROS2 workspace to the Orin Nano
-
-- Install dependencies (onnxruntime, OpenCV, MoveIt 2)
-
-- If using JetArm: use their provided ROS2 packages and servo drivers
-
-- If using myCobot: install the pymycobot SDK + ROS2 wrapper
-
-- Update launch files for real hardware (real camera topic, real arm driver)
-
-#### 5.3 — Tuning on Real Hardware
-
-- Re-calibrate camera-to-arm transform with the physical setup
-
-- Re-tune HSV thresholds for real lighting conditions
-
-- Adjust grasp/release positions for the real piece dimensions
-
-- Test drop accuracy: can the arm consistently drop pieces into each column?
-
-- Tune MoveIt speed/acceleration for smooth motion
-
-#### 5.4 — Full Game Test
-
-- Play a complete game against the robot
-
-- Verify the full loop: human plays → camera detects → AI decides → arm picks up piece → arm drops piece → waits for human
-
-- Handle edge cases: piece bounces out, piece supply runs out, board knocked out of position
-
-- Add error recovery: if board state doesn't match expectations, pause and alert
-
-#### Deliverables
-
-- Fully deployed ROS2 system on Jetson Orin Nano
-- Hardware calibration data
-- Full game demonstration video
-- Error handling and recovery procedures
+| `game_manager_node` | `/connect_four/board_state` | `/connect_four/ai_move` | Tracks turns, calls AI |
+| `arm_controller_node` | `/connect_four/ai_move` | arm commands | Triggers VLA pick-place |
+
+#### 5.2 — Jetson Orin Nano Deployment
+- [ ] Convert YOLO `.pt` to TensorRT `.engine`
+- [ ] Install `onnxruntime-gpu` for Jetson
+- [ ] Replace macOS TTS with `espeak-ng` / `pyttsx3`
+- [ ] Validate Orbbec depth camera on Linux/Jetson SDK
+- [ ] Deploy full stack on Jetson; profile with `tegrastats`
+
+#### 5.3 — Orbbec Depth Camera Integration
+- [ ] Sample board-plane depth at lock time
+- [ ] Reject YOLO detections outside `board_near_mm` / `board_far_mm` range
+- [ ] Full autonomous loop: no human needed to trigger AI move
+
+---
 
 ### Phase 6: Polish + Advanced Features (Optional)
 
-Goal: Make the system robust, user-friendly, and impressive.
-Timeline: Ongoing
+#### 6.1 — Natural Language Commands
+- Whisper on Orin Nano (TensorRT) for speech-to-text
+- LLM intent parsing: "Play in the middle" → column 3
+- Visual grounding for free-form pickup commands
 
-#### 6.1 — Natural Language Commands (Primary Enhancement)
+#### 6.2 — Other Enhancements
+- Voice feedback: "Your turn!" / "I'm thinking..." / "I win!"
+- LED column indicators
+- Automatic board reset (arm pulls release slider)
+- Difficulty levels (vary MCTS simulation count)
+- Web dashboard: stream camera feed + game state
+- Multiple game support (tic-tac-toe, checkers)
 
-Architecture:
-
-- **Speech-to-text:** Whisper model running on Orin Nano with TensorRT acceleration. The JetArm's 6-mic array captures audio.
-
-- **Intent parsing:** An LLM (local small model or API call) extracts structured commands from natural language.
-
-- **Visual grounding:** The depth camera locates the referenced object and destination in 3D space.
-
-- **Motion execution:** MoveIt plans and executes the pick-and-place based on the 3D coordinates.
-
-#### 6.2 — Other Potential Enhancements
-
-- Voice feedback: "Your turn!" / "I'm thinking..." / "I win!" using text-to-speech
-
-- LED indicators: Light up the column the AI is about to play
-
-- Automatic board reset: Arm pulls the board's release slider to dump all pieces
-
-- Difficulty levels: Vary the MCTS simulation count to make the AI easier or harder
-
-- Web dashboard: Stream the camera feed + game state to a web page
-
-- Multiple game support: Teach the same arm to play tic-tac-toe, checkers, etc.
+---
 
 ## Summary Timeline
 
-| Phase | Duration | What You Need |
-|-------|----------|---------------|
-| Phase 1: Vision on Mac (static images) ✅ | 2–3 weeks | Mac only |
-| Phase 2: Live camera on Mac | 1–2 weeks | Mac + webcam + physical board |
-| Phase 3: ROS2 + Simulation | 3–4 weeks | Mac (RoboStack/Docker) + Jetson |
-| Phase 4: Arm motion planning | 2–3 weeks | Arm (simulated or physical) |
-| Phase 5: Real hardware integration | 2–3 weeks | Full hardware setup |
-| Phase 6: Polish | Ongoing | Everything |
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1: Vision on Mac (static images) | ✅ COMPLETE | Board detection, AI inference |
+| Phase 2: Live camera on Mac | ✅ MOSTLY COMPLETE | Game loop, YOLO, robust detection |
+| Phase 3: ROS2 simulation — core | ✅ COMPLETE | UR5e + Gazebo + MoveIt2 + column moves |
+| Phase 3B: VLA-ready simulation | 🔲 NEXT | Pieces + gripper + pick-place in sim |
+| Phase 3C: VLA training | 🔲 | OpenVLA/ACT fine-tuning + sim deployment |
+| Phase 4: Real hardware | 🔲 | Physical arm + sim-to-real transfer |
+| Phase 5: Vision integration | 🔲 DEPRIORITIZED | ROS2 board detection, Jetson, Orbbec |
+| Phase 6: Polish | 🔲 | NLP, voice, web dashboard |
 
-Total estimated time: 10–15 weeks (part-time/hobby pace)
+**Current focus: Phase 3B** — get realistic pieces, board, and Robotiq 2F-85 gripper into Gazebo so the arm can physically interact with the world.
 
-**When to order the arm:** During Phase 2. By then you'll have validated your vision pipeline works and you'll be ready to start simulation. Shipping from Hiwonder/Elephant Robotics typically takes 1–3 weeks.
+**When to order the arm:** Any time during Phase 3B/3C. By the time the VLA model is trained in sim you'll be ready to transfer to hardware. The UR5e + Robotiq 2F-85 used in simulation is industry-standard hardware if budget allows; for a cheaper option the Elephant Robotics myCobot 280 + compatible parallel gripper is the best community-supported path.
