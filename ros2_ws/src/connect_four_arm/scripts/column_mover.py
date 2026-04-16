@@ -13,6 +13,7 @@ Usage:
     ros2 topic pub --once /connect_four/drop_column std_msgs/Int32 "{data: 3}"
 """
 
+import math
 import time
 import threading
 import rclpy
@@ -65,7 +66,7 @@ COLUMN_POSES = [
 # Quaternion: tool0 pointing straight down (180° rotation around Y)
 QUAT_DOWN = [0.0, 1.0, 0.0, 0.0]
 
-MOVE_TIMEOUT = 15.0  # seconds to wait for a move to complete
+MOVE_TIMEOUT = 20.0  # seconds to wait for a move to complete
 
 # Safe parked configuration — arm retracted upright, clear of the board.
 # joint order: shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3
@@ -103,6 +104,11 @@ class ColumnMover(Node):
         self._moveit2.allowed_planning_time = 10.0
 
         self._lock = threading.Lock()
+
+        # Joint configs precomputed at startup via /compute_ik.
+        # Populated by _precompute_column_ik(); moves use these instead of
+        # move_to_pose so OMPL never has to search in Cartesian space.
+        self._column_joints: dict[int, list[float]] = {}
 
         # Transient Local (latched): RViz receives the last message even if it
         # subscribes after markers are first published.
@@ -142,13 +148,133 @@ class ColumnMover(Node):
         )
 
     def _wait_for_moveit(self):
-        """Poll until /compute_ik service exists, then move the arm home once."""
+        """Poll until /compute_ik service exists, then initialise."""
         services = dict(self.get_service_names_and_types())
         if "/compute_ik" not in services:
             return  # try again next tick
         self._setup_timer.cancel()
-        self.get_logger().info("MoveIt2 ready — moving to home position")
-        threading.Thread(target=self._go_home, daemon=True).start()
+        self.get_logger().info("MoveIt2 ready — precomputing column IK")
+        threading.Thread(target=self._init_sequence, daemon=True).start()
+
+    def _init_sequence(self):
+        """Precompute IK for all columns, then move home."""
+        self._precompute_column_ik()
+        self._go_home()
+
+    @staticmethod
+    def _normalize_joints(joints, reference):
+        """Wrap each joint angle to the equivalent value closest to reference."""
+        result = []
+        for j, r in zip(joints, reference):
+            n = round((r - j) / (2 * math.pi))
+            result.append(j + 2 * math.pi * n)
+        return result
+
+    def _call_ik(self, ik_cli, x, y, z, seed):
+        """Call /compute_ik once with a given seed; return joint list or None."""
+        from moveit_msgs.srv import GetPositionIK
+        from geometry_msgs.msg import PoseStamped
+
+        req = GetPositionIK.Request()
+        req.ik_request.group_name = "ur_manipulator"
+        req.ik_request.avoid_collisions = True
+
+        ps = PoseStamped()
+        ps.header.frame_id = "base_link"
+        ps.pose.position.x = x
+        ps.pose.position.y = y
+        ps.pose.position.z = z
+        ps.pose.orientation.x = float(QUAT_DOWN[0])
+        ps.pose.orientation.y = float(QUAT_DOWN[1])
+        ps.pose.orientation.z = float(QUAT_DOWN[2])
+        ps.pose.orientation.w = float(QUAT_DOWN[3])
+        req.ik_request.pose_stamped = ps
+        req.ik_request.robot_state.joint_state.name = list(UR5E_JOINTS)
+        req.ik_request.robot_state.joint_state.position = list(seed)
+
+        future = ik_cli.call_async(req)
+        deadline = time.time() + 5.0
+        while not future.done() and time.time() < deadline:
+            time.sleep(0.05)
+
+        if not future.done() or future.result().error_code.val != 1:
+            return None
+
+        js = future.result().solution.joint_state
+        pos_map = dict(zip(js.name, js.position))
+        joints = [pos_map.get(j) for j in UR5E_JOINTS]
+        return None if None in joints else joints
+
+    def _precompute_column_ik(self):
+        """Resolve joint configs for every column using /compute_ik.
+
+        Calling move_to_configuration instead of move_to_pose removes the
+        Cartesian-orientation constraint from OMPL's search, making planning
+        deterministic: the goal is a single point in C-space rather than the
+        full IK-solution set that OMPL must sample.
+
+        KDL (the default IK solver) ignores seeds and may return any valid
+        solution, including "reach-from-behind" configs far from home.  We try
+        several seeds and keep whichever normalised result is closest to
+        HOME_JOINTS in joint space, while also requiring that q1 (shoulder_pan)
+        points toward the column (not backward).
+        """
+        from moveit_msgs.srv import GetPositionIK
+
+        ik_cli = self.create_client(GetPositionIK, "/compute_ik")
+        if not ik_cli.wait_for_service(timeout_sec=10.0):
+            self.get_logger().warn(
+                "IK service unavailable — column moves will use pose planning"
+            )
+            return
+
+        for col, (x, y, z) in enumerate(COLUMN_POSES):
+            col_pan = math.atan2(y, x)
+
+            # Seeds that bracket the expected elbow-up, tool-down configuration.
+            # q5 = ±π/2 is what the UR5e needs for tool-pointing-down; two sign
+            # variants are included because different columns need different chirality.
+            seeds = [
+                [col_pan, -2.1,    2.0,  -1.5, -math.pi / 2, 0.0],
+                [col_pan, -2.1,    2.0,  -1.5,  math.pi / 2, 0.0],
+                [col_pan, -2.2,    1.8,  -1.2, -math.pi / 2, 0.0],
+                [col_pan, -2.0,    1.5,  -1.0,  math.pi / 2, 0.0],
+                [col_pan, -1.5708, 0.0, -1.5708, 0.0,         0.0],  # home-like
+            ]
+
+            best_joints = None
+            best_dist = float("inf")
+
+            for seed in seeds:
+                raw = self._call_ik(ik_cli, x, y, z, seed)
+                if raw is None:
+                    continue
+
+                # Wrap every joint to the equivalent angle nearest HOME_JOINTS.
+                normalised = self._normalize_joints(raw, HOME_JOINTS)
+
+                # Reject "reach-from-behind": shoulder_pan must point toward column.
+                if abs(normalised[0] - col_pan) > math.pi / 2:
+                    continue
+
+                dist = sum((a - b) ** 2 for a, b in zip(normalised, HOME_JOINTS))
+                if dist < best_dist:
+                    best_dist = dist
+                    best_joints = normalised
+
+            if best_joints is not None:
+                self._column_joints[col] = best_joints
+                self.get_logger().info(
+                    f"IK col {col}: [{', '.join(f'{j:.3f}' for j in best_joints)}]"
+                )
+            else:
+                self.get_logger().warn(
+                    f"No near-home IK solution for col {col} — will use pose planning"
+                )
+
+        self.get_logger().info(
+            f"Column IK precomputed: {len(self._column_joints)}/7 columns"
+        )
 
     def _publish_markers(self):
         markers = MarkerArray()
@@ -261,11 +387,23 @@ class ColumnMover(Node):
                 self.get_logger().info(
                     f"Moving to column {col}  ({x:.3f}, {y:.3f}, {z:.3f})"
                 )
-                self._moveit2.move_to_pose(
-                    position=[x, y, z],
-                    quat_xyzw=QUAT_DOWN,
-                    cartesian=False,
-                )
+
+                if col in self._column_joints:
+                    # Joint-space goal: OMPL searches a single point in C-space,
+                    # not a Cartesian IK-solution set. Always succeeds for reachable
+                    # configurations — no probabilistic failures.
+                    self._moveit2.move_to_configuration(self._column_joints[col])
+                else:
+                    # Fallback for columns where IK precomputation failed.
+                    self.get_logger().warn(
+                        f"No precomputed IK for col {col} — using pose planning"
+                    )
+                    self._moveit2.move_to_pose(
+                        position=[x, y, z],
+                        quat_xyzw=QUAT_DOWN,
+                        cartesian=False,
+                    )
+
                 self._wait_executed()
                 self.get_logger().info(f"Column {col} reached — returning home")
 
