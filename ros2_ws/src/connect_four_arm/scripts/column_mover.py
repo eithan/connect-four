@@ -94,7 +94,7 @@ class ColumnMover(Node):
             base_link_name="base_link",
             end_effector_name="tool0",
             group_name="ur_manipulator",
-            use_move_group_action=False,
+            use_move_group_action=True,
             callback_group=cb_group,
         )
         self._moveit2.max_velocity_scaling_factor = 0.5
