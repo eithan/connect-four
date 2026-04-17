@@ -11,6 +11,14 @@ install(DIRECTORY config/
   DESTINATION share/${PROJECT_NAME}/config
 )
 
+install(DIRECTORY urdf/
+  DESTINATION share/${PROJECT_NAME}/urdf
+)
+
+install(DIRECTORY worlds/
+  DESTINATION share/${PROJECT_NAME}/worlds
+)
+
 install(PROGRAMS scripts/column_mover.py
   DESTINATION lib/${PROJECT_NAME}
 )

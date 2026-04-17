@@ -52,9 +52,16 @@ BOARD_Z_BASE  = 0.0     # board sits on table at z=0
 
 BOARD_CENTER = [BOARD_X, 0.0, BOARD_Z_BASE + BOARD_HEIGHT / 2]
 
-# Drop height: arm hovers above the top of the board
-DROP_CLEARANCE = 0.05           # 50 mm above board top
-DROP_Z = BOARD_Z_BASE + BOARD_HEIGHT + DROP_CLEARANCE  # 0.304 m
+# Robotiq 2F-85 TCP offset: distance from tool0 flange to gripper fingertip plane
+# (UR-to-Robotiq adapter 11 mm + robotiq_base to fingertip 98 mm = 109 mm,
+# measured along tool0 z-axis when arm points straight down).
+# tool0 must be positioned this much higher than the desired fingertip target z.
+GRIPPER_TCP_OFFSET = 0.109
+
+# Drop height: gripper fingertips hover DROP_CLEARANCE above the board top.
+# tool0 z = (BOARD_TOP + DROP_CLEARANCE) + GRIPPER_TCP_OFFSET
+DROP_CLEARANCE = 0.05           # 50 mm above board top (fingertip target)
+DROP_Z = BOARD_Z_BASE + BOARD_HEIGHT + DROP_CLEARANCE + GRIPPER_TCP_OFFSET  # 0.413 m
 
 # Column centers: 7 evenly spaced, symmetric around y=0
 COL_SPACING = BOARD_WIDTH / 7  # ~41.7 mm

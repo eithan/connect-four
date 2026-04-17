@@ -21,10 +21,14 @@ Full game (separate terminal):
 Sequencing:
     t=0     Kill stale processes from previous runs
     t=1.5s  Start Xvfb + Gazebo (via connect_four_sim.launch.py)
+             - loads connect_four.world (table, board, pieces)
+             - spawns UR5e + Robotiq 2F-85 (ur5e_with_gripper.urdf.xacro)
+             - starts joint_trajectory_controller (arm) and joint_state_broadcaster
     t=10s   Start MoveIt2 + RViz2 (via connect_four_moveit.launch.py subprocess)
              - wait_for_robot_description gates move_group and rviz2 startup
-    t=12s   Start column_mover
-             - polls /compute_ik internally before moving
+    t=12s   Start column_mover + spawn gripper_controller
+             - column_mover polls /compute_ik internally before moving
+             - gripper_controller provides FollowJointTrajectory on robotiq_85_left_knuckle_joint
 """
 
 import os
@@ -71,7 +75,7 @@ def generate_launch_description():
         output="screen",
     )
 
-    # --- t=12s: column_mover ---
+    # --- t=12s: column_mover + gripper_controller spawner ---
     # Polls /compute_ik internally before attempting arm motion.
     column_mover_node = Node(
         package="connect_four_arm",
@@ -81,10 +85,20 @@ def generate_launch_description():
         output="screen",
     )
 
+    # Spawn the gripper controller after controller_manager is ready.
+    # Provides /gripper_controller/follow_joint_trajectory action for open/close.
+    gripper_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["gripper_controller", "-c", "/controller_manager"],
+        parameters=[{"use_sim_time": True}],
+        output="screen",
+    )
+
     return LaunchDescription(
         cleanup + [
-            TimerAction(period=1.5, actions=[sim_launch]),
+            TimerAction(period=1.5,  actions=[sim_launch]),
             TimerAction(period=10.0, actions=[moveit_launch]),
-            TimerAction(period=12.0, actions=[column_mover_node]),
+            TimerAction(period=12.0, actions=[column_mover_node, gripper_spawner]),
         ]
     )

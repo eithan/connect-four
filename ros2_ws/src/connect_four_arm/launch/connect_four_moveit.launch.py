@@ -23,7 +23,9 @@ def generate_launch_description():
 
     moveit_config = (
         MoveItConfigsBuilder(robot_name="ur", package_name="ur_moveit_config")
-        .robot_description_semantic(Path("srdf") / "ur.srdf.xacro", {"name": "ur"})
+        .robot_description_semantic(
+            Path(pkg) / "config" / "ur5e_with_gripper.srdf.xacro", {"name": "ur"}
+        )
         .trajectory_execution(
             Path(pkg) / "config" / "connect_four_moveit_controllers.yaml",
             moveit_manage_controllers=True,

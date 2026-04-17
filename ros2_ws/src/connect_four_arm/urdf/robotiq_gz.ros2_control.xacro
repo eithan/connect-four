@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!--
+robotiq_gz.ros2_control.xacro
+
+Gazebo Harmonic-compatible ros2_control block for the Robotiq 2F-85.
+Uses gz_ros2_control/GazeboSimSystem (same plugin as the UR5e arm).
+
+The upstream robotiq_description package uses ign_ros2_control/IgnitionSystem
+for sim_ignition mode, which is the old Ignition name and not available in
+Gazebo Harmonic / ROS2 Jazzy. This file is a drop-in replacement.
+
+Usage (in ur5e_with_gripper.urdf.xacro):
+    <xacro:include filename="$(find connect_four_arm)/urdf/robotiq_gz.ros2_control.xacro"/>
+    <xacro:robotiq_gz_ros2_control name="GripperHardwareInterface" prefix=""/>
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:macro name="robotiq_gz_ros2_control" params="name prefix">
+
+        <ros2_control name="${name}" type="system">
+            <hardware>
+                <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+            </hardware>
+
+            <!-- Primary actuated joint — only this joint needs a command interface. -->
+            <!-- The others are mimic joints driven by gz_ros2_control. -->
+            <joint name="${prefix}robotiq_85_left_knuckle_joint">
+                <command_interface name="position"/>
+                <state_interface name="position">
+                    <param name="initial_value">0.0</param>
+                </state_interface>
+                <state_interface name="velocity"/>
+            </joint>
+
+            <!-- Mimic joints — only param tags, NO command/state interfaces (hardware_interface forbids it). -->
+            <joint name="${prefix}robotiq_85_right_knuckle_joint">
+                <param name="mimic">${prefix}robotiq_85_left_knuckle_joint</param>
+                <param name="multiplier">-1</param>
+            </joint>
+            <joint name="${prefix}robotiq_85_left_inner_knuckle_joint">
+                <param name="mimic">${prefix}robotiq_85_left_knuckle_joint</param>
+                <param name="multiplier">1</param>
+            </joint>
+            <joint name="${prefix}robotiq_85_right_inner_knuckle_joint">
+                <param name="mimic">${prefix}robotiq_85_left_knuckle_joint</param>
+                <param name="multiplier">-1</param>
+            </joint>
+            <joint name="${prefix}robotiq_85_left_finger_tip_joint">
+                <param name="mimic">${prefix}robotiq_85_left_knuckle_joint</param>
+                <param name="multiplier">-1</param>
+            </joint>
+            <joint name="${prefix}robotiq_85_right_finger_tip_joint">
+                <param name="mimic">${prefix}robotiq_85_left_knuckle_joint</param>
+                <param name="multiplier">1</param>
+            </joint>
+
+        </ros2_control>
+
+    </xacro:macro>
+
+</robot>

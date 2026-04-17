@@ -30,3 +30,8 @@ robot/__pycache__/ai_player.cpython-312.pyc
 robot/__pycache__/board_detector.cpython-312.pyc
 robot/__pycache__/generate_test_images.cpython-312.pyc
 *.pyc
+
+# ROS2 workspace build artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
