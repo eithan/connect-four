@@ -101,13 +101,35 @@ def generate_launch_description():
         arguments=["joint_trajectory_controller", "-c", "/controller_manager"],
     )
 
+    # Bridge overhead camera topics from Gazebo to ROS
+    gz_camera_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        arguments=[
+            "/overhead_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+            "/overhead_camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image",
+            "/overhead_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
+            "/overhead_camera/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked",
+        ],
+        output="screen",
+    )
+
+    # Static TF for overhead camera frame (world -> overhead_camera_link)
+    static_tf_camera = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=["0.55", "0.0", "1.2", "0", "1.5708", "0", "world", "overhead_camera_link"],
+    )
+
     return LaunchDescription([
         xvfb,
         TimerAction(period=1.0, actions=[
             robot_state_publisher,
             gz_sim,
             gz_clock_bridge,
+            static_tf_camera,
         ]),
         TimerAction(period=5.0, actions=[gz_spawn_robot]),
         TimerAction(period=8.0, actions=[joint_state_broadcaster_spawner, jtc_spawner]),
+        TimerAction(period=10.0, actions=[gz_camera_bridge]),
     ])
