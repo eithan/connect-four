@@ -94,6 +94,11 @@
         <plugin filename="gz_ros2_control-system"
                 name="gz_ros2_control::GazeboSimROS2ControlPlugin">
             <parameters>$(arg simulation_controllers)</parameters>
+            <!-- position_proportional_gain: converts position error to joint velocity.
+                 formula: vel = gain * (cmd - pos) * update_rate (250 Hz)
+                 default 0.1 → 0.022 rad/sim-sec for 2 rad error (too slow).
+                 2.0 → ~0.44 rad/sim-sec → converges within ~5 sim-sec. -->
+            <position_proportional_gain>2.0</position_proportional_gain>
             <ros>
                 <namespace>$(arg ros_namespace)</namespace>
             </ros>

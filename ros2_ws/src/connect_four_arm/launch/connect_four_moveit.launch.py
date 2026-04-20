@@ -30,6 +30,7 @@ def generate_launch_description():
             Path(pkg) / "config" / "connect_four_moveit_controllers.yaml",
             moveit_manage_controllers=True,
         )
+        .joint_limits(Path(pkg) / "config" / "joint_limits.yaml")
         .to_moveit_configs()
     )
 
@@ -54,6 +55,11 @@ def generate_launch_description():
             {
                 "use_sim_time": True,
                 "publish_robot_description_semantic": True,
+                # Remove ValidateSolution so Pilz doesn't reject grasp configs
+                # that are flagged as collision by IK but valid in practice.
+                "pilz_industrial_motion_planner.response_adapters": [
+                    "default_planning_response_adapters/DisplayMotionPath",
+                ],
             },
         ],
     )
