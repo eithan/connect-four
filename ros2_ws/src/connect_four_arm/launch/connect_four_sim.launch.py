@@ -43,7 +43,7 @@ def generate_launch_description():
         "robot_description": ParameterValue(robot_description_content, value_type=str)
     }
 
-    # Virtual framebuffer — Gazebo needs a display even in headless mode
+    # Virtual framebuffer — ogre2 camera sensor needs a display even in headless mode
     xvfb = ExecuteProcess(
         cmd=["Xvfb", ":99", "-screen", "0", "1024x768x24"],
         output="log",

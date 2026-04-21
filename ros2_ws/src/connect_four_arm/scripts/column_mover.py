@@ -91,7 +91,10 @@ TRAY_PIECES = {
 }
 
 # Pick heights (tool0 z)
-PICK_APPROACH_Z = 0.169   # fingertips 60mm above tray: 0.060 + 0.109
+# PICK_APPROACH_Z matches DROP_Z so the tray-to-column transit (Step 6) stays
+# at a constant height above the board top (0.254 m), preventing the arm from
+# dipping into the board's open column slots during the joint-space trajectory.
+PICK_APPROACH_Z = DROP_Z  # 0.413 m — same as column drop height
 PICK_GRASP_Z    = 0.114   # fingertips 5mm above tray: 0.005 + 0.109
 
 # Gripper joint positions (robotiq_85_left_knuckle_joint, radians)

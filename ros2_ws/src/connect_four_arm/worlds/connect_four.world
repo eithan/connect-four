@@ -204,7 +204,7 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
           <material><ambient>0.2 0.2 0.2 1</ambient><diffuse>0.2 0.2 0.2 1</diffuse></material>
         </visual>
         <sensor name="overhead_camera" type="rgbd_camera">
-          <update_rate>5</update_rate>
+          <update_rate>1</update_rate>
           <camera>
             <horizontal_fov>1.047</horizontal_fov>
             <image>
