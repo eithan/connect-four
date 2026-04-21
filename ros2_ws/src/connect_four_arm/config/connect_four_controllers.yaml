@@ -82,7 +82,7 @@ gripper_controller:
     constraints:
       stopped_velocity_tolerance: 0.05
       goal_time: 10.0
-      robotiq_85_left_knuckle_joint: { trajectory: 0.0, goal: 0.05 }
+      robotiq_85_left_knuckle_joint: { trajectory: 0.0, goal: 0.20 }
 
 
 # ── Kept for compatibility ─────────────────────────────────────────────────
