@@ -19,7 +19,9 @@ install(DIRECTORY worlds/
   DESTINATION share/${PROJECT_NAME}/worlds
 )
 
-install(PROGRAMS scripts/column_mover.py
+install(PROGRAMS
+  scripts/column_mover.py
+  scripts/piece_detector.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

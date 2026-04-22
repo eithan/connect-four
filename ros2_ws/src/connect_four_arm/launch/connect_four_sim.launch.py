@@ -63,7 +63,7 @@ def generate_launch_description():
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
         launch_arguments={
-            "gz_args": f" -s -r -v 4 {world_file}",
+            "gz_args": f" -r -v 4 {world_file}",
         }.items(),
     )
 
@@ -121,6 +121,13 @@ def generate_launch_description():
         arguments=["0.55", "0.0", "1.2", "0", "1.5708", "0", "world", "overhead_camera_link"],
     )
 
+    # Piece detector — starts after camera bridge is up
+    piece_detector = Node(
+        package="connect_four_arm",
+        executable="piece_detector.py",
+        output="screen",
+    )
+
     return LaunchDescription([
         xvfb,
         TimerAction(period=1.0, actions=[
@@ -132,4 +139,5 @@ def generate_launch_description():
         TimerAction(period=5.0, actions=[gz_spawn_robot]),
         TimerAction(period=8.0, actions=[joint_state_broadcaster_spawner, jtc_spawner]),
         TimerAction(period=10.0, actions=[gz_camera_bridge]),
+        TimerAction(period=15.0, actions=[piece_detector]),
     ])
