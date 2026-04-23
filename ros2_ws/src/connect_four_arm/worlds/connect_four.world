@@ -15,14 +15,16 @@ Scene objects:
   - Red pieces:  7 dynamic cylinders at x=0.50, y=-0.126..+0.126 step 0.042, z=0.0125
   - Yellow pieces: 7 dynamic cylinders at x=0.42, y=-0.126..+0.126 step 0.042, z=0.0125
 
-Piece geometry (simulation-friendly):
-  radius = 0.0165 m (33 mm diameter — matches real piece)
-  length = 0.025 m  (25 mm tall — reliable gripper contact in sim; real hardware uses a piece fixture)
+Piece geometry (Hasbro standard):
+  radius = 0.019 m (38 mm diameter)
+  length = 0.007 m (7 mm thickness)
   mass   = 0.010 kg
-  Ixx = Iyy = m/12 * (3r² + h²) ≈ 1.2e-6 kg·m²
-  Izz = m*r²/2                  ≈ 1.36e-6 kg·m²
-  Pieces rest directly on the tray surface (no pedestals); center at z=0.0125 m.
-  PICK_GRASP_Z=0.122 m places fingertips at piece center (0.122-0.109=0.013 m ≈ 0.0125 m).
+  Ixx = Iyy = m/12 * (3r² + h²) ≈ 9.04e-6 kg·m²
+  Izz = m*r²/2                  ≈ 1.81e-6 kg·m²
+  Pieces lie flat on tray; center at z=0.0035 m (height/2).
+  PICK_GRASP_Z=0.112 m places fingertips at piece center (0.112-0.109=0.003 m ≈ 0.0035 m).
+  Coin-slot guides above board top create 9mm-wide slot at x_world=0.628–0.637.
+  Slot center at x_world=0.6325; pieces inserted edge-on after wrist_1 reorientation.
 -->
 <sdf version="1.6">
   <world name="connect_four">
@@ -198,6 +200,27 @@ Piece geometry (simulation-friendly):
           <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
         </visual>
       </link>
+
+      <!-- Coin-slot guides: two rails above board top create a 9mm-wide slot in X.
+           Piece (7mm thick, 38mm dia) enters edge-on, constrained in X.
+           Front rail: extends front plate upward (same x=-0.024).
+           Inner rail: 9mm behind front plate inner face (inner face at x=-0.022, rail center x=-0.0115).
+           Slot X center: -0.0175 local = 0.6325 world. -->
+      <link name="slot_front_rail">
+        <pose>-0.024 0.0 0.2665 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.004 0.292 0.025</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.004 0.292 0.025</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <link name="slot_inner_rail">
+        <pose>-0.0115 0.0 0.2665 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.003 0.292 0.025</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.003 0.292 0.025</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
     </model>
 
     <!-- ── Overhead RGBD camera (Phase 3B.4) ── -->
@@ -262,133 +285,133 @@ Piece geometry (simulation-friendly):
          ════════════════════════════════════════════════════════════════ -->
 
     <model name="red_piece_0">
-      <pose>0.50 -0.126 0.0125 0 0 0</pose>
+      <pose>0.50 -0.126 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="red_piece_1">
-      <pose>0.50 -0.084 0.0125 0 0 0</pose>
+      <pose>0.50 -0.084 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="red_piece_2">
-      <pose>0.50 -0.042 0.0125 0 0 0</pose>
+      <pose>0.50 -0.042 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="red_piece_3">
-      <pose>0.50 0.000 0.0125 0 0 0</pose>
+      <pose>0.50 0.000 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="red_piece_4">
-      <pose>0.50 0.042 0.0125 0 0 0</pose>
+      <pose>0.50 0.042 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="red_piece_5">
-      <pose>0.50 0.084 0.0125 0 0 0</pose>
+      <pose>0.50 0.084 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="red_piece_6">
-      <pose>0.50 0.126 0.0125 0 0 0</pose>
+      <pose>0.50 0.126 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
@@ -399,133 +422,133 @@ Piece geometry (simulation-friendly):
          ════════════════════════════════════════════════════════════════ -->
 
     <model name="yellow_piece_0">
-      <pose>0.42 -0.126 0.0125 0 0 0</pose>
+      <pose>0.42 -0.126 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="yellow_piece_1">
-      <pose>0.42 -0.084 0.0125 0 0 0</pose>
+      <pose>0.42 -0.084 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="yellow_piece_2">
-      <pose>0.42 -0.042 0.0125 0 0 0</pose>
+      <pose>0.42 -0.042 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="yellow_piece_3">
-      <pose>0.42 0.000 0.0125 0 0 0</pose>
+      <pose>0.42 0.000 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="yellow_piece_4">
-      <pose>0.42 0.042 0.0125 0 0 0</pose>
+      <pose>0.42 0.042 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="yellow_piece_5">
-      <pose>0.42 0.084 0.0125 0 0 0</pose>
+      <pose>0.42 0.084 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
     </model>
 
     <model name="yellow_piece_6">
-      <pose>0.42 0.126 0.0125 0 0 0</pose>
+      <pose>0.42 0.126 0.0035 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>1.2e-6</ixx><iyy>1.2e-6</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.025</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>

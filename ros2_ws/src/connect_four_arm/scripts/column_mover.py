@@ -64,15 +64,20 @@ BOARD_CENTER = [BOARD_X, 0.0, BOARD_Z_BASE + BOARD_HEIGHT / 2]
 # tool0 must be positioned this much higher than the desired fingertip target z.
 GRIPPER_TCP_OFFSET = 0.109
 
-# Drop height: gripper fingertips hover DROP_CLEARANCE above the board top.
-# tool0 z = (BOARD_TOP + DROP_CLEARANCE) + GRIPPER_TCP_OFFSET
-DROP_CLEARANCE = 0.05           # 50 mm above board top (fingertip target)
-DROP_Z = BOARD_Z_BASE + BOARD_HEIGHT + DROP_CLEARANCE + GRIPPER_TCP_OFFSET  # 0.413 m
+# Coin-slot drop geometry.
+# The board has two guide rails at the top creating a 9mm-wide slot in X.
+# Front rail inner face at x_world=0.628, inner rail inner face at x_world=0.637.
+# Piece (7mm thick) enters edge-on; slot center at x_world=0.6325.
+SLOT_CENTER_X = 0.6325
 
-# Column centers: 7 evenly spaced, symmetric around y=0
+# Piece radius = 0.019m; piece center must clear board top by piece_radius before release.
+# tool0 z = (board_top + piece_radius) + GRIPPER_TCP_OFFSET = (0.254+0.019) + 0.109 = 0.382
+DROP_Z = BOARD_Z_BASE + BOARD_HEIGHT + 0.019 + GRIPPER_TCP_OFFSET  # 0.382 m
+
+# Column centers: 7 evenly spaced, symmetric around y=0; x=SLOT_CENTER_X for coin-slot drop
 COL_SPACING = BOARD_WIDTH / 7  # ~41.7 mm
 COLUMN_POSES = [
-    (BOARD_X, (3 - i) * COL_SPACING, DROP_Z)
+    (SLOT_CENTER_X, (3 - i) * COL_SPACING, DROP_Z)
     for i in range(7)
 ]
 
@@ -96,13 +101,13 @@ TRAY_PIECES = {
 # PICK_APPROACH_Z matches DROP_Z so the tray-to-column transit (Step 6) stays
 # at a constant height above the board top (0.254 m), preventing the arm from
 # dipping into the board's open column slots during the joint-space trajectory.
-PICK_APPROACH_Z = DROP_Z   # 0.413 m — same as column drop height
-PICK_MID_Z      = 0.165    # intermediate descent: fingertips 56mm above tray (well clear)
-PICK_GRASP_Z    = 0.122    # fingertips at z=13mm ≈ piece center (12.5mm): 25mm tall sim pieces on flat tray
+PICK_APPROACH_Z = DROP_Z   # 0.382 m — same as column drop height (piece cleared above board)
+PICK_MID_Z      = 0.145    # intermediate descent: fingertips ~36mm above tray
+PICK_GRASP_Z    = 0.112    # fingertips at z=3.5mm ≈ piece center (3.5mm): 7mm tall Hasbro pieces
 
 # Gripper joint positions (robotiq_85_left_knuckle_joint, radians)
 GRIPPER_OPEN          = 0.0
-GRIPPER_PIECE         = 0.55   # 33mm piece on flat tray; gripper targets ~27mm gap, piece blocks at 33mm
+GRIPPER_PIECE         = 0.70   # 38mm dia Hasbro piece lying flat; grip edge, ~36mm gap needed
 GRIPPER_MOVE_DURATION = 1.0    # seconds
 
 # Safe parked configuration — arm retracted upright, clear of the board.
@@ -366,9 +371,13 @@ class ColumnMover(Node):
                     best_joints = normalised
 
             if best_joints is not None:
-                self._column_joints[col] = best_joints
+                # Apply wrist_1 (+π/2) reorientation so piece arrives edge-on at slot.
+                # Matches step 5c in _execute_pick_and_place. Tune joint index if needed.
+                edge_joints = list(best_joints)
+                edge_joints[3] += math.pi / 2
+                self._column_joints[col] = edge_joints
                 self.get_logger().info(
-                    f"IK col {col}: [{', '.join(f'{j:.3f}' for j in best_joints)}]"
+                    f"IK col {col}: [{', '.join(f'{j:.3f}' for j in edge_joints)}]"
                 )
             else:
                 self.get_logger().warn(
@@ -651,7 +660,7 @@ class ColumnMover(Node):
             return True
         # Gripper must have moved (> 0.05 rad) AND stopped short of commanded position.
         # Without the lower bound, actual=0.000 (gripper blocked/never moved) falsely reports GRASPED.
-        grasped = 0.05 < actual < (GRIPPER_PIECE - 0.04)
+        grasped = 0.05 < actual < (GRIPPER_PIECE - 0.05)
         reason = "GRASPED" if grasped else (
             "BLOCKED (gripper didn't move — pedestal/piece collision?)" if actual < 0.05
             else "MISSED (air close)"
@@ -769,10 +778,11 @@ class ColumnMover(Node):
 
                     # Step 3b: final descent to grasp height (short, accurate)
                     self.get_logger().info(f"Step 3b (attempt {attempt+1}): Descend to grasp")
-                    self._move_arm_joints(grasp_j, sim_duration=3.0, tolerance=0.05,
-                                         wall_timeout=30.0)
+                    self._move_arm_joints(grasp_j, sim_duration=5.0, tolerance=0.05,
+                                         wall_timeout=45.0)
 
-                    # Step 4: close gripper and check
+                    # Step 4: close gripper and check — settle first so arm isn't still moving
+                    time.sleep(0.35)
                     self.get_logger().info(f"Step 4 (attempt {attempt+1}): Closing gripper")
                     self._move_gripper(GRIPPER_PIECE)
                     grasped = self._check_grasp()
@@ -798,7 +808,8 @@ class ColumnMover(Node):
                 self.get_logger().info("Step 5b: Lifting to approach height")
                 self._move_arm_joints(approach_j, sim_duration=4.0)
 
-                # Step 6: move to column drop position
+                # Step 6: move to column drop position (column_joints has wrist_1+π/2 baked in,
+                # so arm arrives at slot with piece tilted edge-on for coin-slot insertion)
                 self.get_logger().info(f"Step 6: Moving to column {col}")
                 if col in self._column_joints:
                     self._move_arm_joints(self._column_joints[col], sim_duration=8.0)

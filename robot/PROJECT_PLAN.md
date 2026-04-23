@@ -165,119 +165,180 @@ Column y positions: (3 - i) * COL_SPACING, i = 0..6
 
 ---
 
-### Phase 3B: VLA-Ready Simulation 🔲 NEXT
+### Phase 3B: VLA-Ready Simulation 🔄 IN PROGRESS
 
 Goal: Upgrade the Gazebo scene to be physically accurate and capable of collecting VLA training demonstrations. Success = arm can execute a scripted pick-place-release sequence in sim with realistic physics.
 
-#### 3B.1 — Realistic Gazebo Scene
-- [ ] Add a table/surface at the correct height in the Gazebo world SDF
-- [ ] Create Connect Four board collision mesh (292mm × 254mm × 64mm box with 7 column slots — simplified as a solid box with a slot top surface)
-- [ ] Create Connect Four piece SDF models: red and yellow cylinders (31mm diameter × 7mm thick), correct mass/inertia, appropriate friction coefficients
-- [ ] Spawn 7 pieces of each color in a supply tray next to the board at known positions within the arm's workspace
-- [ ] Verify pieces fall and stack realistically in Gazebo physics
+#### 3B.1 — Realistic Gazebo Scene ✅
+- ✅ Table at z=0, board (7 column dividers + front/back plates) at (0.65, 0, 0)
+- ✅ Pieces: Hasbro dimensions, 38mm dia × 7mm thick, flat in supply tray
+  - Red: x=0.50, Yellow: x=0.42, y=-0.126..+0.126 step 0.042m, z=0.0035m
+- ✅ Coin-slot guides on board: two rails at top creating 9mm-wide slot (x_world=0.628–0.637)
+  - Pieces enter edge-on after wrist reorientation; constrained in X, correct column via Y
 
-#### 3B.2 — Robotiq 2F-85 Gripper Integration
-- [ ] Add `robotiq_description` package to the workspace (ROS2 Jazzy compatible fork)
-- [ ] Attach Robotiq 2F-85 URDF to UR5e `tool0` link
-- [ ] Configure gripper MoveIt group and controllers in `connect_four_moveit_controllers.yaml`
-- [ ] Verify gripper open/close in Gazebo via ROS2 action interface
-- [ ] Test that closed fingers can contact and hold a piece cylinder (physics contact working)
+#### 3B.2 — Robotiq 2F-85 Gripper Integration ✅
+- ✅ `ros-jazzy-robotiq-description` installed; URDF attached to UR5e tool0
+- ✅ Mimic joints: ONLY `<param name="mimic">` + `<param name="multiplier">` — no interfaces on mimic joints
+- ✅ Gripper controller: JTC on `robotiq_85_left_knuckle_joint` (0.0=open, 0.8=closed)
+- ✅ SRDF: 88 disable_collisions pairs for all gripper links (prevents CheckStartStateCollision abort)
 
-#### 3B.3 — Full Pick-Place-Release Sequence
-- [ ] Define pick pose for each supply tray position (above piece → descend → grasp → lift)
-- [ ] Precompute IK for supply tray positions (same approach as column IK)
-- [ ] Extend `column_mover.py` (or new node) to accept "pick piece color X, drop in column N" commands
-- [ ] Full motion sequence: home → above_piece → descend → grasp → lift → above_column → descend → release → home
-- [ ] Test all 7 columns with both red and yellow pieces
+#### 3B.3 — Full Pick-Place Sequence ✅ (first successful run achieved)
+- ✅ Topic `/connect_four/pick_and_place` (String, format `"color,col"`)
+- ✅ Column IK precomputed with `wrist_1 += π/2` — piece arrives edge-on at slot
+- ✅ Gripper settle delay (0.35s) before close; slower final descent (5s) prevents early fire
+- ✅ PICK_GRASP_Z=0.112m, DROP_Z=0.382m, SLOT_CENTER_X=0.6325m, GRIPPER_PIECE=0.62 rad
+- 🔄 Tuning needed: verify wrist_1 is correct rotation joint; tune GRIPPER_PIECE for 38mm piece
 
-#### 3B.4 — Scene Camera Setup
-- [ ] Mount a wrist camera on the UR5e (Intel RealSense D435 or similar SDF model)
-- [ ] Mount an overhead/scene camera fixed in the Gazebo world
-- [ ] Publish camera topics from Gazebo plugins
-- [ ] Verify images show gripper, pieces, and board clearly — these will be VLA observations
-
-#### Deliverables
-- Updated Gazebo world SDF with table, board, pieces, cameras
-- Connect Four piece SDF models (red + yellow)
-- UR5e + Robotiq 2F-85 combined URDF
-- Extended `column_mover.py` with full pick-place sequence
-- RViz2 config updated to show gripper and piece markers
+#### 3B.4 — Scene Camera Setup ✅ (overhead RGBD mounted)
+- ✅ Overhead camera at (0.55, 0, 1.2), pitched down, publishes `/overhead_camera/*`
+- [ ] Wrist camera on UR5e tool0 link (optional for SO-101 path — SO-101 has its own wrist cam)
 
 ---
 
-### Phase 3C: VLA Training & Deployment 🔲
+### Phase 3C: SO-101 Hardware Setup 🔲 NEXT AFTER 3B
 
-Goal: Train a Vision-Language-Action model that can interpret a natural language command ("Pick up a red piece and drop it in column 1") and execute it in simulation. Success = command works reliably in sim across varied piece positions.
+Goal: Order and assemble the LeRobot SO-101 leader+follower arm pair. This replaces the "VLA training in simulation" path — real demonstrations from a human operator are faster and more reliable than sim-generated data.
 
-#### 3C.1 — Demonstration Collection
-- [ ] Build a scripted demonstration collector: runs the pick-place sequence with small random offsets to piece positions (±5–10mm), records joint trajectories + wrist camera images + language command
-- [ ] Collect ~100–200 demonstrations per piece color (200–400 total)
-- [ ] Store demonstrations in LeRobot or RLDS format (standard for VLA training)
-- [ ] Validate demonstration quality: replay a subset and verify they look correct
+**Why SO-101 over a UR5e real arm:**
+The SO-101 is a ~$150–300 6-DOF open-source arm designed specifically for LeRobot teleoperation and imitation learning. The leader arm lets you physically demonstrate pick-and-place, the follower records it. 50–100 episodes → trainable ACT policy in ~4 hours of GPU time. No sim-to-real gap for the learned behaviors.
 
-#### 3C.2 — VLA Model Selection & Fine-Tuning
+#### 3C.1 — What to Order
 
-Candidate models (in order of recommendation):
-- **OpenVLA** (Stanford) — open-source, strong language grounding, fine-tunable on custom demos
-- **ACT (Action Chunking Transformer)** — simpler, fast inference, great for repetitive tasks
-- **Diffusion Policy** — best for contact-rich tasks, higher compute
+**Option A — Buy assembled (easiest):**
+- Search: "SO-ARM100" or "SO-101" on Seeed Studio, WAVESHARE, or AliExpress
+- Buy 2 units (one leader, one follower) — ~$150–250 each assembled
+- Also buy: 2× USB webcam (Logitech C270 or similar, ~$25 each) for wrist cameras
 
-Recommended path: Start with ACT (fastest to get working), then upgrade to OpenVLA for language grounding.
+**Option B — Buy parts and print (cheapest, ~$100–150/arm):**
+- Servos per arm: 5× Feetech STS3215 (~$14 each) + 2× Feetech STS3032 (~$10 each) = ~$90/arm
+- USB adapter: 1× Feetech SCServo USB-to-serial board (~$15)
+- 3D printed frame: download STLs from `TheRobotStudio/SO-ARM100` on GitHub, print in PLA (~300g per arm)
+- Hardware: M2/M3 screws, bearings, power supply (7.4V 2A LiPo or DC adapter)
+- Wrist camera: 1× USB webcam per follower arm
 
-- [ ] Set up training environment (CUDA, PyTorch, model-specific dependencies)
-- [ ] Format demonstration data for chosen model
-- [ ] Fine-tune model on collected demonstrations
-- [ ] Evaluate: does the model successfully pick the correct color piece and drop in the correct column?
+**Total for 2 arms (Option B):** ~$250–350 + print costs
 
-#### 3C.3 — Sim Deployment
-- [ ] Build a ROS2 node that takes a natural language command, runs VLA inference, and publishes joint trajectory commands
-- [ ] Test in Gazebo: "Pick up a red piece and drop it in column 3"
-- [ ] Evaluate success rate across all 7 columns and both colors
+**Before ordering, confirm:** your Ubuntu machine has 2 free USB ports (one per arm's controller board) and you have access to a 3D printer or print service.
 
-#### Deliverables
-- Demonstration dataset (joint trajectories + images + language commands)
-- Fine-tuned VLA model checkpoint
-- ROS2 VLA inference node
-- Evaluation report (success rate per column/color)
+#### 3C.2 — LeRobot Environment Setup
+
+```bash
+# Install LeRobot (run on Ubuntu machine)
+git clone https://github.com/huggingface/lerobot.git
+cd lerobot
+pip install -e ".[feetech]"
+
+# Verify SO-101 is recognized
+python lerobot/scripts/find_motors_bus_port.py
+
+# Calibrate both arms (follow the interactive prompts)
+python lerobot/scripts/control_robot.py calibrate \
+    --robot-path lerobot/configs/robot/so101.yaml \
+    --robot-overrides '~motors' --arms main_follower
+python lerobot/scripts/control_robot.py calibrate \
+    --robot-path lerobot/configs/robot/so101.yaml \
+    --robot-overrides '~motors' --arms main_leader
+```
+
+#### 3C.3 — Collect Demonstrations
+
+Set up physically:
+- Mount follower arm on table, position Connect Four board at comfortable reach (~300mm center from arm base)
+- Place piece supply tray with red and yellow pieces within reach
+- Attach wrist camera to follower arm's tool link, USB to PC
+
+```bash
+# Record 50+ episodes — you control leader arm, follower records
+python lerobot/scripts/control_robot.py record \
+    --robot-path lerobot/configs/robot/so101.yaml \
+    --fps 30 \
+    --repo-id <your-hf-username>/connect_four_pick_place \
+    --tags connect_four \
+    --warmup-time-s 5 \
+    --episode-time-s 30 \
+    --reset-time-s 10 \
+    --num-episodes 60
+```
+
+Each episode: pick one piece from tray, drop in a column (vary colors and columns). Reset piece to tray between episodes. Aim for ~10 demos per column.
+
+#### 3C.4 — Train ACT Policy
+
+Requires a machine with GPU (RTX 3080+ recommended; 8GB VRAM minimum).
+
+```bash
+# Train ACT on collected demos (~3–5 hours on RTX 3080)
+python lerobot/scripts/train.py \
+    policy=act_so101_real \
+    env=so101_real \
+    dataset_repo_id=<your-hf-username>/connect_four_pick_place \
+    hydra.run.dir=outputs/train/act_connect_four
+
+# Evaluate the trained policy
+python lerobot/scripts/control_robot.py record \
+    --robot-path lerobot/configs/robot/so101.yaml \
+    -p outputs/train/act_connect_four/checkpoints/last/pretrained_model \
+    --fps 30 \
+    --repo-id <your-hf-username>/eval_connect_four \
+    --num-episodes 20
+```
+
+#### 3C.5 — Integration with Game Loop
+
+```bash
+# Wire game_loop.py → SO-101 policy instead of scripted MoveIt
+# The policy takes: wrist camera image + (optionally) language goal
+# Publishes: joint positions to SO-101 follower arm
+```
+
+Build a thin ROS2 bridge node: subscribes to `/connect_four/ai_move` (column number), maps to language goal "pick red piece, drop column N", runs ACT inference, streams joint targets to SO-101.
+
+#### Tips for Good Demonstrations
+- Be deliberate and smooth — jerky motions transfer poorly
+- Pick piece from the same tray position each episode until that slot is well-covered
+- Vary drop column across episodes (don't always drop in col 3)
+- If a pick fails during recording, stop, reset, and redo that episode
+- 50 good demos beat 200 sloppy ones
 
 ---
 
-### Phase 4: Real Hardware Integration 🔲
+### Phase 4: Full Game Integration 🔲
 
-Goal: Transfer the working simulation to a real robot arm. The VLA model trained in sim should transfer with minimal additional calibration.
+Goal: SO-101 plays complete Connect Four games against a human.
 
-#### 4.1 — Hardware Assembly
-- [ ] Mount chosen arm on a stable surface
-- [ ] Position Connect Four board within arm's reach (matching sim geometry: board center at ~650mm from base, table height matching sim)
-- [ ] Set up piece supply tray at simulated position
-- [ ] Mount wrist camera and overhead camera matching sim placement
+#### 4.1 — End-to-End Game Test
+- [ ] Wire `game_loop.py --ros` → game_manager_node → SO-101 policy node
+- [ ] Camera (overhead or wrist) detects board state after each move
+- [ ] AI chooses column → policy picks piece + drops it
+- [ ] Handle: piece supply running out, failed pick (policy retry), board shift detection
 
-#### 4.2 — ROS2 Driver Setup
-- [ ] Install arm-specific ROS2 driver (UR5e driver or arm vendor package)
-- [ ] Verify arm responds to MoveIt2 commands
-- [ ] Install Robotiq 2F-85 ROS2 driver (or equivalent real gripper driver)
-- [ ] Verify gripper open/close on real hardware
+#### 4.2 — Robustness Improvements
+- [ ] Collect additional demonstrations for failure cases seen in 4.1
+- [ ] Fine-tune policy on augmented dataset
+- [ ] Add piece-detection fallback: if pick fails (camera confirms piece didn't move), re-attempt
 
-#### 4.3 — Sim-to-Real Calibration
-- [ ] Camera extrinsic calibration (wrist camera to tool0 frame, overhead camera to base frame)
-- [ ] Verify piece positions in real tray match sim coordinates (adjust `COLUMN_POSES` and tray pose if needed)
-- [ ] Tune gripper closing force and width for real Connect Four pieces
-- [ ] Test drop accuracy: does piece land in the correct column slot?
+#### 4.3 — Full Demo Video
+- [ ] Record complete game: setup → 7+ moves → win
+- [ ] Document: policy checkpoint, dataset, hardware config
 
-#### 4.4 — VLA Sim-to-Real Transfer
-- [ ] Run VLA model in real environment; evaluate success rate
-- [ ] Collect ~20–30 real-world demonstrations if sim-to-real gap is too large
-- [ ] Fine-tune VLA on mixed sim + real data if needed
+---
 
-#### 4.5 — Full Game Test
-- [ ] Wire up `game_loop.py --ros` with real hardware
-- [ ] Play complete games end-to-end: camera detects board → AI decides column → VLA picks piece + drops
-- [ ] Handle edge cases: piece supply runs out, dropped piece bounces, board shifts
+### Phase 5: Vision Integration for Board Detection 🔲 (DEPRIORITIZED)
 
-#### Deliverables
-- Real hardware calibration data (camera transforms, tray positions)
-- Sim-to-real tuning notes
-- Full game demonstration video
+*The board detection pipeline (Phase 2) already works well. This phase is only needed for full autonomy — the SO-101 policy handles grasping, but the overhead camera still needs ROS2 integration for board-state publishing.*
+
+#### 5.1 — ROS2 Node Architecture
+
+| Node | Subscribes To | Publishes | Purpose |
+|------|--------------|-----------|---------|
+| `camera_node` | — | `/camera/image_raw` | USB/depth camera capture |
+| `board_detector_node` | `/camera/image_raw` | `/connect_four/board_state` | Board state from image |
+| `game_manager_node` | `/connect_four/board_state` | `/connect_four/ai_move` | Turn tracking + AI call |
+| `so101_policy_node` | `/connect_four/ai_move` | SO-101 joint commands | ACT policy inference |
+
+#### 5.2 — Jetson Orin Nano Deployment (optional)
+- [ ] Deploy ACT policy on Jetson for untethered operation
+- [ ] Convert to TensorRT if inference is too slow (target: <100ms per step)
 
 ---
 
@@ -333,12 +394,14 @@ Create ROS2 nodes to replace the standalone `game_loop.py`:
 | Phase 1: Vision on Mac (static images) | ✅ COMPLETE | Board detection, AI inference |
 | Phase 2: Live camera on Mac | ✅ MOSTLY COMPLETE | Game loop, YOLO, robust detection |
 | Phase 3: ROS2 simulation — core | ✅ COMPLETE | UR5e + Gazebo + MoveIt2 + column moves |
-| Phase 3B: VLA-ready simulation | 🔲 NEXT | Pieces + gripper + pick-place in sim |
-| Phase 3C: VLA training | 🔲 | OpenVLA/ACT fine-tuning + sim deployment |
-| Phase 4: Real hardware | 🔲 | Physical arm + sim-to-real transfer |
-| Phase 5: Vision integration | 🔲 DEPRIORITIZED | ROS2 board detection, Jetson, Orbbec |
+| Phase 3B: VLA-ready simulation | 🔄 IN PROGRESS | Pieces + gripper + pick-place — tuning |
+| Phase 3C: SO-101 hardware setup | 🔲 NEXT | Order parts, assemble, calibrate, collect demos, train ACT |
+| Phase 4: Full game integration | 🔲 | SO-101 plays complete games vs. human |
+| Phase 5: Vision / ROS2 integration | 🔲 DEPRIORITIZED | ROS2 board detection pipeline |
 | Phase 6: Polish | 🔲 | NLP, voice, web dashboard |
 
-**Current focus: Phase 3B** — get realistic pieces, board, and Robotiq 2F-85 gripper into Gazebo so the arm can physically interact with the world.
+**Current focus: Finish Phase 3B tuning** (wrist rotation direction, GRIPPER_PIECE value), then **order SO-101 parts for Phase 3C**.
 
-**When to order the arm:** Any time during Phase 3B/3C. By the time the VLA model is trained in sim you'll be ready to transfer to hardware. The UR5e + Robotiq 2F-85 used in simulation is industry-standard hardware if budget allows; for a cheaper option the Elephant Robotics myCobot 280 + compatible parallel gripper is the best community-supported path.
+**When to order SO-101:** Now or any time during 3B tuning. Parts take 1–3 weeks to arrive (longer for Option B printed parts). By the time you finish 3B and print/assemble the arms, you'll be ready to collect demonstrations immediately.
+
+**Hardware path summary:** SO-101 leader+follower → LeRobot ACT policy → trained on real demos → plays Connect Four. The UR5e simulation validated the algorithm; the SO-101 is the real-hardware endpoint at a fraction of the cost.
