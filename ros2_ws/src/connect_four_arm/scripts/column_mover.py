@@ -98,11 +98,11 @@ TRAY_PIECES = {
 # dipping into the board's open column slots during the joint-space trajectory.
 PICK_APPROACH_Z = DROP_Z   # 0.413 m — same as column drop height
 PICK_MID_Z      = 0.165    # intermediate descent: fingertips 56mm above tray (well clear)
-PICK_GRASP_Z    = 0.134    # fingertips 25mm above tray: gives safe clearance vs overshoot
+PICK_GRASP_Z    = 0.122    # fingertips at z=13mm ≈ piece center (12.5mm): 25mm tall sim pieces on flat tray
 
 # Gripper joint positions (robotiq_85_left_knuckle_joint, radians)
 GRIPPER_OPEN          = 0.0
-GRIPPER_PIECE         = 0.55   # ~33mm gap; tune empirically
+GRIPPER_PIECE         = 0.55   # 33mm piece on flat tray; gripper targets ~27mm gap, piece blocks at 33mm
 GRIPPER_MOVE_DURATION = 1.0    # seconds
 
 # Safe parked configuration — arm retracted upright, clear of the board.
@@ -562,7 +562,7 @@ class ColumnMover(Node):
         max_err = float('inf')
         min_err_seen = float('inf')
         last_improvement = time.time()
-        STALL_TIMEOUT = 10.0  # abort if error doesn't improve by 0.005 rad in this many seconds
+        STALL_TIMEOUT = sim_duration * 6.0 + 15.0  # generous: covers RTF as low as ~0.15
 
         while time.time() - start_wall < wall_timeout:
             if self._joint_pos:
@@ -649,10 +649,15 @@ class ColumnMover(Node):
         if actual is None:
             self.get_logger().warn('No gripper joint state — assuming grasp succeeded')
             return True
-        grasped = actual < (GRIPPER_PIECE - 0.04)
+        # Gripper must have moved (> 0.05 rad) AND stopped short of commanded position.
+        # Without the lower bound, actual=0.000 (gripper blocked/never moved) falsely reports GRASPED.
+        grasped = 0.05 < actual < (GRIPPER_PIECE - 0.04)
+        reason = "GRASPED" if grasped else (
+            "BLOCKED (gripper didn't move — pedestal/piece collision?)" if actual < 0.05
+            else "MISSED (air close)"
+        )
         self.get_logger().info(
-            f'Gripper check: actual={actual:.3f} rad, target={GRIPPER_PIECE:.3f} rad '
-            f'→ {"GRASPED" if grasped else "MISSED (air close)"}'
+            f'Gripper check: actual={actual:.3f} rad, target={GRIPPER_PIECE:.3f} rad → {reason}'
         )
         return grasped
 
