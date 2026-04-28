@@ -13,6 +13,7 @@ Usage:
     ros2 topic pub --once /connect_four/drop_column std_msgs/Int32 "{data: 3}"
 """
 
+import json
 import math
 import time
 import threading
@@ -63,15 +64,20 @@ BOARD_CENTER = [BOARD_X, 0.0, BOARD_Z_BASE + BOARD_HEIGHT / 2]
 # tool0 must be positioned this much higher than the desired fingertip target z.
 GRIPPER_TCP_OFFSET = 0.109
 
-# Drop height: gripper fingertips hover DROP_CLEARANCE above the board top.
-# tool0 z = (BOARD_TOP + DROP_CLEARANCE) + GRIPPER_TCP_OFFSET
-DROP_CLEARANCE = 0.05           # 50 mm above board top (fingertip target)
-DROP_Z = BOARD_Z_BASE + BOARD_HEIGHT + DROP_CLEARANCE + GRIPPER_TCP_OFFSET  # 0.413 m
+# Coin-slot drop geometry.
+# The board has two guide rails at the top creating a 9mm-wide slot in X.
+# Front rail inner face at x_world=0.628, inner rail inner face at x_world=0.637.
+# Piece (7mm thick) enters edge-on; slot center at x_world=0.6325.
+SLOT_CENTER_X = 0.6325
 
-# Column centers: 7 evenly spaced, symmetric around y=0
+# Piece radius = 0.019m; piece center must clear board top by piece_radius before release.
+# tool0 z = (board_top + piece_radius) + GRIPPER_TCP_OFFSET = (0.254+0.019) + 0.109 = 0.382
+DROP_Z = BOARD_Z_BASE + BOARD_HEIGHT + 0.019 + GRIPPER_TCP_OFFSET  # 0.382 m
+
+# Column centers: 7 evenly spaced, symmetric around y=0; x=SLOT_CENTER_X for coin-slot drop
 COL_SPACING = BOARD_WIDTH / 7  # ~41.7 mm
 COLUMN_POSES = [
-    (BOARD_X, (3 - i) * COL_SPACING, DROP_Z)
+    (SLOT_CENTER_X, (3 - i) * COL_SPACING, DROP_Z)
     for i in range(7)
 ]
 
@@ -79,6 +85,7 @@ COLUMN_POSES = [
 QUAT_DOWN = [0.0, 1.0, 0.0, 0.0]
 
 MOVE_TIMEOUT = 90.0  # seconds to wait for a move to complete
+MAX_PICK_RETRIES = 2  # re-attempts if gripper closes in air
 
 # --- Supply tray geometry ---
 TRAY_RED_X    = 0.50
@@ -91,12 +98,16 @@ TRAY_PIECES = {
 }
 
 # Pick heights (tool0 z)
-PICK_APPROACH_Z = 0.169   # fingertips 60mm above tray: 0.060 + 0.109
-PICK_GRASP_Z    = 0.114   # fingertips 5mm above tray: 0.005 + 0.109
+# PICK_APPROACH_Z matches DROP_Z so the tray-to-column transit (Step 6) stays
+# at a constant height above the board top (0.254 m), preventing the arm from
+# dipping into the board's open column slots during the joint-space trajectory.
+PICK_APPROACH_Z = DROP_Z   # 0.382 m — same as column drop height (piece cleared above board)
+PICK_MID_Z      = 0.145    # intermediate descent: fingertips ~36mm above tray
+PICK_GRASP_Z    = 0.112    # fingertips at z=3.5mm ≈ piece center (3.5mm): 7mm tall Hasbro pieces
 
 # Gripper joint positions (robotiq_85_left_knuckle_joint, radians)
 GRIPPER_OPEN          = 0.0
-GRIPPER_PIECE         = 0.55   # ~33mm gap; tune empirically
+GRIPPER_PIECE         = 0.70   # 38mm dia Hasbro piece lying flat; grip edge, ~36mm gap needed
 GRIPPER_MOVE_DURATION = 1.0    # seconds
 
 # Safe parked configuration — arm retracted upright, clear of the board.
@@ -144,10 +155,20 @@ class ColumnMover(Node):
 
         # Tray IK: keyed by "color_idx" (e.g. "red_0", "yellow_3")
         self._tray_joints: dict[str, list[float]] = {}
+        # Tray mid IK: same x,y at PICK_MID_Z (intermediate descent waypoint)
+        self._tray_mid_joints: dict[str, list[float]] = {}
         # Tray grasp IK: same x,y as tray but at PICK_GRASP_Z height
         self._tray_grasp_joints: dict[str, list[float]] = {}
         # Next piece index to pick for each color (consumed in order 0..6)
         self._next_piece: dict[str, int] = {'red': 0, 'yellow': 0}
+        # Latest piece positions from the overhead camera detector
+        self._detected_pieces: dict[str, list] = {'red': [], 'yellow': []}
+
+        # Persistent IK service client — reused during pick-place for live re-targeting
+        from moveit_msgs.srv import GetPositionIK
+        self._ik_cli = self.create_client(
+            GetPositionIK, "/compute_ik", callback_group=cb_group
+        )
 
         # Direct arm action client — bypasses MoveIt/Pilz planning entirely.
         # Trajectories are sent straight to the JTC with a fixed sim-time duration,
@@ -206,6 +227,14 @@ class ColumnMover(Node):
             self._on_pick_and_place,
             10,
             callback_group=self._sub_cb_group,
+        )
+
+        self.create_subscription(
+            String,
+            '/connect_four/piece_positions',
+            self._on_piece_positions,
+            10,
+            callback_group=cb_group,
         )
 
         self._busy = False   # True while a move is in progress
@@ -342,9 +371,13 @@ class ColumnMover(Node):
                     best_joints = normalised
 
             if best_joints is not None:
-                self._column_joints[col] = best_joints
+                # Apply wrist_1 (+π/2) reorientation so piece arrives edge-on at slot.
+                # Matches step 5c in _execute_pick_and_place. Tune joint index if needed.
+                edge_joints = list(best_joints)
+                edge_joints[3] += math.pi / 2
+                self._column_joints[col] = edge_joints
                 self.get_logger().info(
-                    f"IK col {col}: [{', '.join(f'{j:.3f}' for j in best_joints)}]"
+                    f"IK col {col}: [{', '.join(f'{j:.3f}' for j in edge_joints)}]"
                 )
             else:
                 self.get_logger().warn(
@@ -428,13 +461,24 @@ class ColumnMover(Node):
                             f"No grasp IK for {key} — will reuse approach joints"
                         )
                         self._tray_grasp_joints[key] = best_joints
+
+                    # Mid approach IK — seeded from approach joints so wrist
+                    # configuration matches, keeping the short final descent vertical.
+                    mid_raw = self._call_ik(
+                        ik_cli, px, py, PICK_MID_Z, best_joints,
+                        avoid_collisions=False
+                    )
+                    if mid_raw is not None:
+                        self._tray_mid_joints[key] = self._normalize_joints(mid_raw, best_joints)
+                    else:
+                        self._tray_mid_joints[key] = best_joints
                 else:
                     self.get_logger().warn(
                         f"No IK solution for tray position {key} ({px:.2f}, {py:.3f})"
                     )
 
         self.get_logger().info(
-            f"Tray IK precomputed: {total}/14 positions (approach + grasp)"
+            f"Tray IK precomputed: {total}/14 positions (approach + mid + grasp)"
         )
 
     def _move_gripper(self, position: float, duration: float = GRIPPER_MOVE_DURATION):
@@ -482,7 +526,7 @@ class ColumnMover(Node):
             self._joint_pos[name] = pos
 
     def _move_arm_joints(self, target_joints: list, sim_duration: float = 4.0,
-                         tolerance: float = 0.15) -> bool:
+                         tolerance: float = 0.15, wall_timeout: float = None) -> bool:
         """Send a trajectory directly to the arm JTC and wait until the arm
         physically reaches the target by polling /joint_states.
 
@@ -521,13 +565,14 @@ class ColumnMover(Node):
             self.get_logger().error("Arm JTC goal rejected")
             return False
 
-        # Poll actual joint positions instead of waiting for JTC result_future.
-        # The JTC may delay reporting success (PID doesn't meet 0.1 rad tolerance
-        # exactly at trajectory end for large moves), but the arm physically reaches
-        # within tolerance well before the JTC's convergence window closes.
-        wall_timeout = sim_duration * 15.0 + 60.0
+        if wall_timeout is None:
+            wall_timeout = sim_duration * 15.0 + 60.0
         start_wall = time.time()
         max_err = float('inf')
+        min_err_seen = float('inf')
+        last_improvement = time.time()
+        STALL_TIMEOUT = sim_duration * 6.0 + 15.0  # generous: covers RTF as low as ~0.15
+
         while time.time() - start_wall < wall_timeout:
             if self._joint_pos:
                 errs = [
@@ -537,6 +582,15 @@ class ColumnMover(Node):
                 max_err = max(errs)
                 if max_err < tolerance:
                     return True
+                if max_err < min_err_seen - 0.005:
+                    min_err_seen = max_err
+                    last_improvement = time.time()
+                elif time.time() - last_improvement > STALL_TIMEOUT:
+                    self.get_logger().warn(
+                        f"Arm stalled — max_err={max_err:.3f} rad, "
+                        f"no improvement in {STALL_TIMEOUT:.0f}s"
+                    )
+                    return False
             time.sleep(0.1)
 
         self.get_logger().error(
@@ -544,6 +598,77 @@ class ColumnMover(Node):
             f"— max joint error = {max_err:.3f} rad"
         )
         return False
+
+    def _on_piece_positions(self, msg: String):
+        """Update latest camera detections from piece_detector."""
+        try:
+            self._detected_pieces = json.loads(msg.data)
+        except Exception:
+            pass
+
+    def _find_detected_piece(self, color: str, expected_xy: tuple, max_dist: float = 0.08):
+        """Return the detected piece XY closest to expected_xy, or None if none within max_dist."""
+        candidates = self._detected_pieces.get(color, [])
+        if not candidates:
+            return None
+        ex, ey = expected_xy
+        best = min(candidates, key=lambda p: (p[0] - ex) ** 2 + (p[1] - ey) ** 2)
+        dist = math.hypot(best[0] - ex, best[1] - ey)
+        if dist > max_dist:
+            self.get_logger().warn(
+                f'Closest {color} detection ({best[0]:.3f},{best[1]:.3f}) is {dist*1000:.0f}mm '
+                f'from expected ({ex:.3f},{ey:.3f}) — beyond {max_dist*1000:.0f}mm threshold'
+            )
+            return None
+        self.get_logger().info(
+            f'Camera-corrected {color} target: ({best[0]:.3f},{best[1]:.3f}) '
+            f'(was ({ex:.3f},{ey:.3f}), delta {dist*1000:.0f}mm)'
+        )
+        return best
+
+    def _compute_pick_joints(self, px: float, py: float, seed_joints: list):
+        """Compute approach, mid, and grasp joint configs for the given XY position.
+
+        Returns (approach_j, mid_j, grasp_j) or None if IK fails at approach height.
+        """
+        approach_raw = self._call_ik(self._ik_cli, px, py, PICK_APPROACH_Z, seed_joints)
+        if approach_raw is None:
+            return None
+        approach_j = self._normalize_joints(approach_raw, seed_joints)
+
+        mid_raw = self._call_ik(self._ik_cli, px, py, PICK_MID_Z, approach_j,
+                                avoid_collisions=False)
+        mid_j = self._normalize_joints(mid_raw, approach_j) if mid_raw else approach_j
+
+        grasp_raw = self._call_ik(self._ik_cli, px, py, PICK_GRASP_Z, mid_j,
+                                  avoid_collisions=False)
+        grasp_j = self._normalize_joints(grasp_raw, mid_j) if grasp_raw else mid_j
+
+        return approach_j, mid_j, grasp_j
+
+    def _check_grasp(self) -> bool:
+        """Return True if gripper is holding a piece (didn't reach commanded close position).
+
+        A successful grasp stops the gripper short of GRIPPER_PIECE because the
+        piece's body blocks full closure.  If the gripper reached the commanded
+        position, it closed in air and the pick failed.
+        """
+        time.sleep(0.4)  # let gripper settle after close command
+        actual = self._joint_pos.get('robotiq_85_left_knuckle_joint')
+        if actual is None:
+            self.get_logger().warn('No gripper joint state — assuming grasp succeeded')
+            return True
+        # Gripper must have moved (> 0.05 rad) AND stopped short of commanded position.
+        # Without the lower bound, actual=0.000 (gripper blocked/never moved) falsely reports GRASPED.
+        grasped = 0.05 < actual < (GRIPPER_PIECE - 0.05)
+        reason = "GRASPED" if grasped else (
+            "BLOCKED (gripper didn't move — pedestal/piece collision?)" if actual < 0.05
+            else "MISSED (air close)"
+        )
+        self.get_logger().info(
+            f'Gripper check: actual={actual:.3f} rad, target={GRIPPER_PIECE:.3f} rad → {reason}'
+        )
+        return grasped
 
     def _on_pick_and_place(self, msg: String):
         """Handle /connect_four/pick_and_place messages, format: 'color,col'."""
@@ -582,15 +707,13 @@ class ColumnMover(Node):
         ).start()
 
     def _execute_pick_and_place(self, color: str, col: int):
-        """Full 8-step pick-place-release sequence."""
+        """Full pick-place-release sequence with camera targeting and grasp verification."""
         with self._lock:
             self._busy = True
             try:
                 idx = self._next_piece[color]
                 if idx >= len(TRAY_PIECES[color]):
-                    self.get_logger().error(
-                        f"No more {color} pieces in tray (used all 7)"
-                    )
+                    self.get_logger().error(f"No more {color} pieces in tray (used all 7)")
                     return
 
                 key = f"{color}_{idx}"
@@ -600,58 +723,104 @@ class ColumnMover(Node):
                     )
                     return
 
-                px, py = TRAY_PIECES[color][idx]
+                nominal_xy = TRAY_PIECES[color][idx]
                 self.get_logger().info(
-                    f"Pick-place: {color} piece #{idx} from ({px:.3f}, {py:.3f}) "
-                    f"→ column {col}"
+                    f"Pick-place: {color} piece #{idx} from "
+                    f"({nominal_xy[0]:.3f}, {nominal_xy[1]:.3f}) → column {col}"
                 )
 
                 # Step 1: open gripper
                 self.get_logger().info("Step 1: Opening gripper")
                 self._move_gripper(GRIPPER_OPEN)
 
-                # Step 2: move to approach height above tray piece
-                _wall0 = time.time()
-                _sim0 = self.get_clock().now().nanoseconds / 1e9
+                # Step 2: move to approach height above nominal piece position
                 self.get_logger().info(f"Step 2: Moving to tray approach ({key})")
                 self._move_arm_joints(self._tray_joints[key], sim_duration=8.0)
-                _wall1 = time.time()
-                _sim1 = self.get_clock().now().nanoseconds / 1e9
-                self.get_logger().info(
-                    f"Step 2 done: wall={_wall1-_wall0:.1f}s sim={_sim1-_sim0:.2f}s "
-                    f"RTF={(_sim1-_sim0)/max(0.001,_wall1-_wall0):.2%}"
-                )
 
-                # Step 3: descend to grasp height
-                self.get_logger().info("Step 3: Descending to grasp height")
-                self._move_arm_joints(self._tray_grasp_joints[key], sim_duration=4.0)
+                # ── Pick attempt loop (up to MAX_PICK_RETRIES+1 total tries) ──
+                grasped = False
+                approach_j = self._tray_joints[key]
+                mid_j      = self._tray_mid_joints.get(key, approach_j)
+                grasp_j    = self._tray_grasp_joints.get(key, mid_j)
 
-                # Step 4: close gripper + settle
-                self.get_logger().info("Step 4: Closing gripper")
-                self._move_gripper(GRIPPER_PIECE)
-                time.sleep(0.5)
+                for attempt in range(MAX_PICK_RETRIES + 1):
+                    if attempt > 0:
+                        self.get_logger().info(
+                            f"Retry {attempt}/{MAX_PICK_RETRIES}: re-detecting piece position"
+                        )
+                        self._move_gripper(GRIPPER_OPEN)
+                        # Lift to approach before re-targeting
+                        self._move_arm_joints(approach_j, sim_duration=4.0)
 
-                # Step 5: lift back to approach height
-                self.get_logger().info("Step 5: Lifting to approach height")
-                self._move_arm_joints(self._tray_joints[key], sim_duration=4.0)
+                    # Camera correction: replace nominal target with detected position
+                    target_xy = nominal_xy
+                    detected = self._find_detected_piece(color, nominal_xy)
+                    if detected is not None:
+                        target_xy = detected
+                        # Recompute IK for the actual piece location
+                        result = self._compute_pick_joints(
+                            target_xy[0], target_xy[1], approach_j
+                        )
+                        if result is not None:
+                            approach_j, mid_j, grasp_j = result
+                        else:
+                            self.get_logger().warn(
+                                "IK failed for detected position — using precomputed joints"
+                            )
+                    else:
+                        self.get_logger().info(
+                            "No camera detection available — using precomputed joints"
+                        )
 
-                # Step 6: move to column drop position
+                    # Step 3a: descend to mid-height (large motion, low XY drift risk)
+                    self.get_logger().info(f"Step 3a (attempt {attempt+1}): Descend to mid")
+                    self._move_arm_joints(mid_j, sim_duration=4.0, tolerance=0.05)
+
+                    # Step 3b: final descent to grasp height (short, accurate)
+                    self.get_logger().info(f"Step 3b (attempt {attempt+1}): Descend to grasp")
+                    self._move_arm_joints(grasp_j, sim_duration=5.0, tolerance=0.05,
+                                         wall_timeout=45.0)
+
+                    # Step 4: close gripper and check — settle first so arm isn't still moving
+                    time.sleep(0.35)
+                    self.get_logger().info(f"Step 4 (attempt {attempt+1}): Closing gripper")
+                    self._move_gripper(GRIPPER_PIECE)
+                    grasped = self._check_grasp()
+
+                    if grasped:
+                        break
+                    self.get_logger().warn(
+                        f"Grasp attempt {attempt+1} failed — "
+                        f"{'retrying' if attempt < MAX_PICK_RETRIES else 'giving up'}"
+                    )
+
+                if not grasped:
+                    self.get_logger().error(
+                        f"All {MAX_PICK_RETRIES+1} grasp attempts failed — aborting"
+                    )
+                    self._move_gripper(GRIPPER_OPEN)
+                    self._move_arm_joints(HOME_JOINTS, sim_duration=8.0)
+                    return
+
+                # Step 5: two-stage lift
+                self.get_logger().info("Step 5a: Lifting to mid")
+                self._move_arm_joints(mid_j, sim_duration=3.0, tolerance=0.05)
+                self.get_logger().info("Step 5b: Lifting to approach height")
+                self._move_arm_joints(approach_j, sim_duration=4.0)
+
+                # Step 6: move to column drop position (column_joints has wrist_1+π/2 baked in,
+                # so arm arrives at slot with piece tilted edge-on for coin-slot insertion)
                 self.get_logger().info(f"Step 6: Moving to column {col}")
                 if col in self._column_joints:
                     self._move_arm_joints(self._column_joints[col], sim_duration=8.0)
                 else:
-                    self.get_logger().warn(
-                        f"No precomputed IK for col {col} — using MoveIt pose planning"
-                    )
                     cx, cy, cz = COLUMN_POSES[col]
                     self._moveit2.move_to_pose(
-                        position=[cx, cy, cz],
-                        quat_xyzw=QUAT_DOWN,
-                        cartesian=False,
+                        position=[cx, cy, cz], quat_xyzw=QUAT_DOWN, cartesian=False
                     )
                     self._wait_executed()
 
-                # Step 7: release piece + let it fall
+                # Step 7: release
                 self.get_logger().info("Step 7: Releasing piece")
                 self._move_gripper(GRIPPER_OPEN)
                 time.sleep(0.5)

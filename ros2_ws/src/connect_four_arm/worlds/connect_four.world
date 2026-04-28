@@ -12,15 +12,19 @@ Scene objects:
   - Table:       static, 1.5 × 1.0 × 0.1 m, top surface at z=0, centered at (0.65, 0, -0.05)
   - Board:       static, 0.064 × 0.292 × 0.254 m, center at (0.65, 0, 0.127)
   - Supply tray: static, thin slab at (0.46, 0, -0.0025), holds the piece supply
-  - Red pieces:  7 dynamic cylinders at x=0.50, y=-0.126..+0.126 step 0.042, z=0.0035
-  - Yellow pieces: 7 dynamic cylinders at x=0.42, y=-0.126..+0.126 step 0.042, z=0.0035
+  - Red pieces:  7 dynamic cylinders at x=0.50, y=-0.126..+0.126 step 0.042, z=0.0125
+  - Yellow pieces: 7 dynamic cylinders at x=0.42, y=-0.126..+0.126 step 0.042, z=0.0125
 
-Piece geometry (Hasbro Connect Four, nominal dimensions):
-  radius = 0.0165 m (33 mm diameter)
-  length = 0.007 m  (7 mm thick)
+Piece geometry (Hasbro standard):
+  radius = 0.019 m (38 mm diameter)
+  length = 0.007 m (7 mm thickness)
   mass   = 0.010 kg
-  Ixx = Iyy = m/12 * (3r² + h²) ≈ 7.21e-7 kg·m²
-  Izz = m*r²/2                  ≈ 1.36e-6 kg·m²
+  Ixx = Iyy = m/12 * (3r² + h²) ≈ 9.04e-6 kg·m²
+  Izz = m*r²/2                  ≈ 1.81e-6 kg·m²
+  Pieces lie flat on tray; center at z=0.0035 m (height/2).
+  PICK_GRASP_Z=0.112 m places fingertips at piece center (0.112-0.109=0.003 m ≈ 0.0035 m).
+  Coin-slot guides above board top create 9mm-wide slot at x_world=0.628–0.637.
+  Slot center at x_world=0.6325; pieces inserted edge-on after wrist_1 reorientation.
 -->
 <sdf version="1.6">
   <world name="connect_four">
@@ -40,6 +44,11 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
             name="gz::sim::systems::SceneBroadcaster"/>
     <plugin filename="gz-sim-contact-system"
             name="gz::sim::systems::Contact"/>
+    <!-- Sensors system: required for camera rendering (uses ogre2 via Xvfb) -->
+    <plugin filename="gz-sim-sensors-system"
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
 
     <!-- ── Lighting ── -->
     <light type="directional" name="sun">
@@ -98,30 +107,150 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       </link>
     </model>
 
-    <!-- ── Connect Four board (simplified solid box, blue) ── -->
+    <!-- ── Connect Four board (slotted: 8 column dividers + back plate) ── -->
     <!--
-      Real board: 7 columns × 42 mm = 294 mm wide, 6 rows × 42 mm = 252 mm tall,
-      ~64 mm thick. Matches BOARD_WIDTH/HEIGHT/DEPTH in column_mover.py.
-      Column slots are not modelled geometrically — the solid box is sufficient
-      for Phase 3B collision avoidance and piece drop physics.
+      7 cols x 41.7mm = 292mm wide, 254mm tall, 64mm deep.
+      8 thin walls (4mm thick, blue) divide 7 column channels (41.7mm each).
+      Piece diameter 33mm < channel 41.7mm: pieces fall freely and stack.
+      Wall y positions (world): +/-0.1459, +/-0.1042, +/-0.0625, +/-0.0208
+      Back plate at local x=+0.030 closes the back of each slot.
     -->
     <model name="connect_four_board">
       <static>true</static>
-      <!-- x=0.65 (forward from arm), y=0 (centered), z=0.127 (half height) -->
-      <pose>0.65 0.0 0.127 0 0 0</pose>
-      <link name="board_link">
-        <collision name="collision">
-          <!-- depth(x)=0.064, width(y)=0.292, height(z)=0.254 -->
-          <geometry><box><size>0.064 0.292 0.254</size></box></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><box><size>0.064 0.292 0.254</size></box></geometry>
-          <material>
-            <ambient>0.08 0.25 0.85 1</ambient>
-            <diffuse>0.08 0.25 0.85 1</diffuse>
-            <specular>0.3 0.3 0.3 1</specular>
-          </material>
+      <pose>0.65 0.0 0.0 0 0 0</pose>
+
+      <link name="wall_0">
+        <pose>0.0 0.1459 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.048 0.004 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.048 0.004 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
         </visual>
+      </link>
+
+      <link name="wall_1">
+        <pose>0.0 0.1042 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.048 0.004 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.048 0.004 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <link name="wall_2">
+        <pose>0.0 0.0625 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.048 0.004 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.048 0.004 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <link name="wall_3">
+        <pose>0.0 0.0208 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.048 0.004 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.048 0.004 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <link name="wall_4">
+        <pose>0.0 -0.0208 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.048 0.004 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.048 0.004 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <link name="wall_5">
+        <pose>0.0 -0.0625 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.048 0.004 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.048 0.004 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <link name="wall_6">
+        <pose>0.0 -0.1042 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.048 0.004 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.048 0.004 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <link name="wall_7">
+        <pose>0.0 -0.1459 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.048 0.004 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.048 0.004 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <!-- Back plate: closes the rear of all 7 slots -->
+      <link name="back_plate">
+        <pose>0.024 0.0 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.004 0.292 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.004 0.292 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <!-- Front plate: closes the front of all 7 slots (pieces enter from top, held inside) -->
+      <link name="front_plate">
+        <pose>-0.024 0.0 0.127 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.004 0.292 0.254</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.004 0.292 0.254</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <!-- Coin-slot guides: two rails above board top create a 9mm-wide slot in X.
+           Piece (7mm thick, 38mm dia) enters edge-on, constrained in X.
+           Front rail: extends front plate upward (same x=-0.024).
+           Inner rail: 9mm behind front plate inner face (inner face at x=-0.022, rail center x=-0.0115).
+           Slot X center: -0.0175 local = 0.6325 world. -->
+      <link name="slot_front_rail">
+        <pose>-0.024 0.0 0.2665 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.004 0.292 0.025</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.004 0.292 0.025</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+
+      <link name="slot_inner_rail">
+        <pose>-0.0115 0.0 0.2665 0 0 0</pose>
+        <collision name="col"><geometry><box><size>0.003 0.292 0.025</size></box></geometry></collision>
+        <visual name="vis"><geometry><box><size>0.003 0.292 0.025</size></box></geometry>
+          <material><ambient>0.08 0.25 0.85 1</ambient><diffuse>0.08 0.25 0.85 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── Overhead RGBD camera (Phase 3B.4) ── -->
+    <!--
+      Mounted 1.2m above (0.55, 0, 1.2), pitched 90deg down to view table.
+      Publishes: /overhead_camera/image, /overhead_camera/depth_image,
+                 /overhead_camera/camera_info, /overhead_camera/points
+    -->
+    <model name="overhead_camera_mount">
+      <static>true</static>
+      <pose>0.55 0.0 1.2 0 1.5708 0</pose>
+      <link name="overhead_camera_link">
+        <visual name="vis">
+          <geometry><box><size>0.04 0.04 0.02</size></box></geometry>
+          <material><ambient>0.2 0.2 0.2 1</ambient><diffuse>0.2 0.2 0.2 1</diffuse></material>
+        </visual>
+        <sensor name="overhead_camera" type="rgbd_camera">
+          <update_rate>1</update_rate>
+          <camera>
+            <horizontal_fov>1.047</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip><near>0.1</near><far>10.0</far></clip>
+          </camera>
+          <topic>/overhead_camera</topic>
+          <gz_frame_id>overhead_camera_link</gz_frame_id>
+        </sensor>
       </link>
     </model>
 
@@ -152,7 +281,7 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
     <!-- ════════════════════════════════════════════════════════════════
          RED PIECES — 7 cylinders at x=0.50, y=-0.126..+0.126 step 0.042
          Cylinder axis = z (piece lying flat on tray, grip from above by edge).
-         z = 0.0035 (half of 7 mm thickness, resting on tray surface at z=0).
+         z = 0.0125 (half of 25 mm height, resting on tray at z=0).
          ════════════════════════════════════════════════════════════════ -->
 
     <model name="red_piece_0">
@@ -160,15 +289,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
@@ -179,15 +308,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
@@ -198,15 +327,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
@@ -217,15 +346,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
@@ -236,15 +365,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
@@ -255,15 +384,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
@@ -274,15 +403,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.85 0.1 0.1 1</ambient><diffuse>0.85 0.1 0.1 1</diffuse></material>
         </visual>
       </link>
@@ -297,15 +426,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
@@ -316,15 +445,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
@@ -335,15 +464,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
@@ -354,15 +483,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
@@ -373,15 +502,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
@@ -392,15 +521,15 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
@@ -411,19 +540,20 @@ Piece geometry (Hasbro Connect Four, nominal dimensions):
       <link name="link">
         <inertial>
           <mass>0.010</mass>
-          <inertia><ixx>7.21e-7</ixx><iyy>7.21e-7</iyy><izz>1.36e-6</izz>
+          <inertia><ixx>9.04e-6</ixx><iyy>9.04e-6</iyy><izz>1.81e-6</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
-          <surface><friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction></surface>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
+          <surface><friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.0165</radius><length>0.007</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.019</radius><length>0.007</length></cylinder></geometry>
           <material><ambient>0.95 0.85 0.05 1</ambient><diffuse>0.95 0.85 0.05 1</diffuse></material>
         </visual>
       </link>
     </model>
+
 
   </world>
 </sdf>
