@@ -286,6 +286,8 @@ Phase C is where the SO-101 path differentiates from the JetArm plan. Pick what'
 - [ ] Use LeRobot's `record` script to capture teleoperated Connect Four games
 - [ ] Record 50–100 episodes: full pick-and-place sequences across all 7 columns and varying piece-tray states
 - [ ] Each episode captures: leader joint commands, follower joint states, both camera streams, timestamps
+- [ ] **Save in LeRobot dataset format** (the de facto interchange standard, consumed directly by openpi, SmolVLA, ACT, Diffusion Policy, and HuggingFace Hub viewers). This is non-negotiable — the format choice determines which models you can later fine-tune without doing a data migration.
+- [ ] Optionally add natural-language annotations per episode (e.g. "place a red piece in column 3") so the same dataset is usable for VLA fine-tuning in C.3
 - [ ] Push dataset to HuggingFace Hub (private repo) for portability and visualization
 
 #### C.2 Behavior cloning baseline (ACT or Diffusion Policy)
@@ -294,12 +296,36 @@ Phase C is where the SO-101 path differentiates from the JetArm plan. Pick what'
 - [ ] Build an `arm_node_v2` that uses the trained policy instead of scripted keyframes
 - [ ] Compare to scripted baseline: success rate, motion smoothness, generalization to small piece-tray variations
 
-#### C.3 SmolVLA fine-tuning (the marquee experiment)
-- [ ] Take the same dataset + add language annotations: "place a red piece in column 3"
-- [ ] Fine-tune **SmolVLA** (450M params, designed for SO-100/101) on the annotated dataset
-- [ ] Deploy on Jetson; benchmark inference latency vs. ACT
-- [ ] Compare task success and generalization
-- [ ] Optional: explore zero-shot transfer to slight variations (different piece colors, board positions)
+#### C.3 VLA fine-tuning (the marquee experiment)
+
+Three concrete options in increasing order of capability, compute, and overhead. Pick one or sequence them.
+
+- [ ] **Option A — SmolVLA (recommended starting point).** ~450M params, designed by HuggingFace specifically for SO-100/101. Fine-tune on the C.1 dataset with language annotations. Deploys on the Jetson Orin Nano in real time. Most realistic on-device target.
+- [ ] **Option B — π₀-base (Physical Intelligence open-source checkpoint via openpi).** Pre-trained on 10K+ hours of cross-platform robot data including ALOHA. Larger than SmolVLA but better generalization and language-following per PI's published numbers. Fine-tuning consumes openpi's LeRobot dataset format directly. **Inference does not fit on a Jetson Orin Nano** — run via openpi's "remote inference" pattern (model on a desktop 4090/5090 or cloud GPU; Jetson subscribes to a websocket and streams action chunks to the follower).
+- [ ] **Option C — π₀.₅-base.** Larger again, with co-trained semantic reasoning, better open-world generalization. Same remote-inference deployment as π₀. Use this if you want the strongest available open-weight VLA on this dataset.
+
+For all options, the deployment shape is the same:
+
+```
+[GPU server]  ←── observations (cam frames, joint state) ── [Jetson]
+              ──── action chunk (50 actions) ──→
+                                                            [Jetson]
+                                                              │
+                                                              ▼
+                                                          arm_node
+                                                              │
+                                                              ▼
+                                                          SO-101
+```
+
+Tasks (apply to whichever option you choose):
+- [ ] Convert / verify the C.1 dataset is in openpi-compatible LeRobot format
+- [ ] Set up training environment on a desktop GPU (or rent cloud)
+- [ ] Fine-tune the chosen base model on Connect Four data
+- [ ] Stand up a policy server (LeRobot for SmolVLA; `openpi/scripts/serve_policy.py` for π₀ / π₀.₅)
+- [ ] Build `arm_node_v3` that subscribes to the policy server and streams action chunks to the SO-101 follower at 30–50 Hz
+- [ ] Benchmark task success, motion quality, and inference latency vs. the C.2 ACT baseline
+- [ ] Stretch: explore zero-shot transfer to small variations (different piece colors, board positions, slightly different lighting)
 
 #### C.4 Other polish + stretch
 - [ ] **MoveIt2 motion planning** as an alternative to scripted/learned arm motion
@@ -386,6 +412,11 @@ If after Phase A on the JetArm path you find yourself yearning for the LeRobot e
 - [LeRobot v0.5.0 release notes](https://huggingface.co/blog/lerobot-release-v050)
 - [SmolVLA blog post](https://huggingface.co/blog/smolvla)
 - [SmolVLA model card](https://huggingface.co/lerobot/smolvla_base)
+- [Physical Intelligence — main site](https://www.pi.website/)
+- [openpi — Physical Intelligence's open-source VLA repo on GitHub](https://github.com/Physical-Intelligence/openpi)
+- [π₀ paper PDF (Physical Intelligence)](https://www.pi.website/download/pi0.pdf)
+- [π₀.₅ blog (Physical Intelligence)](https://www.pi.website/blog/pi05)
+- [openpi remote inference docs](https://github.com/Physical-Intelligence/openpi/blob/main/docs/remote_inference.md)
 - [SO-ARM100 / SO-ARM101 hardware repo (TheRobotStudio)](https://github.com/TheRobotStudio/SO-ARM100)
 - [Hiwonder LeRobot SO-ARM101 product page](https://www.hiwonder.com/products/lerobot-so-101)
 - [Seeed Studio SO-ARM100/101 listing](https://www.seeedstudio.com/SO-ARM100-low-cost-AI-arm-kit-pre-assembled-p-6343.html)
@@ -399,3 +430,4 @@ If after Phase A on the JetArm path you find yourself yearning for the LeRobot e
 ## 11. Changelog
 
 - **2026-04-28** — Initial version. Parallel alternative to `ROBOT_PLAN.md`. Three-phase plan with Phase A heavy on fabrication and LeRobot environment setup; Phase C centered on imitation learning + SmolVLA fine-tuning as the path's payoff.
+- **2026-04-28 (rev 2)** — Phase C.1 made explicit about LeRobot dataset format as the required interchange standard for openpi/SmolVLA/ACT. Phase C.3 expanded to include π₀-base and π₀.₅-base fine-tuning options via Physical Intelligence's openpi, with remote-inference deployment notes (those VLAs don't fit on the Jetson and must run on a separate GPU server streaming action chunks).
