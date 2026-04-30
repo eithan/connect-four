@@ -28,19 +28,39 @@ Summary of why SO-101: ecosystem alignment with HuggingFace LeRobot and Physical
 
 ---
 
-## End Effector: Robotiq 2F-85 Parallel Gripper
+## End Effector
 
-**Recommendation: Robotiq 2F-85** (or a compatible open-source clone for cheaper arms).
+**Why fingers over suction:** Fingers are far more general-purpose, required for picking up pieces stacked flat in a supply tray, and better suited for VLA training-data diversity. No suction cups in this project.
 
-- **Why fingers over suction:** Fingers are far more general-purpose, required for picking up pieces stacked vertically in a supply tray, and better suited for VLA training data diversity.
-- **Why Robotiq 2F-85 specifically:**
-  - Industry standard — massive ROS2/Gazebo ecosystem, well-maintained URDF and MoveIt configs
-  - 85mm open width is ideal for Connect Four discs (~33mm diameter) — plenty of clearance
-  - Adaptive fingers conform to object shape for reliable grasp
-  - Excellent sim-to-real transfer: the Gazebo model behaves like the real hardware
-  - Compatible with UR5e (which is what the simulation uses)
-- **For cheap real arm:** An open-source Robotiq-inspired 2-finger gripper (~$50–200 for servo-driven clone) or the myCobot's included gripper accessory. The VLA model trained on Robotiq 2F-85 in sim should transfer reasonably well to any parallel gripper with similar geometry.
-- **Connect Four piece grip strategy:** Approach from above with fingers spread slightly wider than 33mm, lower onto the disc (pieces stored flat in a tray), close fingers to ~25mm to grip the disc by its edge.
+The simulation and the real hardware use **different parallel-jaw grippers**. This is fine for our path; details below.
+
+### Simulation gripper: Robotiq 2F-85 URDF (free, in Gazebo)
+
+The existing `connect_four_arm` ROS2 package uses the **Robotiq 2F-85 URDF** mounted on the UR5e in Gazebo. This is a community-maintained open-source URDF + MoveIt config + ROS2 controllers package (`ros-jazzy-robotiq-description`), installed via `apt`. **Not a real-hardware purchase** — the actual Robotiq 2F-85 gripper retails for $5,300–$8,000 and is not needed here.
+
+Why it was chosen for sim:
+- Industry-standard ROS2/Gazebo model, well-maintained URDF and MoveIt configs
+- 85 mm open width is plenty of clearance for ~38–40 mm Connect Four discs
+- Already integrated and working in Phase 3B (mimic joints, SRDF disable_collisions, JTC controller)
+- No reason to swap it out
+
+### Real-hardware gripper: SO-101 stock parallel-jaw (included with kit)
+
+The LeRobot **SO-ARM101 ships with its own parallel-jaw gripper** as part of the assembled kit — a Feetech STS3215-driven open-source design that is the canonical end-effector for the LeRobot ecosystem. Every published SmolVLA / π₀ / π₀.₅ recipe targeting SO-100/101 expects exactly this gripper. **Zero incremental cost; nothing additional to buy.**
+
+Connect Four discs (33–40 mm diameter, ~6–7 mm thick) are well within its grasp range.
+
+### Sim-vs-real gripper mismatch — why it doesn't matter
+
+There is a real geometry mismatch between the Robotiq 2F-85 in Gazebo and the SO-101 stock gripper in the real arm. This is acceptable for our path because:
+
+- **Phase 3C uses real teleoperated demonstrations**, not sim-trained policies, for the learned controller. The VLA model is fine-tuned on real-arm data, so the sim-side gripper geometry doesn't affect the deployed policy.
+- **The Gazebo simulation continues to validate higher-level algorithms** — game state, column targeting, MoveIt2 collision avoidance, end-to-end ROS2 plumbing. All gripper-agnostic.
+- **If we ever wanted sim-trained policies that transfer to real** (sim-to-real reinforcement learning, for example), we would swap the Gazebo URDF to the community SO-101 URDF. That's a separate project, not on the critical path for v1.
+
+### Connect Four piece grip strategy (applies to both sim and real)
+
+Approach from above with fingers spread slightly wider than the disc OD (~40 mm), lower onto the disc (pieces stored flat in a tray), close fingers until contact is detected to grip by the rim. Custom 3D-printed TPU fingertips with a concave cradle for the disc edge are an optional Phase 3C iteration if grip reliability falls short with stock fingers.
 
 ---
 
