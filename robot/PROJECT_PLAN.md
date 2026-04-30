@@ -164,9 +164,11 @@ Column y positions: (3 - i) * COL_SPACING, i = 0..6
 
 ---
 
-### Phase 3B: VLA-Ready Simulation 🔄 IN PROGRESS
+### Phase 3B: VLA-Ready Simulation ✅ ALGORITHM-COMPLETE
 
 Goal: Upgrade the Gazebo scene to be physically accurate and capable of collecting VLA training demonstrations. Success = arm can execute a scripted pick-place-release sequence in sim with realistic physics.
+
+**Closeout note (2026-04-30):** Declared algorithm-complete. Geometry, IK, MoveIt2 motion planning, gripper controller, ROS2 plumbing, and full launch graph are validated. Gazebo Harmonic's contact physics for small parallel-jaw grasps proved unreliable, and reliable sim grasping is no longer a blocker because (a) Phase 3C trains on real teleoperated demonstrations, not sim-trained policies, and (b) the gripper geometry mismatch between sim (Robotiq 2F-85) and real (SO-101 stock parallel-jaw) means sim grasp behavior wouldn't transfer anyway. Sub-task 3B.3 grasp tuning is parked.
 
 #### 3B.1 — Realistic Gazebo Scene ✅
 - ✅ Table at z=0, board (7 column dividers + front/back plates) at (0.65, 0, 0)
@@ -181,12 +183,12 @@ Goal: Upgrade the Gazebo scene to be physically accurate and capable of collecti
 - ✅ Gripper controller: JTC on `robotiq_85_left_knuckle_joint` (0.0=open, 0.8=closed)
 - ✅ SRDF: 88 disable_collisions pairs for all gripper links (prevents CheckStartStateCollision abort)
 
-#### 3B.3 — Full Pick-Place Sequence ✅ (first successful run achieved)
+#### 3B.3 — Full Pick-Place Sequence ✅ (motion plumbing validated; grasp contact physics parked)
 - ✅ Topic `/connect_four/pick_and_place` (String, format `"color,col"`)
 - ✅ Column IK precomputed with `wrist_1 += π/2` — piece arrives edge-on at slot
 - ✅ Gripper settle delay (0.35s) before close; slower final descent (5s) prevents early fire
 - ✅ PICK_GRASP_Z=0.112m, DROP_Z=0.382m, SLOT_CENTER_X=0.6325m, GRIPPER_PIECE=0.62 rad
-- 🔄 Tuning needed: verify wrist_1 is correct rotation joint; tune GRIPPER_PIECE for 38mm piece
+- 🅿️ Parked: wrist_1 rotation direction verification + GRIPPER_PIECE tuning. Gazebo grasp contact physics are unreliable for small parallel-jaw grasps; the sim mostly misses pickups. Not a blocker — Phase 3C uses real teleop demos, and the sim/real gripper geometry mismatch means sim grasp behavior wouldn't transfer anyway.
 
 #### 3B.4 — Scene Camera Setup ✅ (overhead RGBD mounted)
 - ✅ Overhead camera at (0.55, 0, 1.2), pitched down, publishes `/overhead_camera/*`
@@ -409,13 +411,13 @@ Create ROS2 nodes to replace the standalone `game_loop.py`:
 | Phase 1: Vision on Mac (static images) | ✅ COMPLETE | Board detection, AI inference |
 | Phase 2: Live camera on Mac | ✅ MOSTLY COMPLETE | Game loop, YOLO, robust detection |
 | Phase 3: ROS2 simulation — core | ✅ COMPLETE | UR5e + Gazebo + MoveIt2 + column moves |
-| Phase 3B: VLA-ready simulation | 🔄 IN PROGRESS | Pieces + gripper + pick-place — tuning |
+| Phase 3B: VLA-ready simulation | ✅ ALGORITHM-COMPLETE | Geometry/IK/MoveIt/launch validated; sim grasp contact physics parked, deferred to real arm |
 | Phase 3C: SO-101 hardware setup | 🔲 NEXT | Order parts, assemble, calibrate, collect demos, train ACT |
 | Phase 4: Full game integration | 🔲 | SO-101 plays complete games vs. human |
 | Phase 5: Vision / ROS2 integration | 🔲 DEPRIORITIZED | ROS2 board detection pipeline |
 | Phase 6: Polish | 🔲 | NLP, voice, web dashboard |
 
-**Current focus: Finish Phase 3B tuning** (wrist rotation direction, GRIPPER_PIECE value), then **order SO-101 parts for Phase 3C**.
+**Current focus:** Phase 3B closed out as algorithm-complete. SO-101 Advanced Kit ordered from Hiwonder (lead time ~25 business days from China). Active work is **Phase 3C prep** — see [`SESSION_STATUS.md`](./SESSION_STATUS.md) for the prioritized TODO list of pre-arm work (LeRobot environment, fixture printing, `arm_node` design, dataset schema).
 
 **When to order SO-101:** Now or any time during 3B tuning. Parts take 1–3 weeks to arrive (longer for Option B printed parts). By the time you finish 3B and print/assemble the arms, you'll be ready to collect demonstrations immediately.
 
