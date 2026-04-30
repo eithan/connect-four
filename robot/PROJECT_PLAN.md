@@ -1,5 +1,11 @@
 # Connect Four Robot Arm — Full Project Plan
 
+> **Document map.** This is the master plan. Companion docs in this folder:
+> - [`SESSION_STATUS.md`](./SESSION_STATUS.md) — concise current state, hardware ordered, immediate next steps. Read this first if returning after a break.
+> - [`ARM_DECISION_LOG.md`](./ARM_DECISION_LOG.md) — historical record of the arm-selection process (JetArm evaluated and rejected, SO-101 chosen).
+> - [`VLA_FINETUNING_PLAN.md`](./VLA_FINETUNING_PLAN.md) — deep-dive on Vision-Language-Action fine-tuning (SmolVLA / π₀ / π₀.₅) that complements Phase 3C and Phase 4 below.
+> - [`CLAUDE.md`](./CLAUDE.md) — guidance for Claude when working in this folder.
+
 ## Project Overview
 
 Build a robot arm that can play Connect Four against a human opponent by:
@@ -14,38 +20,11 @@ Your stack: Apple Silicon Mac (development) → Ubuntu 24.04 runtime machine →
 
 ---
 
-## Robot Arm Recommendations
+## Robot Arm — Decision
 
-### Budget Tier (~$200–$400): Hiwonder ArmPi Ultra (Raspberry Pi version)
+**Locked: LeRobot SO-ARM101** (leader + follower, fully assembled). See [`ARM_DECISION_LOG.md`](./ARM_DECISION_LOG.md) for the full evaluation history including the JetArm evaluation, Hiwonder support replies (429 mm reach, 2–4 mm precision), and the rationale for choosing SO-101 over alternatives.
 
-- Price: ~$300–$400 depending on configuration
-- Specs: 6-DOF, bus servos (25 KG torque), 3D depth camera included, ROS2 compatible
-- Pros: Comes with a depth camera out of the box, extensive tutorials, Python/OpenCV support, ROS2 ready.
-- Cons: Raspberry Pi based (not Jetson), lower torque. Smaller community than Elephant Robotics.
-- Best for: Getting started quickly at low cost.
-
-### Mid Tier (~$500–$800): Elephant Robotics myCobot 280
-
-- Price: ~$650–$800 depending on version
-- Specs: 6-DOF, 250g payload, 280mm reach, ±0.5mm repeatability
-- Pros: Largest community of any hobby arm, excellent ROS2 + MoveIt support. Huge ecosystem of accessories.
-- Cons: 250g payload is light. No depth camera included.
-- Best for: Best overall balance of community support, documentation, and ROS2 integration.
-
-### High Tier (~$700–$1,100+): Hiwonder JetArm (Jetson Orin Nano version)
-
-- Price: ~$700–$1,100+ (includes Jetson Orin Nano board)
-- Specs: 6-DOF, bus servos (35 KG torque), 3D depth camera (Gemini) included, 6-mic array, ROS2 + MoveIt
-- Pros: Natively designed for Jetson Orin Nano. Includes 3D depth camera. Working examples for 3D spatial grasping. Full IK source code and Gazebo simulation included.
-- Cons: Higher price. More reliant on Hiwonder's own tutorials/packages.
-- Best for: Most turnkey "Jetson + arm + depth camera + ROS2" experience.
-
-### Honorable Mention: Seeed Studio reBot Arm B601
-
-- Price: Target sub-$1,000 build cost (open source, you source parts)
-- Specs: 6-DOF + gripper, 650mm reach, 1.5kg payload
-
-**Recommendation:** Go with the Hiwonder JetArm (Orin Nano 8GB version) for the most integrated experience, or the Elephant Robotics myCobot 280 for the best community/ROS2 support.
+Summary of why SO-101: ecosystem alignment with HuggingFace LeRobot and Physical Intelligence's openpi (the de facto VLA toolchain), built-in leader/follower teleoperation, cross-embodiment skill transfer, alignment with the existing UR5e/Robotiq 2F-85 ROS2 simulation, and compatibility with the long-term goal of generalist robot teaching for household tasks and other games.
 
 ---
 
@@ -195,9 +174,25 @@ Goal: Upgrade the Gazebo scene to be physically accurate and capable of collecti
 
 ---
 
+### Architecture Insights from Physical Intelligence (informs Phases 3C and 4)
+
+Physical Intelligence (makers of π₀, π₀.₅, π₀.₇, openpi) has open-sourced their architecture and we adopt several patterns from it. Detail in [`VLA_FINETUNING_PLAN.md`](./VLA_FINETUNING_PLAN.md); the headlines:
+
+1. **Separate policy from execution; stream action chunks.** Large VLAs run on GPU servers and stream chunks of ~50 actions to the robot over websocket. Our ROS2 action contract should support this directly.
+2. **LeRobot dataset format is the de facto interchange standard.** All published VLA fine-tuning recipes consume it (SmolVLA, π₀, π₀.₅, OpenVLA, ACT, Diffusion Policy). Phase 3C demonstration recording must produce LeRobot-format datasets.
+3. **Don't train from scratch — fine-tune a pre-trained foundation VLA.** PI's whole thesis. For Connect Four: fine-tune SmolVLA on hundreds (not thousands) of demos.
+4. **Cross-embodiment generalization.** Skills transfer across arm types via the LeRobot toolchain. This is why the existing UR5e simulation continues to add value alongside the SO-101 real-arm work.
+5. **For on-Jetson inference, SmolVLA is the ceiling, not π₀ or larger.** SmolVLA (450M) was built specifically as the on-device counterpart to PI's cloud models. π₀ (3B) and π₀.₅ require remote inference from a desktop GPU.
+
+These patterns mostly reinforce decisions already in this plan — keeping the policy decoupled from arm motion (clean ROS2 action interface), targeting LeRobot via the SO-101, planning ACT before VLA. The main concrete additions are: (a) record demos in LeRobot format from day one, (b) add language annotations to episodes during Phase 3C, (c) keep the option open in Phase 4+ to add a `arm_node_openpi` variant that talks to a remote π₀.₅ policy server.
+
+---
+
 ### Phase 3C: SO-101 Hardware Setup 🔲 NEXT AFTER 3B
 
 Goal: Order and assemble the LeRobot SO-101 leader+follower arm pair. This replaces the "VLA training in simulation" path — real demonstrations from a human operator are faster and more reliable than sim-generated data.
+
+**See also:** [`VLA_FINETUNING_PLAN.md`](./VLA_FINETUNING_PLAN.md) for the openpi/SmolVLA/π₀/π₀.₅ deep-dive that extends this phase.
 
 **Why SO-101 over a UR5e real arm:**
 The SO-101 is a ~$150–300 6-DOF open-source arm designed specifically for LeRobot teleoperation and imitation learning. The leader arm lets you physically demonstrate pick-and-place, the follower records it. 50–100 episodes → trainable ACT policy in ~4 hours of GPU time. No sim-to-real gap for the learned behaviors.
