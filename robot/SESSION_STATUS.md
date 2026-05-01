@@ -11,10 +11,10 @@
 | Area | Status |
 |---|---|
 | Phase 1 — Vision pipeline (static images) | ✅ Complete |
-| Phase 2 — Live camera + cooperative game loop | ✅ Complete |
+| Phase 2 — Live camera + cooperative game loop | ✅ Mostly complete (sub-tasks 2.6 / 2.7 deprioritized to Phase 5) |
 | Phase 3 — ROS2 simulation core (UR5e + Gazebo + MoveIt2) | ✅ Complete |
 | Phase 3B — VLA-ready sim (Robotiq 2F-85 + pick-and-place) | ✅ Algorithm-complete (grasp contact physics deferred to real hardware) |
-| Phase 3C — SO-101 hardware setup | 🔲 Next, ready to order ($540 from Hiwonder, 1–3 wk lead time) |
+| Phase 3C — SO-101 hardware setup | 🔄 Arm ordered 2026-04-30 ($540, ETA early June 2026); pre-arm prep work in flight |
 | Phase 4 — Full game integration on real arm | 🔲 Pending |
 
 ## Decisions Locked
@@ -123,7 +123,7 @@ Even if you start with SmolVLA on-machine, the option to add π₀.₅-base via 
 Don't pull the sim work — close it out cleanly so it stays useful as a sandbox.
 
 - [ ] Add a comment to `column_mover.py` noting the wrist rotation direction question is parked
-- [ ] Update `PROJECT_PLAN.md` Phase 3B status from "🔄 IN PROGRESS" to "✅ ALGORITHM-COMPLETE (grasp physics deferred to real hardware)"
+- [x] ~~Update `PROJECT_PLAN.md` Phase 3B status from "🔄 IN PROGRESS" to "✅ ALGORITHM-COMPLETE (grasp physics deferred to real hardware)"~~ — done 2026-04-30
 - [ ] Commit any local sim tweaks so they're preserved
 
 ### 8. (Optional) Try a small demo recording on a sim SO-100

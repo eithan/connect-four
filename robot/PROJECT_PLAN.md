@@ -102,7 +102,7 @@ Goal: Replace static images with a live camera feed and validate real-time board
 - ✅ Extended hole search, clipped-contour guard, accurate board overlay
 
 #### 2.6 — Jetson Orin Nano Deployment ⏸ DEPRIORITIZED
-*Deferred until after VLA model is working in simulation (Phase 3C). The vision pipeline already works well on Ubuntu; Jetson deployment is an optimization, not a blocker.*
+*Deferred to Phase 5 (untethered/edge deployment). The vision pipeline already works well on the existing Ubuntu machine; Jetson deployment is an optimization for standalone operation, not a blocker. See [`SESSION_STATUS.md`](./SESSION_STATUS.md) "Deferred to Phase 5" hardware section for the buy trigger.*
 
 - [ ] Convert YOLO `.pt` to TensorRT `.engine`
 - [ ] Install Jetson-specific `onnxruntime-gpu` wheel
@@ -210,32 +210,33 @@ These patterns mostly reinforce decisions already in this plan — keeping the p
 
 ---
 
-### Phase 3C: SO-101 Hardware Setup 🔲 NEXT AFTER 3B
+### Phase 3C: SO-101 Hardware Setup 🔄 IN FLIGHT (arm ordered, prep work in progress)
 
-Goal: Order and assemble the LeRobot SO-101 leader+follower arm pair. This replaces the "VLA training in simulation" path — real demonstrations from a human operator are faster and more reliable than sim-generated data.
+Goal: Order, assemble, calibrate, and integrate the LeRobot SO-101 leader+follower arm pair. This replaces the "VLA training in simulation" path — real demonstrations from a human operator are faster and more reliable than sim-generated data.
 
-**See also:** [`VLA_FINETUNING_PLAN.md`](./VLA_FINETUNING_PLAN.md) for the openpi/SmolVLA/π₀/π₀.₅ deep-dive that extends this phase.
+**See also:** [`VLA_FINETUNING_PLAN.md`](./VLA_FINETUNING_PLAN.md) for the openpi/SmolVLA/π₀/π₀.₅ deep-dive that extends this phase. [`SESSION_STATUS.md`](./SESSION_STATUS.md) has the live TODO list of pre-arm prep work.
 
 **Why SO-101 over a UR5e real arm:**
-The SO-101 is a ~$150–300 6-DOF open-source arm designed specifically for LeRobot teleoperation and imitation learning. The leader arm lets you physically demonstrate pick-and-place, the follower records it. 50–100 episodes → trainable ACT policy in ~4 hours of GPU time. No sim-to-real gap for the learned behaviors.
+The SO-101 is an open-source 6-DOF arm designed specifically for LeRobot teleoperation and imitation learning. The leader arm lets you physically demonstrate pick-and-place, the follower records it. 50–100 episodes → trainable ACT policy in ~4 hours of GPU time. No sim-to-real gap for the learned behaviors. See [`ARM_DECISION_LOG.md`](./ARM_DECISION_LOG.md) for the full evaluation that led to this choice (notably over the Hiwonder JetArm).
 
-#### 3C.1 — What to Order
+#### 3C.1 — What Was Ordered ✅
 
-**Option A — Buy assembled (easiest):**
-- Search: "SO-ARM100" or "SO-101" on Seeed Studio, WAVESHARE, or AliExpress
-- Buy 2 units (one leader, one follower) — ~$150–250 each assembled
-- Also buy: 2× USB webcam (Logitech C270 or similar, ~$25 each) for wrist cameras
+**Hiwonder LeRobot SO-ARM101 Advanced Kit (assembled), ordered 2026-04-30, ETA early June 2026 (~25 business days from China). Total: $540 ($460 + $80 shipping).**
 
-**Option B — Buy parts and print (cheapest, ~$100–150/arm):**
-- Servos per arm: 5× Feetech STS3215 (~$14 each) + 2× Feetech STS3032 (~$10 each) = ~$90/arm
-- USB adapter: 1× Feetech SCServo USB-to-serial board (~$15)
-- 3D printed frame: download STLs from `TheRobotStudio/SO-ARM100` on GitHub, print in PLA (~300g per arm)
-- Hardware: M2/M3 screws, bearings, power supply (7.4V 2A LiPo or DC adapter)
-- Wrist camera: 1× USB webcam per follower arm
+Bundled in the Advanced Kit:
+- Leader + follower arms (both fully assembled)
+- Wrist camera + external scene camera
+- 12 servos total (6 × 12V, 6 × 7.4V) with magnetic feedback
+- 2× motor control boards
+- BusLinker V3.0 debugging board
+- All cables, power supplies (12V + 5V), table clamps
 
-**Total for 2 arms (Option B):** ~$250–350 + print costs
+**No additional camera purchase needed** — both wrist and scene cameras ship with the kit.
 
-**Before ordering, confirm:** your Ubuntu machine has 2 free USB ports (one per arm's controller board) and you have access to a 3D printer or print service.
+**Before the arm arrives, confirm on the Ubuntu machine:**
+- At least 2 free USB ports for arm controllers (4 total counting cameras)
+- Discrete GPU available for ACT training (RTX 3080+ recommended)
+- LeRobot environment installed and smoke-tested (TODO item 1 in `SESSION_STATUS.md`)
 
 #### 3C.2 — LeRobot Environment Setup
 
@@ -340,49 +341,37 @@ Goal: SO-101 plays complete Connect Four games against a human.
 
 ---
 
-### Phase 5: Vision Integration for Board Detection 🔲 (DEPRIORITIZED)
+### Phase 5: ROS2 Vision Integration + Jetson Deployment 🔲 DEPRIORITIZED
 
-*The board detection pipeline (Phase 2) already works well. This phase is only needed for full autonomy — the SO-101 policy handles grasping, but the overhead camera still needs ROS2 integration for board-state publishing.*
+*The board detection pipeline (Phase 2) already works well as a standalone Python process. This phase is only needed for full autonomy / untethered operation — the SO-101 policy (Phase 3C/4) handles grasping, but the overhead camera still needs ROS2 integration for board-state publishing if you want to remove the standalone `game_loop.py`. The Jetson Orin Nano (deferred from earlier phases — see [`SESSION_STATUS.md`](./SESSION_STATUS.md) "Deferred to Phase 5") is the buy trigger here.*
 
 #### 5.1 — ROS2 Node Architecture
+
+Replace the standalone `game_loop.py` with ROS2 nodes:
 
 | Node | Subscribes To | Publishes | Purpose |
 |------|--------------|-----------|---------|
-| `camera_node` | — | `/camera/image_raw` | USB/depth camera capture |
-| `board_detector_node` | `/camera/image_raw` | `/connect_four/board_state` | Board state from image |
-| `game_manager_node` | `/connect_four/board_state` | `/connect_four/ai_move` | Turn tracking + AI call |
-| `so101_policy_node` | `/connect_four/ai_move` | SO-101 joint commands | ACT policy inference |
+| `camera_node` | — | `/camera/image_raw` (and `/camera/depth` if depth is added) | USB camera capture (SO-101 wrist + scene cameras, or external) |
+| `board_detector_node` | `/camera/image_raw` | `/connect_four/board_state` | Board state from image (port of `board_detector.py`) |
+| `game_manager_node` | `/connect_four/board_state` | `/connect_four/ai_move` | Turn tracking + AlphaZero call (port of `turn_tracker.py` + `ai_player.py`) |
+| `so101_policy_node` (or `arm_node`) | `/connect_four/ai_move` | SO-101 joint commands | ACT/SmolVLA policy inference; thin wrapper over LeRobot Python |
 
-#### 5.2 — Jetson Orin Nano Deployment (optional)
-- [ ] Deploy ACT policy on Jetson for untethered operation
-- [ ] Convert to TensorRT if inference is too slow (target: <100ms per step)
+#### 5.2 — Jetson Orin Nano Deployment (optional, untethered operation)
 
----
-
-### Phase 5: Vision Integration for Board Detection 🔲
-
-*This phase was previously higher priority. It is now sequenced after the VLA model is working because the board detection pipeline (Phase 2) already works well via the game_loop's camera feed, and the Orbbec/ROS integration is only needed for fully autonomous operation.*
-
-#### 5.1 — ROS2 Node Architecture
-Create ROS2 nodes to replace the standalone `game_loop.py`:
-
-| Node | Subscribes To | Publishes | Purpose |
-|------|--------------|-----------|---------|
-| `camera_node` | — | `/camera/image_raw`, `/camera/depth` | Captures from depth camera |
-| `board_detector_node` | `/camera/image_raw` | `/connect_four/board_state` | Detects board state from image |
-| `game_manager_node` | `/connect_four/board_state` | `/connect_four/ai_move` | Tracks turns, calls AI |
-| `arm_controller_node` | `/connect_four/ai_move` | arm commands | Triggers VLA pick-place |
-
-#### 5.2 — Jetson Orin Nano Deployment
+- [ ] Buy Jetson Orin Nano 8GB Super Dev Kit + 256GB NVMe SSD (~$340) — see [`SESSION_STATUS.md`](./SESSION_STATUS.md) for trigger criteria
+- [ ] Flash JetPack 6.x and install ROS2 Jazzy + LeRobot environment
 - [ ] Convert YOLO `.pt` to TensorRT `.engine`
-- [ ] Install `onnxruntime-gpu` for Jetson
-- [ ] Replace macOS TTS with `espeak-ng` / `pyttsx3`
-- [ ] Validate Orbbec depth camera on Linux/Jetson SDK
+- [ ] Install `onnxruntime-gpu` Jetson wheel for AlphaZero inference
+- [ ] Replace macOS TTS with `espeak-ng` / `pyttsx3` (Linux equivalent)
 - [ ] Deploy full stack on Jetson; profile with `tegrastats`
+- [ ] Decide whether to deploy the learned policy on-Jetson (SmolVLA fits) or keep remote inference (π₀ / π₀.₅ require it) — see [`VLA_FINETUNING_PLAN.md`](./VLA_FINETUNING_PLAN.md)
 
-#### 5.3 — Orbbec Depth Camera Integration
+#### 5.3 — Optional depth camera integration
+
+The SO-101 Advanced Kit ships with two RGB cameras (wrist + scene) — depth is not strictly required. If a depth sensor is added later (e.g. RealSense D405) for richer perception:
+
 - [ ] Sample board-plane depth at lock time
-- [ ] Reject YOLO detections outside `board_near_mm` / `board_far_mm` range
+- [ ] Reject piece detections outside `board_near_mm` / `board_far_mm` range
 - [ ] Full autonomous loop: no human needed to trigger AI move
 
 ---
@@ -412,13 +401,11 @@ Create ROS2 nodes to replace the standalone `game_loop.py`:
 | Phase 2: Live camera on Mac | ✅ MOSTLY COMPLETE | Game loop, YOLO, robust detection |
 | Phase 3: ROS2 simulation — core | ✅ COMPLETE | UR5e + Gazebo + MoveIt2 + column moves |
 | Phase 3B: VLA-ready simulation | ✅ ALGORITHM-COMPLETE | Geometry/IK/MoveIt/launch validated; sim grasp contact physics parked, deferred to real arm |
-| Phase 3C: SO-101 hardware setup | 🔲 NEXT | Order parts, assemble, calibrate, collect demos, train ACT |
+| Phase 3C: SO-101 hardware setup | 🔄 Arm ordered 2026-04-30 (ETA early June 2026); pre-arm prep in flight | Calibrate, collect demos, train ACT once arm arrives |
 | Phase 4: Full game integration | 🔲 | SO-101 plays complete games vs. human |
-| Phase 5: Vision / ROS2 integration | 🔲 DEPRIORITIZED | ROS2 board detection pipeline |
+| Phase 5: ROS2 vision integration + Jetson deployment | 🔲 DEPRIORITIZED | Untethered operation; Jetson buy trigger lives here |
 | Phase 6: Polish | 🔲 | NLP, voice, web dashboard |
 
-**Current focus:** Phase 3B closed out as algorithm-complete. SO-101 Advanced Kit ordered from Hiwonder (lead time ~25 business days from China). Active work is **Phase 3C prep** — see [`SESSION_STATUS.md`](./SESSION_STATUS.md) for the prioritized TODO list of pre-arm work (LeRobot environment, fixture printing, `arm_node` design, dataset schema).
-
-**When to order SO-101:** Now or any time during 3B tuning. Parts take 1–3 weeks to arrive (longer for Option B printed parts). By the time you finish 3B and print/assemble the arms, you'll be ready to collect demonstrations immediately.
+**Current focus:** Phase 3B closed out as algorithm-complete. SO-101 Advanced Kit ordered from Hiwonder on 2026-04-30 (lead time ~25 business days from China; ETA early June 2026). Active work is **Phase 3C prep** — see [`SESSION_STATUS.md`](./SESSION_STATUS.md) for the prioritized TODO list of pre-arm work (LeRobot environment, fixture printing, `arm_node` design, dataset schema).
 
 **Hardware path summary:** SO-101 leader+follower → LeRobot ACT policy → trained on real demos → plays Connect Four. The UR5e simulation validated the algorithm; the SO-101 is the real-hardware endpoint at a fraction of the cost.
