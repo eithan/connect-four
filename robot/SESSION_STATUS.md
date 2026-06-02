@@ -2,7 +2,7 @@
 
 **Read this first.** A concise dashboard of the project's current state, hardware logistics, and immediate next steps. The full master plan lives in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
 
-**Last updated:** 2026-04-30
+**Last updated:** 2026-05-22
 
 ---
 
@@ -14,7 +14,7 @@
 | Phase 2 — Live camera + cooperative game loop | ✅ Mostly complete (sub-tasks 2.6 / 2.7 deprioritized to Phase 5) |
 | Phase 3 — ROS2 simulation core (UR5e + Gazebo + MoveIt2) | ✅ Complete |
 | Phase 3B — VLA-ready sim (Robotiq 2F-85 + pick-and-place) | ✅ Algorithm-complete (grasp contact physics deferred to real hardware) |
-| Phase 3C — SO-101 hardware setup | 🔄 Arm ordered 2026-04-30 ($540, ETA early June 2026); pre-arm prep work in flight |
+| Phase 3C — SO-101 hardware setup | 🔄 Arm **arrived early** (~2026-05-22), assembled & calibrated; teleop verified with both cameras. Now recording the first single-task dataset |
 | Phase 4 — Full game integration on real arm | 🔲 Pending |
 
 ## Decisions Locked
@@ -57,9 +57,10 @@ Reasoning: LeRobot's canonical workflow connects the SO-101 leader + follower ov
 
 ## Current Focus
 
-1. ✅ **SO-101 Advanced Kit ordered** from Hiwonder on 2026-04-30 — arriving in ~5 weeks (early June 2026).
-2. ✅ **Phase 3B closed out** as algorithm-complete in `PROJECT_PLAN.md`. Sim grasp contact physics parked.
-3. **Pre-arm prep on the Ubuntu machine** during the ~5-week wait — see TODO section below. User will start the week of 2026-05-04 at a relaxed pace.
+1. ✅ **SO-101 Advanced Kit arrived early** (~2026-05-22, well ahead of the early-June ETA). Assembled, calibrated, and teleoperating via `lerobot-teleoperate` with both cameras visible in the Rerun viewer (stable udev symlinks: follower `/dev/so101_follower`→ttyACM1, leader `/dev/so101_leader`→ttyACM0; cameras /dev/video0 + /dev/video2).
+2. ✅ **LeRobot environment working** — teleop running implies the install (TODO item 1) is effectively done.
+3. 🔄 **Recording the v1 single-task dataset:** fixed pick (edge-nest fixture) → drop into column 0, ~50 teleop episodes, then an ACT baseline. Smallest-task-first to validate the record → train → deploy loop. See `dataset_schema.md` and `record_first_dataset.sh`.
+4. **New fixture for the vertical grip:** `connect_four_piece_edge_nest.scad` holds a disc on edge so the gripper clamps the flat faces (across the 8.5 mm thickness) and the disc drops vertically into the slot — avoids the parked wrist-rotation step. Stage 1 (single hand-reloaded nest) now; inclined gravity feed is Stage 2.
 
 ## TODO: Prep Work While Waiting for Arm
 
@@ -148,6 +149,11 @@ LeRobot supports a SO-100 in MuJoCo. Walking through the LeRobot record-train-de
 | `robot/CLAUDE.md` | Guidance for Claude when working in this folder |
 | `robot/game_loop.py` | Live camera + cooperative game loop (with `--ros` flag) |
 | `robot/board_detector.py` | Vision pipeline (HSV + YOLOv8 hybrid) |
+| `robot/teleop.sh` | `lerobot-teleoperate` command (stable symlink ports, `front`/`hand` cameras) |
+| `robot/connect_four_piece_edge_nest.scad` | Stage-1 edge-standing piece nest (vertical face-grip, drop-ready) |
+| `robot/dataset_schema.md` | v1 dataset schema: task scope, language annotation, episode/metadata |
+| `robot/record_first_dataset.sh` | `lerobot-record` command for the v1 fixed-pick → column-0 dataset |
+| `robot/train_act.sh` | `lerobot-train` ACT command + commented real-arm eval/deploy command |
 | `robot/ai_player.py` | AlphaZero ONNX inference + heuristic fallback |
 | `robot/turn_tracker.py` | Stateful turn detection / win detection |
 | `ros2_ws/src/connect_four_arm/scripts/column_mover.py` | Arm control node (IK precompute + joint-space planning) |
@@ -156,6 +162,7 @@ LeRobot supports a SO-100 in MuJoCo. Walking through the LeRobot record-train-de
 
 ## Changelog
 
+- **2026-05-22** — SO-101 **arrived early** (well ahead of the early-June ETA), assembled, calibrated, and teleoperating with both cameras (scene `/dev/video0` + wrist `/dev/video2`) in the Rerun viewer. Phase 3C advanced from pre-arm prep to demo recording. Added the `connect_four_piece_edge_nest.scad` fixture (holds a disc on edge for a vertical face-grip, so the disc drops straight into the board — supersedes the flat rim-grip approach in the tray/chute/magazine files for v1, and sidesteps the parked wrist-rotation question). Added `dataset_schema.md` and `record_first_dataset.sh` for the v1 fixed-pick → column-0 dataset. Discs confirmed at 32 mm × 8.5 mm.
 - **2026-04-30** — SO-101 Advanced Kit ordered from Hiwonder ($540 total, ~25 business days from China, ETA early June 2026). Phase 3B flipped to ✅ ALGORITHM-COMPLETE in `PROJECT_PLAN.md` with closeout note documenting the parked grasp-physics tuning. Compute decision locked: defer Jetson Orin Nano to Phase 5, use existing Ubuntu 24.04 machine for Phase 3C/4 — LeRobot's canonical workflow, saves ~$340. Added prioritized TODO section for prep work during the ~5-week wait. User pacing: starting TODO items the week of 2026-05-04, slow tempo.
 - **2026-04-29** — Restructured the doc set: renamed `ROBOT_PLAN.md` → `ARM_DECISION_LOG.md` (decision history) and `ROBOT_PLAN_ALT.md` → `VLA_FINETUNING_PLAN.md` (focused VLA companion to the master plan). Added this `SESSION_STATUS.md` as the dashboard entry point. Folded the Physical Intelligence architecture insights into `PROJECT_PLAN.md` and `VLA_FINETUNING_PLAN.md`.
 - **2026-04-28** — JetArm evaluation closed; SO-101 decision locked. Hiwonder support replies received and recorded in `ARM_DECISION_LOG.md`.
