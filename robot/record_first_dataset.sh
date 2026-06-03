@@ -55,7 +55,10 @@
 #
 #  STOPPING EARLY
 #  ---------------
-#  Press Ctrl-C. All completed episodes are saved automatically.
+#  Wait until you see "Recording episode N" (not "Reset the environment") before
+#  pressing Ctrl-C. lerobot encodes the video during the reset phase — killing
+#  it mid-encode discards the episode. Once the next episode number appears,
+#  encoding of the previous one is done and Ctrl-C is safe.
 #  Run the script again to continue — it resumes from where you left off.
 # =============================================================
 
@@ -107,7 +110,7 @@ lerobot-record \
   --robot.id=my_follower_arm \
   --robot.cameras='{
     front: {type: opencv, index_or_path: "/dev/video0", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"},
-    hand:  {type: opencv, index_or_path: "/dev/video2", width: 640, height: 480, fps: 30, fourcc: "YUYV", backend: "V4L2"}
+    hand:  {type: opencv, index_or_path: "/dev/video2", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"}
   }' \
   --teleop.type=so101_leader \
   --teleop.port=/dev/so101_leader \
@@ -120,6 +123,8 @@ lerobot-record \
   --dataset.reset_time_s=8 \
   --dataset.root="${DATASET_ROOT}" \
   --dataset.push_to_hub="${PUSH_TO_HUB}" \
+  --dataset.streaming_encoding=true \
+  --dataset.encoder_threads=2 \
   "${RESUME_ARGS[@]}" \
   --display_data=true \
   2>&1 | python3 "${SCRIPT_DIR}/record_voice_monitor.py"
