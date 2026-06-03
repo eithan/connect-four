@@ -1,29 +1,42 @@
 #!/usr/bin/env bash
 # =============================================================
 #  send_key.sh
-#  Run this in a SECOND terminal while record_first_dataset.sh
-#  is running. Press Enter here to send a Right Arrow keystroke
-#  to lerobot (ends current phase early).
+#  Run in a SECOND terminal while record_first_dataset.sh runs.
+#  Press ENTER here to send a Right Arrow keystroke to lerobot.
 #
-#  PREREQS:  sudo apt install xdotool
-#
-#  USAGE:
-#    Terminal 1: ./robot/record_first_dataset.sh
-#    Terminal 2: ./robot/send_key.sh
+#  Uses kernel-level evdev injection (bypasses Wayland/X11).
+#  PREREQS:  pip install evdev
+#            User must be in the 'input' group (already done after reboot).
 # =============================================================
 
-set -euo pipefail
+python3 - <<'EOF'
+import sys
 
-command -v xdotool &>/dev/null || {
-    echo "ERROR: xdotool not found. Run: sudo apt install xdotool"
-    exit 1
-}
+try:
+    import evdev
+    from evdev import UInput, ecodes as e
+except ImportError:
+    print("ERROR: Run:  pip install evdev")
+    sys.exit(1)
 
-echo "Ready. Press ENTER to send Right Arrow to lerobot (end phase early)."
-echo "Press Ctrl-C to quit."
-echo ""
+try:
+    ui = UInput()
+except PermissionError:
+    print("ERROR: Permission denied on /dev/uinput")
+    print("Fix:  sudo chmod a+rw /dev/uinput  (temporary)")
+    print("  or: sudo usermod -a -G uinput $USER  then reboot (permanent)")
+    sys.exit(1)
 
-while IFS= read -r; do
-    xdotool key Right
-    echo "  → Right Arrow sent  $(date +%H:%M:%S)"
-done
+print("Ready. Press ENTER to send Right Arrow to lerobot.")
+print("Press Ctrl-C to quit.\n")
+
+while True:
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        break
+    ui.write(e.EV_KEY, e.KEY_RIGHT, 1)
+    ui.write(e.EV_KEY, e.KEY_RIGHT, 0)
+    ui.syn()
+    print(f"  → Right Arrow sent")
+EOF
