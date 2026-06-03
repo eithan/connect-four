@@ -18,9 +18,10 @@
 #  KEYBOARD CONTROLS
 #  -------------------------------------------------------------------------
 #  *** Wayland / RDP users: arrow keys won't work in the recording terminal.
-#      Open a SECOND terminal and run:  python3 robot/send_key.py
-#      Press ENTER there to inject a Right Arrow at the kernel level (evdev).
-#      For Left Arrow (discard), see send_key.py — add a 'd' path if needed.
+#      lerobot uses pynput which listens on X11 (DISPLAY env var).
+#      1. sudo apt install xdotool       (one-time)
+#      2. Open a SECOND terminal and run: python3 robot/send_key.py
+#         ENTER = Right Arrow, d+ENTER = Left Arrow
 #
 #  Normal X11 / local terminal:
 #    Right Arrow : during setup  → start the episode early
@@ -68,7 +69,7 @@ REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
 # Local root for the dataset. --resume=true requires an explicit root (can't
 # write into the Hub snapshot cache). Episodes accumulate here across sessions.
 # Full path to this specific dataset — lerobot uses root as-is, no repo_id appended.
-DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
+DATASET_BASE="${HOME}/lerobot_datasets"
 TASK="Pick a yellow piece from the chute and drop it into column 0"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -80,16 +81,23 @@ cleanup() {
 trap cleanup EXIT
 
 # ── Resume detection ─────────────────────────────────────────────────────────
-# --resume=true triggers a Hub API call even when push_to_hub=false, which
+# lerobot's create() uses root as-is; resume() appends repo_id to root.
+# So the two modes need different --dataset.root values:
+#   create:  root = full dataset path  (DATASET_BASE/REPO_ID)
+#   resume:  root = parent dir         (DATASET_BASE — lerobot appends REPO_ID)
+#
+# --resume=true also triggers a Hub API call even when push_to_hub=false, which
 # fails if the repo doesn't exist on HuggingFace. Only pass it when the local
-# dataset directory already exists (i.e., this is a continuation, not a first run).
-DATASET_LOCAL_PATH="${DATASET_ROOT}/${REPO_ID}"
+# dataset directory already exists.
+DATASET_LOCAL_PATH="${DATASET_BASE}/${REPO_ID}"
 RESUME_ARGS=()
 if [ -d "${DATASET_LOCAL_PATH}" ]; then
     echo "Found existing dataset at ${DATASET_LOCAL_PATH} — resuming."
     RESUME_ARGS=(--resume=true)
+    DATASET_ROOT="${DATASET_BASE}"          # resume() appends repo_id
 else
     echo "No existing dataset found — starting fresh at ${DATASET_LOCAL_PATH}."
+    DATASET_ROOT="${DATASET_LOCAL_PATH}"    # create() uses root as-is
 fi
 
 # ── Run ───────────────────────────────────────────────────────────────────────
