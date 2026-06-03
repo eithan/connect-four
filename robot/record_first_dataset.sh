@@ -78,6 +78,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# ── Resume detection ─────────────────────────────────────────────────────────
+# --resume=true triggers a Hub API call even when push_to_hub=false, which
+# fails if the repo doesn't exist on HuggingFace. Only pass it when the local
+# dataset directory already exists (i.e., this is a continuation, not a first run).
+DATASET_LOCAL_PATH="${DATASET_ROOT}/${REPO_ID}"
+RESUME_ARGS=()
+if [ -d "${DATASET_LOCAL_PATH}" ]; then
+    echo "Found existing dataset at ${DATASET_LOCAL_PATH} — resuming."
+    RESUME_ARGS=(--resume=true)
+else
+    echo "No existing dataset found — starting fresh at ${DATASET_LOCAL_PATH}."
+fi
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 lerobot-record \
   --robot.type=so101_follower \
@@ -98,7 +111,7 @@ lerobot-record \
   --dataset.reset_time_s=20 \
   --dataset.root="${DATASET_ROOT}" \
   --dataset.push_to_hub="${PUSH_TO_HUB}" \
-  --resume=true \
+  "${RESUME_ARGS[@]}" \
   --display_data=true \
   2>&1 | python3 "${SCRIPT_DIR}/record_voice_monitor.py"
 
