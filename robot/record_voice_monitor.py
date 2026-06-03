@@ -2,16 +2,18 @@
 """
 record_voice_monitor.py
 =======================
-Pipe lerobot-record output through this script for spoken phase announcements.
+Adds chute-specific voice announcements on top of lerobot's built-in audio.
+lerobot already handles setup/recording phase transitions with its own sounds.
+This script only announces disc position and when to reload the chute —
+the one thing lerobot doesn't know about.
 
-USAGE (called automatically by record_first_dataset.sh):
+USAGE (called by record_first_dataset.sh — do not run directly):
     lerobot-record [args] 2>&1 | python3 robot/record_voice_monitor.py
 
 INSTALL TTS (Ubuntu, one-time):
     sudo apt install espeak
 
-DEBUG: all matched log lines are written to /tmp/lerobot_monitor.log
-so you can see exactly what triggered each announcement.
+DEBUG LOG: /tmp/lerobot_monitor.log
 """
 
 import queue
@@ -23,22 +25,22 @@ from datetime import datetime
 
 # ── Config ────────────────────────────────────────────────────────────────────
 CHUTE_SIZE   = 5    # must match n_pieces in connect_four_top_grab_chute.scad
-ESPEAK_SPEED = 145  # words per minute
+ESPEAK_SPEED = 145
 DEBUG_LOG    = '/tmp/lerobot_monitor.log'
-
 
 # ── Debug log ─────────────────────────────────────────────────────────────────
 
-_debug_file = open(DEBUG_LOG, 'a', buffering=1)
+_dbg = open(DEBUG_LOG, 'a', buffering=1)
 
-def dbg(label, line):
+def dbg(label, msg):
     ts = datetime.now().strftime('%H:%M:%S.%f')[:-3]
-    _debug_file.write(f"[{ts}] {label}: {line}\n")
+    _dbg.write(f"[{ts}] {label}: {msg}\n")
 
-
-# ── Speaker: one worker thread, no overlap ────────────────────────────────────
+# ── Speaker ───────────────────────────────────────────────────────────────────
 
 class Speaker:
+    """Single worker thread — new say() kills current speech immediately."""
+
     def __init__(self):
         self._q      = queue.Queue()
         self._proc   = None
@@ -54,7 +56,7 @@ class Speaker:
         ]:
             try:
                 subprocess.run(probe, capture_output=True, timeout=2)
-                dbg('TTS', f'using engine: {name}')
+                dbg('TTS', f'engine: {name}')
                 return name
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 pass
@@ -97,90 +99,37 @@ class Speaker:
 
 _speaker = Speaker()
 
-PHASE_SETUP     = 'setup'
-PHASE_RECORDING = 'recording'
-
-
 # ── Monitor ───────────────────────────────────────────────────────────────────
 
 def monitor():
-    phase       = None
-    episode_num = 0
-
     dbg('START', 'monitor running')
 
     for raw_line in sys.stdin:
         sys.stdout.write(raw_line)
         sys.stdout.flush()
         line = raw_line.strip()
-
-        # Log every line so we can see the full lerobot output
         dbg('LINE', line)
 
-        # Only process actual lerobot INFO/WARNING log lines.
-        # The config dump at startup is raw Python dicts with no INFO prefix —
-        # it contains 'preset' (matches 'reset') and 'warmup_s' (matches 'warmup')
-        # which were triggering false announcements. Requiring the INFO prefix
-        # filters all of that out.
-        is_info_line = bool(re.match(r'^(INFO|WARNING)\s', line))
-
-        # ── Recording started ──────────────────────────────────────────────
-        m = re.search(r'[Rr]ecording episode[^\d]*(\d+)', line)
-        if m:
-            ep = int(m.group(1))
-            dbg('MATCH', f'recording episode {ep} (phase={phase})')
-
-            # Episode 0 is lerobot's warmup/preview — skip it
-            if ep == 0:
-                dbg('SKIP', 'episode 0 is warmup, ignoring')
-                continue
-
-            if phase != PHASE_RECORDING:
-                phase       = PHASE_RECORDING
-                episode_num = ep
-                disc_pos    = ((episode_num - 1) % CHUTE_SIZE) + 1
-                _speaker.say(
-                    f"Recording. Disc {disc_pos} of {CHUTE_SIZE}. "
-                    f"Episode {episode_num}. Go."
-                )
+        # Only act when lerobot starts an episode setup window.
+        # Episode 0 is a camera warmup — skip it.
+        m = re.search(r'Recording episode[^\d]*(\d+)', line)
+        if not m:
             continue
 
-        # ── Reset / setup window ───────────────────────────────────────────
-        # \b word boundary prevents 'preset' from matching 'reset'.
-        # is_info_line prevents config dump lines from matching.
-        if is_info_line and re.search(r'\b[Rr]eset\b|\b[Ww]arm', line):
-            dbg('MATCH', f'reset/warmup (phase={phase}, episode_num={episode_num})')
+        ep = int(m.group(1))
+        dbg('MATCH', f'episode {ep}')
 
-            if phase != PHASE_SETUP:
-                phase     = PHASE_SETUP
-                next_ep   = episode_num + 1
-                next_disc = ((next_ep - 1) % CHUTE_SIZE) + 1
-
-                if episode_num == 0:
-                    # Very start of session — no episodes recorded yet
-                    _speaker.say(
-                        f"Setup time. Load {CHUTE_SIZE} discs into the chute. "
-                        f"Move arm to start position. "
-                        f"Press Right Arrow when ready."
-                    )
-                elif next_disc == 1:
-                    # Cycle boundary — chute needs refilling
-                    _speaker.say(
-                        f"Setup time. Reload the chute with {CHUTE_SIZE} discs. "
-                        f"Press Right Arrow when ready."
-                    )
-                else:
-                    _speaker.say(
-                        f"Setup time. Disc {next_disc} of {CHUTE_SIZE} next. "
-                        f"Press Right Arrow when ready."
-                    )
+        if ep == 0:
+            dbg('SKIP', 'warmup episode')
             continue
 
-        # ── Session done ───────────────────────────────────────────────────
-        if re.search(r'[Ee]xiting', line):
-            dbg('MATCH', 'exiting')
-            _speaker.say("Session complete. Well done.")
-            continue
+        disc_pos     = ((ep - 1) % CHUTE_SIZE) + 1
+        needs_reload = (disc_pos == 1) and (ep > 1)
+
+        if needs_reload:
+            _speaker.say(f"Reload the chute. Disc 1 of {CHUTE_SIZE}.")
+        else:
+            _speaker.say(f"Disc {disc_pos} of {CHUTE_SIZE}.")
 
 
 if __name__ == '__main__':
