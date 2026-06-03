@@ -117,6 +117,13 @@ def monitor():
         # Log every line so we can see the full lerobot output
         dbg('LINE', line)
 
+        # Only process actual lerobot INFO/WARNING log lines.
+        # The config dump at startup is raw Python dicts with no INFO prefix —
+        # it contains 'preset' (matches 'reset') and 'warmup_s' (matches 'warmup')
+        # which were triggering false announcements. Requiring the INFO prefix
+        # filters all of that out.
+        is_info_line = bool(re.match(r'^(INFO|WARNING)\s', line))
+
         # ── Recording started ──────────────────────────────────────────────
         m = re.search(r'[Rr]ecording episode[^\d]*(\d+)', line)
         if m:
@@ -139,7 +146,9 @@ def monitor():
             continue
 
         # ── Reset / setup window ───────────────────────────────────────────
-        if re.search(r'[Rr]eset|[Ww]arm.?up', line):
+        # \b word boundary prevents 'preset' from matching 'reset'.
+        # is_info_line prevents config dump lines from matching.
+        if is_info_line and re.search(r'\b[Rr]eset\b|\b[Ww]arm', line):
             dbg('MATCH', f'reset/warmup (phase={phase}, episode_num={episode_num})')
 
             if phase != PHASE_SETUP:
