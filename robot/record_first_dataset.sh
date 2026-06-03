@@ -15,8 +15,14 @@
 #  - Connect Four board placed so column 0 is reachable.
 #  - 5 discs loaded into the chute.
 #
-#  KEYBOARD CONTROLS  (click the terminal window first — it must have focus)
+#  KEYBOARD CONTROLS
 #  -------------------------------------------------------------------------
+#  *** Wayland / RDP users: arrow keys won't work in the recording terminal.
+#      Open a SECOND terminal and run:  python3 robot/send_key.py
+#      Press ENTER there to inject a Right Arrow at the kernel level (evdev).
+#      For Left Arrow (discard), see send_key.py — add a 'd' path if needed.
+#
+#  Normal X11 / local terminal:
 #    Right Arrow : during setup  → start the episode early
 #                  during record → end the episode early (only after returning
 #                                  arm to start position)
@@ -88,6 +94,7 @@ lerobot-record \
   --dataset.episode_time_s=45 \
   --dataset.reset_time_s=20 \
   --dataset.push_to_hub="${PUSH_TO_HUB}" \
+  --resume=true \
   --display_data=true \
   2>&1 | python3 "${SCRIPT_DIR}/record_voice_monitor.py"
 

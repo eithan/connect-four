@@ -31,16 +31,24 @@ except PermissionError:
     print("Fix:  sudo chmod a+rw /dev/uinput")
     sys.exit(1)
 
-print("Ready. Press ENTER to send Right Arrow to lerobot.")
-print("Press Ctrl-C to quit.\n")
+print("Controls:")
+print("  ENTER  → Right Arrow  (start / end episode)")
+print("  d      → Left Arrow   (discard episode)")
+print("  Ctrl-C → quit\n")
 
 while True:
     try:
-        input()
+        cmd = input()
     except (EOFError, KeyboardInterrupt):
         print("\nDone.")
         break
-    ui.write(e.EV_KEY, e.KEY_RIGHT, 1)
-    ui.write(e.EV_KEY, e.KEY_RIGHT, 0)
-    ui.syn()
-    print("  → Right Arrow sent")
+    if cmd.strip().lower() == 'd':
+        ui.write(e.EV_KEY, e.KEY_LEFT, 1)
+        ui.write(e.EV_KEY, e.KEY_LEFT, 0)
+        ui.syn()
+        print("  ← Left Arrow sent  (discard)")
+    else:
+        ui.write(e.EV_KEY, e.KEY_RIGHT, 1)
+        ui.write(e.EV_KEY, e.KEY_RIGHT, 0)
+        ui.syn()
+        print("  → Right Arrow sent (start/end)")

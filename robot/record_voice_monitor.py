@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -104,6 +105,13 @@ _speaker = Speaker()
 def monitor():
     dbg('START', 'monitor running')
 
+    # Debounce: track last announced episode + time to avoid double-firing
+    # when lerobot prints multiple matching lines for the same episode
+    # (e.g. "Recording setup for episode 1" then "Recording episode 1 / 50").
+    _last_ep   = -1
+    _last_time = 0.0
+    DEBOUNCE_S = 3.0
+
     for raw_line in sys.stdin:
         sys.stdout.write(raw_line)
         sys.stdout.flush()
@@ -116,12 +124,20 @@ def monitor():
         if not m:
             continue
 
-        ep = int(m.group(1))
+        ep  = int(m.group(1))
+        now = time.monotonic()
         dbg('MATCH', f'episode {ep}')
 
         if ep == 0:
             dbg('SKIP', 'warmup episode')
             continue
+
+        if ep == _last_ep and (now - _last_time) < DEBOUNCE_S:
+            dbg('SKIP', f'debounce duplicate for episode {ep}')
+            continue
+
+        _last_ep   = ep
+        _last_time = now
 
         disc_pos     = ((ep - 1) % CHUTE_SIZE) + 1
         needs_reload = (disc_pos == 1) and (ep > 1)
