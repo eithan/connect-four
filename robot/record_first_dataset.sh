@@ -63,6 +63,12 @@ TASK="Pick a yellow piece from the chute and drop it into column 0"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# ── Kill Rerun on exit (Ctrl-C or normal finish) ──────────────────────────────
+cleanup() {
+    pkill -f "rerun" 2>/dev/null || true
+}
+trap cleanup EXIT
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 lerobot-record \
   --robot.type=so101_follower \
