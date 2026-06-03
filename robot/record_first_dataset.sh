@@ -109,8 +109,8 @@ lerobot-record \
   --robot.port=/dev/so101_follower \
   --robot.id=my_follower_arm \
   --robot.cameras='{
-    front: {type: opencv, index_or_path: "/dev/video0", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"},
-    hand:  {type: opencv, index_or_path: "/dev/video2", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"}
+    front: {type: opencv, index_or_path: "/dev/video2", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"},
+    hand:  {type: opencv, index_or_path: "/dev/video0", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"}
   }' \
   --teleop.type=so101_leader \
   --teleop.port=/dev/so101_leader \
