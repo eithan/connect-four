@@ -2,7 +2,7 @@
 
 **Read this first.** A concise dashboard of the project's current state, hardware logistics, and immediate next steps. The full master plan lives in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
 
-**Last updated:** 2026-05-22
+**Last updated:** 2026-06-03
 
 ---
 
@@ -14,7 +14,7 @@
 | Phase 2 — Live camera + cooperative game loop | ✅ Mostly complete (sub-tasks 2.6 / 2.7 deprioritized to Phase 5) |
 | Phase 3 — ROS2 simulation core (UR5e + Gazebo + MoveIt2) | ✅ Complete |
 | Phase 3B — VLA-ready sim (Robotiq 2F-85 + pick-and-place) | ✅ Algorithm-complete (grasp contact physics deferred to real hardware) |
-| Phase 3C — SO-101 hardware setup | 🔄 Arm **arrived early** (~2026-05-22), assembled & calibrated; teleop verified with both cameras. Now recording the first single-task dataset |
+| Phase 3C — SO-101 hardware setup | 🔄 Recording pipeline fully debugged (2026-06-03). Ready to collect the 50-episode v1 dataset. |
 | Phase 4 — Full game integration on real arm | 🔲 Pending |
 
 ## Decisions Locked
@@ -57,10 +57,30 @@ Reasoning: LeRobot's canonical workflow connects the SO-101 leader + follower ov
 
 ## Current Focus
 
-1. ✅ **SO-101 Advanced Kit arrived early** (~2026-05-22, well ahead of the early-June ETA). Assembled, calibrated, and teleoperating via `lerobot-teleoperate` with both cameras visible in the Rerun viewer (stable udev symlinks: follower `/dev/so101_follower`→ttyACM1, leader `/dev/so101_leader`→ttyACM0; cameras /dev/video0 + /dev/video2).
-2. ✅ **LeRobot environment working** — teleop running implies the install (TODO item 1) is effectively done.
-3. 🔄 **Recording the v1 single-task dataset:** fixed pick (edge-nest fixture) → drop into column 0, ~50 teleop episodes, then an ACT baseline. Smallest-task-first to validate the record → train → deploy loop. See `dataset_schema.md` and `record_first_dataset.sh`.
-4. **New fixture for the vertical grip:** `connect_four_piece_edge_nest.scad` holds a disc on edge so the gripper clamps the flat faces (across the 8.5 mm thickness) and the disc drops vertically into the slot — avoids the parked wrist-rotation step. Stage 1 (single hand-reloaded nest) now; inclined gravity feed is Stage 2.
+1. ✅ **SO-101 arrived, assembled, calibrated, teleop verified** (~2026-05-22).
+2. ✅ **Recording pipeline fully debugged** (2026-06-03). All major issues resolved — see Recording Setup section below.
+3. 🔄 **Next: collect 50-episode v1 dataset.** Run `record_first_dataset.sh`, do the full pick-from-chute → drop-column-0 task. Once 50 episodes are done, run `train_act.sh`.
+
+## Recording Setup (as of 2026-06-03)
+
+Everything needed to start recording is in place. Key facts:
+
+| Item | Detail |
+|---|---|
+| Script | `robot/record_first_dataset.sh` |
+| Dataset path | `~/lerobot_datasets/eithanz/connect_four_chute5_pick_col0/` |
+| FPS | 15 (30 caused consistent frame drops due to YUYV wrist cam + AV1 encoding overhead) |
+| Cameras | `front`=/dev/video2 (overhead rear, looking down at workspace); `hand`=/dev/video0 (wrist) |
+| Wrist cam format | YUYV (can't do MJPG — falls back silently) |
+| Encoding | Streaming AV1 (libsvtav1); use `mpv` or `ffplay` to play back — VLC 3.x can't decode AV1 |
+| Arrow keys | Use `python3 robot/send_key.py` in a second terminal (xdotool-based, requires `sudo apt install xdotool`) |
+| Ctrl-C safety | Wait until log shows `Recording episode N` (not `Reset the environment`) before Ctrl-C — episode data writes during the reset phase |
+| Resuming | Script auto-detects existing dataset and passes `--resume=true` with correct root path |
+| Viewing episodes | `./view_episode.sh 0` (uses ffplay, correct chunk/file path format) |
+
+**Camera position:** overhead rear — camera mounted behind and above the Connect Four board, looking down toward the arm and workspace. Full arm in frame, board back-face visible on right side. Static shade visible upper-left (harmless). Monitor not in frame.
+
+**Board state between episodes:** fine to leave pieces in the board — the task trajectory is the same regardless of board state. Clear column 0 only when it fills up.
 
 ## TODO: Prep Work While Waiting for Arm
 
@@ -161,6 +181,8 @@ LeRobot supports a SO-100 in MuJoCo. Walking through the LeRobot record-train-de
 | `ai/src/connect_four_ai/models/alphazero-network-model.onnx` | Trained AlphaZero model (also at `robot/alphazero-network-model.onnx`) |
 
 ## Changelog
+
+- **2026-06-03** — Recording pipeline fully debugged. Resolved: lerobot resume root-path inconsistency (create vs resume use different root values), HF Hub API call on resume with push_to_hub=false, camera labels swapped (video0↔video2), FPS warnings fixed by dropping to 15fps + streaming encoding + display_data=false, AV1 playback requires mpv/ffplay not VLC, arrow key injection via xdotool (pynput uses X11 backend on RDP, not evdev), Ctrl-C timing for safe episode saves. Camera view finalized: overhead rear behind board.
 
 - **2026-05-22** — SO-101 **arrived early** (well ahead of the early-June ETA), assembled, calibrated, and teleoperating with both cameras (scene `/dev/video0` + wrist `/dev/video2`) in the Rerun viewer. Phase 3C advanced from pre-arm prep to demo recording. Added the `connect_four_piece_edge_nest.scad` fixture (holds a disc on edge for a vertical face-grip, so the disc drops straight into the board — supersedes the flat rim-grip approach in the tray/chute/magazine files for v1, and sidesteps the parked wrist-rotation question). Added `dataset_schema.md` and `record_first_dataset.sh` for the v1 fixed-pick → column-0 dataset. Discs confirmed at 32 mm × 8.5 mm.
 - **2026-04-30** — SO-101 Advanced Kit ordered from Hiwonder ($540 total, ~25 business days from China, ETA early June 2026). Phase 3B flipped to ✅ ALGORITHM-COMPLETE in `PROJECT_PLAN.md` with closeout note documenting the parked grasp-physics tuning. Compute decision locked: defer Jetson Orin Nano to Phase 5, use existing Ubuntu 24.04 machine for Phase 3C/4 — LeRobot's canonical workflow, saves ~$340. Added prioritized TODO section for prep work during the ~5-week wait. User pacing: starting TODO items the week of 2026-05-04, slow tempo.
