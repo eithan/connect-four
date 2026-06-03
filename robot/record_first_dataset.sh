@@ -116,8 +116,8 @@ lerobot-record \
   --dataset.single_task="${TASK}" \
   --dataset.fps=30 \
   --dataset.num_episodes=50 \
-  --dataset.episode_time_s=45 \
-  --dataset.reset_time_s=20 \
+  --dataset.episode_time_s=30 \
+  --dataset.reset_time_s=8 \
   --dataset.root="${DATASET_ROOT}" \
   --dataset.push_to_hub="${PUSH_TO_HUB}" \
   "${RESUME_ARGS[@]}" \
