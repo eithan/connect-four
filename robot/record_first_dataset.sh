@@ -55,8 +55,8 @@
 set -euo pipefail
 
 # ── Edit these ────────────────────────────────────────────────────────────────
-HF_USER="your-hf-username"   # used for the dataset repo ID; push stays local
-PUSH_TO_HUB="false"          # set "true" only when you want to upload to HF Hub
+HF_USER="eithanz"	# used for the dataset repo ID; push stays local
+PUSH_TO_HUB="false"     # set "true" only when you want to upload to HF Hub
 
 REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
 TASK="Pick a yellow piece from the chute and drop it into column 0"
