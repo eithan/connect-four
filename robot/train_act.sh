@@ -28,8 +28,10 @@
 set -euo pipefail
 
 # ---- Match these to record_first_dataset.sh ----
-HF_USER="your-hf-username"
-REPO_ID="${HF_USER}/connect_four_pick_place_col0"
+HF_USER="eithanz"
+REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
+# Must match the root used in record_first_dataset.sh when push_to_hub=false
+DATASET_ROOT="${HOME}/lerobot_datasets"
 
 # ---- Run config ----
 DEVICE="cuda"                         # "cuda" | "cpu" | "mps"
@@ -38,6 +40,7 @@ OUTPUT_DIR="outputs/train/${JOB_NAME}"
 
 lerobot-train \
   --dataset.repo_id="${REPO_ID}" \
+  --dataset.root="${DATASET_ROOT}" \
   --policy.type=act \
   --policy.device="${DEVICE}" \
   --policy.push_to_hub=false \
