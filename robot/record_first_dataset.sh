@@ -117,7 +117,7 @@ lerobot-record \
   --teleop.id=my_leader_arm \
   --dataset.repo_id="${REPO_ID}" \
   --dataset.single_task="${TASK}" \
-  --dataset.fps=30 \
+  --dataset.fps=15 \
   --dataset.num_episodes=50 \
   --dataset.episode_time_s=30 \
   --dataset.reset_time_s=8 \
@@ -126,7 +126,7 @@ lerobot-record \
   --dataset.streaming_encoding=true \
   --dataset.encoder_threads=2 \
   "${RESUME_ARGS[@]}" \
-  --display_data=true \
+  --display_data=false \
   2>&1 | python3 "${SCRIPT_DIR}/record_voice_monitor.py"
 
 # After recording, visualize the dataset before training:

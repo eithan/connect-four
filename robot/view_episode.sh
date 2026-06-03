@@ -2,8 +2,7 @@
 # =============================================================
 #  view_episode.sh
 #  Play back a recorded episode from the local LeRobot dataset.
-#  Shows the front and hand camera feeds side by side.
-#  No internet connection or Hugging Face upload required.
+#  Shows front and hand camera feeds side by side via ffplay.
 #
 #  PREREQS (one-time):
 #    sudo apt install ffmpeg      # provides ffplay
@@ -12,102 +11,119 @@
 #    ./view_episode.sh            # play the most recent episode
 #    ./view_episode.sh 3          # play episode 3 (zero-indexed)
 #    ./view_episode.sh --list     # list all available episodes
-#
-#  The dataset used is set by REPO_ID below — change it to match
-#  whichever dataset you want to inspect.
 # =============================================================
 
 set -euo pipefail
 
-# ── Config ──────────────────────────────────────────────────────────────────
-HF_USER="your-hf-username"
+# ── Config ────────────────────────────────────────────────────────────────────
+HF_USER="eithanz"
 DATASET="connect_four_chute5_pick_col0"
 REPO_ID="${HF_USER}/${DATASET}"
+DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
 
-CACHE="${HOME}/.cache/huggingface/lerobot/${REPO_ID}"
-VIDEO_DIR="${CACHE}/videos/chunk-000"
-FRONT_DIR="${VIDEO_DIR}/observation.images.front"
-HAND_DIR="${VIDEO_DIR}/observation.images.hand"
+# lerobot v0.5 stores videos as:
+#   videos/observation.images.<cam>/chunk-<NNN>/file-<NNN>.mp4
+# Episodes are split into chunks of CHUNK_SIZE. For ≤50 episodes everything
+# is in chunk-000.
+CHUNK_SIZE=1000
+VIDEO_ROOT="${DATASET_ROOT}/videos"
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 die() { echo "ERROR: $*" >&2; exit 1; }
 
+episode_to_path() {
+    local cam=$1 ep=$2
+    local chunk file
+    chunk=$(printf "%03d" $(( ep / CHUNK_SIZE )))
+    file=$(printf "%03d" $(( ep % CHUNK_SIZE )))
+    echo "${VIDEO_ROOT}/observation.images.${cam}/chunk-${chunk}/file-${file}.mp4"
+}
+
 check_dataset() {
-    [[ -d "${CACHE}" ]] || die "Dataset not found at: ${CACHE}
-  Run record_first_dataset.sh first, or update REPO_ID in this script."
-    [[ -d "${FRONT_DIR}" ]] || die "No video files found at: ${FRONT_DIR}
-  Make sure at least one episode has been recorded."
+    [[ -d "${DATASET_ROOT}" ]] || die "Dataset not found at: ${DATASET_ROOT}
+  Run record_first_dataset.sh first."
+    [[ -d "${VIDEO_ROOT}" ]] || die "No videos directory found at: ${VIDEO_ROOT}
+  Make sure at least one episode has been fully recorded."
+}
+
+count_episodes() {
+    # Count unique file indices across all chunks for the front camera
+    local cam_dir="${VIDEO_ROOT}/observation.images.front"
+    [[ -d "$cam_dir" ]] || { echo 0; return; }
+    find "$cam_dir" -name "file-*.mp4" | wc -l
 }
 
 list_episodes() {
     check_dataset
-    echo "Episodes in ${REPO_ID}:"
+    local total
+    total=$(count_episodes)
+    echo "Dataset: ${REPO_ID}"
+    echo "Root:    ${DATASET_ROOT}"
+    echo "Episodes: ${total}"
     echo ""
-    local count=0
-    for f in "${FRONT_DIR}"/episode_*.mp4; do
-        [[ -f "$f" ]] || continue
-        num=$(basename "$f" .mp4 | sed 's/episode_//')
-        size=$(du -h "$f" | cut -f1)
-        echo "  Episode $(( 10#$num ))   ${size}   $(basename "$f")"
-        (( count++ )) || true
+    if [[ $total -eq 0 ]]; then
+        echo "  (no episodes recorded yet)"
+        return
+    fi
+    local i=0
+    while [[ $i -lt $total ]]; do
+        local front
+        front=$(episode_to_path front "$i")
+        local size="?"
+        [[ -f "$front" ]] && size=$(du -h "$front" | cut -f1)
+        echo "  Episode ${i}   ${size}   $(basename "$(dirname "$front")")/$(basename "$front")"
+        (( i++ )) || true
     done
-    echo ""
-    echo "Total: ${count} episode(s)"
 }
 
 play_episode() {
     local ep_num=$1
-    local ep_str
-    ep_str=$(printf "%06d" "$ep_num")
-
-    local front="${FRONT_DIR}/episode_${ep_str}.mp4"
-    local hand="${HAND_DIR}/episode_${ep_str}.mp4"
+    local front hand
+    front=$(episode_to_path front "$ep_num")
+    hand=$(episode_to_path hand "$ep_num")
 
     [[ -f "$front" ]] || die "Episode ${ep_num} not found: ${front}"
 
     echo "Playing episode ${ep_num}..."
-    echo "  Front camera: ${front}"
-    [[ -f "$hand" ]] && echo "  Hand camera:  ${hand}"
+    echo "  Front: ${front}"
+    [[ -f "$hand" ]] && echo "  Hand:  ${hand}"
     echo ""
-    echo "Controls: space = pause/play,  q = quit,  left/right = seek"
+    echo "Controls: space=pause/play  q=quit  left/right=seek"
     echo ""
 
     if [[ -f "$hand" ]]; then
-        # Both cameras — show side by side with ffplay
+        # Side-by-side with ffplay's lavfi filter
         ffplay -hide_banner -loglevel warning \
             -window_title "Episode ${ep_num} — front | hand" \
             -f lavfi \
             "movie=${front},scale=640:480[v0]; \
              movie=${hand},scale=640:480[v1]; \
              [v0][v1]hstack" \
-            2>/dev/null \
+        2>/dev/null \
         || {
-            # ffplay lavfi fallback failed — try simpler approach
-            echo "(side-by-side failed, playing front then hand separately)"
+            echo "(side-by-side failed, playing cameras separately)"
             ffplay -hide_banner -loglevel warning \
-                -window_title "Episode ${ep_num} — FRONT camera" "$front"
+                -window_title "Episode ${ep_num} — FRONT" "$front"
             ffplay -hide_banner -loglevel warning \
-                -window_title "Episode ${ep_num} — HAND camera" "$hand"
+                -window_title "Episode ${ep_num} — HAND" "$hand"
         }
     else
-        # Front camera only
         ffplay -hide_banner -loglevel warning \
-            -window_title "Episode ${ep_num} — front camera" "$front"
+            -window_title "Episode ${ep_num} — front" "$front"
     fi
 }
 
 get_latest_episode() {
-    local latest=-1
-    for f in "${FRONT_DIR}"/episode_*.mp4; do
-        [[ -f "$f" ]] || continue
-        num=$(basename "$f" .mp4 | sed 's/episode_//')
-        num=$(( 10#$num ))
-        (( num > latest )) && latest=$num
-    done
-    echo "$latest"
+    local total
+    total=$(count_episodes)
+    if [[ $total -eq 0 ]]; then
+        echo -1
+    else
+        echo $(( total - 1 ))
+    fi
 }
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 check_dataset
 
 ARG="${1:---latest}"
@@ -116,7 +132,7 @@ case "$ARG" in
     --list|-l)
         list_episodes
         ;;
-    --latest|-n)
+    --latest)
         ep=$(get_latest_episode)
         [[ $ep -ge 0 ]] || die "No episodes found in dataset."
         play_episode "$ep"
