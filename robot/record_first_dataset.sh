@@ -123,9 +123,8 @@ lerobot-record \
   --dataset.reset_time_s=8 \
   --dataset.root="${DATASET_ROOT}" \
   --dataset.push_to_hub="${PUSH_TO_HUB}" \
-  --dataset.streaming_encoding=true \
-  --dataset.encoder_threads=2 \
   "${RESUME_ARGS[@]}" \
+  --play_sounds=false \
   --display_data=false \
   2>&1 | python3 "${SCRIPT_DIR}/record_voice_monitor.py"
 
