@@ -84,23 +84,19 @@ cleanup() {
 trap cleanup EXIT
 
 # ── Resume detection ─────────────────────────────────────────────────────────
-# lerobot's create() uses root as-is; resume() appends repo_id to root.
-# So the two modes need different --dataset.root values:
-#   create:  root = full dataset path  (DATASET_BASE/REPO_ID)
-#   resume:  root = parent dir         (DATASET_BASE — lerobot appends REPO_ID)
+# Both create() and resume() use --dataset.root as the full dataset path (no
+# repo_id appended internally). Always pass the full path.
 #
-# --resume=true also triggers a Hub API call even when push_to_hub=false, which
-# fails if the repo doesn't exist on HuggingFace. Only pass it when the local
-# dataset directory already exists.
+# --resume=true also triggers a Hub API call even with push_to_hub=false.
+# Apply the one-time lerobot patch (see PREREQS above) to fix this.
 DATASET_LOCAL_PATH="${DATASET_BASE}/${REPO_ID}"
+DATASET_ROOT="${DATASET_LOCAL_PATH}"
 RESUME_ARGS=()
 if [ -d "${DATASET_LOCAL_PATH}" ]; then
     echo "Found existing dataset at ${DATASET_LOCAL_PATH} — resuming."
     RESUME_ARGS=(--resume=true)
-    DATASET_ROOT="${DATASET_BASE}"          # resume() appends repo_id
 else
     echo "No existing dataset found — starting fresh at ${DATASET_LOCAL_PATH}."
-    DATASET_ROOT="${DATASET_LOCAL_PATH}"    # create() uses root as-is
 fi
 
 # ── Run ───────────────────────────────────────────────────────────────────────
@@ -124,9 +120,7 @@ lerobot-record \
   --dataset.root="${DATASET_ROOT}" \
   --dataset.push_to_hub="${PUSH_TO_HUB}" \
   "${RESUME_ARGS[@]}" \
-  --play_sounds=false \
-  --display_data=false \
-  2>&1 | python3 "${SCRIPT_DIR}/record_voice_monitor.py"
+  --display_data=false
 
 # After recording, visualize the dataset before training:
 #   python lerobot/scripts/visualize_dataset.py \
