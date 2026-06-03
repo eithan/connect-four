@@ -2,64 +2,68 @@
 # =============================================================
 #  record_first_dataset.sh
 #  Record the v1 Connect Four dataset — 5-piece chute, depth-adaptive.
-#  See dataset_schema.md for the schema this implements.
 #
-#  GOAL
-#  ----
-#  Train ACT to pick from ALL 5 disc positions in the chute (full stack
-#  down to last disc) without needing to reload between picks. The policy
-#  learns to go deeper as pieces disappear by seeing the visual change
-#  in the wrist camera.
+#  FIRST-TIME SETUP
+#  ----------------
+#  Install TTS engine (one-time, Ubuntu):
+#    sudo apt install espeak
 #
-#  PREREQS
-#  -------
-#  - Arms calibrated; teleop already verified (your lerobot-teleoperate cmd).
-#  - 5-piece chute placed at its marked spot on the bench (tape cross).
-#    Orient so the ±X open faces align with the gripper's open/close axis.
-#  - Board placed so column 0 is reachable.
-#  - You are logged in to the HF Hub if pushing:  huggingface-cli login
+#  PREREQS EACH SESSION
+#  ---------------------
+#  - Arms plugged in and calibrated; teleop already verified.
+#  - 5-piece chute at its marked spot, open sides facing the gripper axis.
+#  - Connect Four board placed so column 0 is reachable.
+#  - 5 discs loaded into the chute.
 #
-#  RECORDING WORKFLOW — IMPORTANT
-#  --------------------------------
-#  DO NOT reload the chute between episodes within a cycle.
-#  Let the chute deplete naturally so the dataset covers all 5 depths:
+#  KEYBOARD CONTROLS  (click the terminal window first — it must have focus)
+#  -------------------------------------------------------------------------
+#    Right Arrow : during setup  → start the episode early
+#                  during record → end the episode early (only after returning
+#                                  arm to start position)
+#    Left  Arrow : discard current episode and re-record it
+#    Ctrl-C      : stop the session cleanly (all completed episodes are kept)
 #
-#    Cycle start  →  load 5 discs into chute
-#    Episode  1   →  pick disc 1 (top of full stack), drop into column 0
-#    Episode  2   →  pick disc 2 (one deeper), drop into column 0
-#    Episode  3   →  pick disc 3, drop
-#    Episode  4   →  pick disc 4, drop
-#    Episode  5   →  pick disc 5 (bottom, deepest), drop
-#    Cycle end    →  reload chute to full (5 discs), start next cycle
+#  EPISODE WORKFLOW
+#  ----------------
+#  The voice announcer tells you which phase you're in at all times.
 #
-#  With 50 episodes = 10 full cycles = 10 demos per disc depth.
-#  That gives ACT enough visual coverage to interpolate across all depths.
+#  SETUP TIME  →  position arm at start pose, press Right Arrow to begin
+#  RECORDING   →  perform full task:
+#                   1. Descend over chute, fingers either side of disc
+#                   2. Close gripper on disc rim
+#                   3. Lift disc clear of chute
+#                   4. Rotate wrist 90° so disc is vertical
+#                   5. Move to column 0
+#                   6. Open gripper — disc falls in
+#                   7. *** RETURN ARM TO START POSITION ***  ← do this every time
+#                   8. Press Right Arrow to end episode
+#  SETUP TIME  →  reload chute if announced, then press Right Arrow again
 #
-#  During the reset_time_s window between episodes:
-#    - If the chute still has discs: just return arm to start pose. Done.
-#    - If the chute is now empty (every 5th episode): reload it fully,
-#      then return arm to start pose. You have 15 s.
+#  CHUTE RELOAD SCHEDULE  (every 5 episodes)
+#  -------------------------------------------
+#    Episodes  1– 5 : load at start, let deplete naturally
+#    Episodes  6–10 : reload to 5 discs at start of episode 6
+#    Episodes 11–15 : reload at start of episode 11
+#    ...and so on. The voice will tell you when to reload.
 #
-#  KEYBOARD CONTROLS (focus on the terminal/Rerun window)
-#  -------------------------------------------------------
-#    Right Arrow : end current episode early and move on
-#    Left  Arrow : discard and re-record the current episode
-#                  (re-seat the disc you just picked if needed)
-#    Escape      : stop the whole session
-#
-#  NOTE: flag names match LeRobot v0.5.x. If a flag errors, run
-#        `lerobot-record --help` — the API does drift between versions.
+#  STOPPING EARLY
+#  ---------------
+#  Press Ctrl-C. All completed episodes are saved automatically.
+#  Run the script again to continue — it resumes from where you left off.
 # =============================================================
 
 set -euo pipefail
 
-# ---- Edit these ----
-HF_USER="your-hf-username"          # <-- set your Hugging Face username
-PUSH_TO_HUB="false"                 # "true" to upload; keep local while testing
+# ── Edit these ────────────────────────────────────────────────────────────────
+HF_USER="your-hf-username"   # used for the dataset repo ID; push stays local
+PUSH_TO_HUB="false"          # set "true" only when you want to upload to HF Hub
 
 REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
 TASK="Pick a yellow piece from the chute and drop it into column 0"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ── Run ───────────────────────────────────────────────────────────────────────
 lerobot-record \
   --robot.type=so101_follower \
   --robot.port=/dev/so101_follower \
@@ -75,15 +79,14 @@ lerobot-record \
   --dataset.single_task="${TASK}" \
   --dataset.fps=30 \
   --dataset.num_episodes=50 \
-  --dataset.episode_time_s=20 \
-  --dataset.reset_time_s=15 \
+  --dataset.episode_time_s=45 \
+  --dataset.reset_time_s=20 \
   --dataset.push_to_hub="${PUSH_TO_HUB}" \
-  --display_data=true
+  --display_data=true \
+  2>&1 | python3 "${SCRIPT_DIR}/record_voice_monitor.py"
 
-# After this completes, the dataset lives under your LeRobot home
-# (~/.cache/huggingface/lerobot/${REPO_ID} by default).
+# After recording, visualize the dataset before training:
+#   python lerobot/scripts/visualize_dataset.py \
+#     --repo-id your-username/connect_four_chute5_pick_col0
 #
-# Visualize before training:
-#   python lerobot/scripts/visualize_dataset.py --repo-id ${REPO_ID}
-#
-# Then run train_act.sh (remember to set DEVICE="mps" for M4 Max).
+# Then copy to M4 Max and run train_act.sh with DEVICE="mps".
