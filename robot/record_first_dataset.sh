@@ -67,7 +67,8 @@ PUSH_TO_HUB="false"     # set "true" only when you want to upload to HF Hub
 REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
 # Local root for the dataset. --resume=true requires an explicit root (can't
 # write into the Hub snapshot cache). Episodes accumulate here across sessions.
-DATASET_ROOT="${HOME}/lerobot_datasets"
+# Full path to this specific dataset — lerobot uses root as-is, no repo_id appended.
+DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
 TASK="Pick a yellow piece from the chute and drop it into column 0"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

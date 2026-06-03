@@ -31,7 +31,7 @@ set -euo pipefail
 HF_USER="eithanz"
 REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
 # Must match the root used in record_first_dataset.sh when push_to_hub=false
-DATASET_ROOT="${HOME}/lerobot_datasets"
+DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
 
 # ---- Run config ----
 DEVICE="cuda"                         # "cuda" | "cpu" | "mps"
