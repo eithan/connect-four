@@ -25,30 +25,21 @@ rm -rf ~/lerobot_datasets/eithanz/connect_four_chute5_pick_col0/
 
 ### Step 3: Start recording
 
-Terminal 1 (recording):
 ```bash
 cd ~/development/connect-four/robot
 ./record_first_dataset.sh
 ```
 
-Terminal 2 (arrow key injection, Wayland/RDP):
-```bash
-cd ~/development/connect-four/robot
-python3 send_key.py
-# ENTER = advance / end episode
-# d+ENTER = discard episode
-```
-
 **Episode workflow:**
 1. Wait for "Recording episode N" in the log
-2. Perform the task: descend → grasp piece → lift → move to column 0 → drop → return arm to home
-3. Press ENTER in Terminal 2 to end the episode early (or wait 30s)
-4. Wait 8 seconds for reset, or press ENTER again to skip the wait
+2. Perform the task: descend → grasp piece → lift → move to target column → drop → return arm to home
+3. Press **Right Arrow** in the recording terminal to end the episode early (or wait 30s)
+4. The 8-second reset countdown starts — reload a disc if needed, then press **Right Arrow** again to skip the wait
 5. Repeat
 
 **When to stop:**
-- Wait until you see `Recording episode 21` in the log before Ctrl-C (confirms episode 20 is fully saved)
-- All 20 episodes should survive a clean Ctrl-C once the next episode has started
+- Wait until you see `Recording episode 21` in the log before pressing Ctrl-C (confirms episode 20 is fully saved — data is written during the reset phase)
+- Press **Ctrl-C** in the recording terminal
 
 ### Step 4: Verify the recordings
 

@@ -21,20 +21,13 @@
 #  - Connect Four board placed so target column is reachable.
 #  - 5 discs loaded into the chute.
 #
-#  KEYBOARD CONTROLS
+#  KEYBOARD CONTROLS  (press in the recording terminal)
 #  -------------------------------------------------------------------------
-#  *** Wayland / RDP users: arrow keys won't work in the recording terminal.
-#      lerobot uses pynput which listens on X11 (DISPLAY env var).
-#      1. sudo apt install xdotool       (one-time)
-#      2. Open a SECOND terminal and run: python3 robot/send_key.py
-#         ENTER = Right Arrow, d+ENTER = Left Arrow
-#
-#  Normal X11 / local terminal:
 #    Right Arrow : during setup  → start the episode early
 #                  during record → end the episode early (only after returning
 #                                  arm to start position)
 #    Left  Arrow : discard current episode and re-record it
-#    Ctrl-C      : stop the session cleanly (all completed episodes are kept)
+#    Ctrl-C      : stop the session (see STOPPING EARLY below)
 #
 #  EPISODE WORKFLOW
 #  ----------------
