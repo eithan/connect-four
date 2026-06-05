@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['red piece', 'yellow piece']
+
+roboflow:
+  workspace: eithans-workspace
+  project: eithans-workspace
+  version: dataset
+  license: Private
+  url: https://app.roboflow.com/eithans-workspace/eithans-workspace/dataset
