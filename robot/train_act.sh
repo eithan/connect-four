@@ -30,9 +30,9 @@ set -euo pipefail
 # ---- Match these to record_first_dataset.sh ----
 HF_USER="eithanz"
 REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
-# Must match the root used in record_first_dataset.sh when push_to_hub=false
-# lerobot appends repo_id to root when loading, so this is the parent dir
-DATASET_ROOT="${HOME}/lerobot_datasets"
+# Full path to the dataset — lerobot uses root as-is (no repo_id appended).
+# If running on Mac after copying from Ubuntu, update this path accordingly.
+DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
 
 # ---- Run config ----
 DEVICE="cuda"                         # "cuda" | "cpu" | "mps"

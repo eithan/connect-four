@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================
-#  record_first_dataset.sh
-#  Record the v1 Connect Four dataset — 5-piece chute, depth-adaptive.
+#  record_first_dataset.sh  [COLUMN]
+#  Record a Connect Four pick-and-place dataset for a given column.
+#
+#  USAGE
+#  -----
+#    ./record_first_dataset.sh       # column 0, 20 episodes (first recording)
+#    ./record_first_dataset.sh 3     # column 3, 10 episodes
+#    ./record_first_dataset.sh 0 5   # column 0, 5 episodes (override count)
 #
 #  FIRST-TIME SETUP
 #  ----------------
@@ -12,7 +18,7 @@
 #  ---------------------
 #  - Arms plugged in and calibrated; teleop already verified.
 #  - 5-piece chute at its marked spot, open sides facing the gripper axis.
-#  - Connect Four board placed so column 0 is reachable.
+#  - Connect Four board placed so target column is reachable.
 #  - 5 discs loaded into the chute.
 #
 #  KEYBOARD CONTROLS
@@ -40,7 +46,7 @@
 #                   2. Close gripper on disc rim
 #                   3. Lift disc clear of chute
 #                   4. Rotate wrist 90° so disc is vertical
-#                   5. Move to column 0
+#                   5. Move to target column
 #                   6. Open gripper — disc falls in
 #                   7. *** RETURN ARM TO START POSITION ***  ← do this every time
 #                   8. Press Right Arrow to end episode
@@ -64,16 +70,26 @@
 
 set -euo pipefail
 
-# ── Edit these ────────────────────────────────────────────────────────────────
-HF_USER="eithanz"	# used for the dataset repo ID; push stays local
-PUSH_TO_HUB="false"     # set "true" only when you want to upload to HF Hub
+# ── Args ──────────────────────────────────────────────────────────────────────
+COL="${1:-0}"
+if ! [[ "${COL}" =~ ^[0-6]$ ]]; then
+    echo "Usage: $0 [COLUMN (0-6)] [NUM_EPISODES]" >&2
+    exit 1
+fi
 
-REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
-# Local root for the dataset. --resume=true requires an explicit root (can't
-# write into the Hub snapshot cache). Episodes accumulate here across sessions.
-# Full path to this specific dataset — lerobot uses root as-is, no repo_id appended.
+# Column 0 gets 20 episodes (pipeline validation); all others get 10.
+DEFAULT_EPISODES=$([ "${COL}" -eq 0 ] && echo 20 || echo 10)
+NUM_EPISODES="${2:-${DEFAULT_EPISODES}}"
+
+# ── Config ────────────────────────────────────────────────────────────────────
+HF_USER="eithanz"
+PUSH_TO_HUB="false"
+
+REPO_ID="${HF_USER}/connect_four_chute5_pick_col${COL}"
 DATASET_BASE="${HOME}/lerobot_datasets"
-TASK="Pick a yellow piece from the chute and drop it into column 0"
+TASK="Pick a yellow piece from the chute and drop it into column ${COL}"
+
+echo "Column: ${COL}  |  Episodes: ${NUM_EPISODES}  |  Dataset: ${REPO_ID}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -114,7 +130,7 @@ lerobot-record \
   --dataset.repo_id="${REPO_ID}" \
   --dataset.single_task="${TASK}" \
   --dataset.fps=15 \
-  --dataset.num_episodes=50 \
+  --dataset.num_episodes="${NUM_EPISODES}" \
   --dataset.episode_time_s=30 \
   --dataset.reset_time_s=8 \
   --dataset.root="${DATASET_ROOT}" \
