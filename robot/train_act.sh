@@ -37,6 +37,9 @@ TOTAL_STEPS=50000
 
 # ── MPS setup ─────────────────────────────────────────────────────────────────
 export PYTORCH_ENABLE_MPS_FALLBACK=1
+# Multiple conda packages each ship their own OpenMP runtime (libomp.dylib).
+# This tells the loader to allow duplicates rather than abort.
+export KMP_DUPLICATE_LIB_OK=TRUE
 
 # ── Train ─────────────────────────────────────────────────────────────────────
 echo "Training ACT on ${REPO_ID}"
