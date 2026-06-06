@@ -37,9 +37,9 @@ TOTAL_STEPS=50000
 
 # ── MPS setup ─────────────────────────────────────────────────────────────────
 export PYTORCH_ENABLE_MPS_FALLBACK=1
-# Multiple conda packages each ship their own OpenMP runtime (libomp.dylib).
-# This tells the loader to allow duplicates rather than abort.
 export KMP_DUPLICATE_LIB_OK=TRUE
+# Allow MPS to use all available GPU memory (default cap is 50%).
+export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0
 
 # ── Train ─────────────────────────────────────────────────────────────────────
 echo "Training ACT on ${REPO_ID}"
@@ -60,7 +60,7 @@ lerobot-train \
   --steps="${TOTAL_STEPS}" \
   --save_freq=5000 \
   --log_freq=100 \
-  --num_workers=4 \
+  --num_workers=0 \
   --wandb.enable=false \
 2>&1 | python3 -u -c "
 import sys, re, time, datetime
