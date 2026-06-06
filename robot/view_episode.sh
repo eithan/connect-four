@@ -67,50 +67,45 @@ count_episodes() {
 }
 
 # Return "start_seconds duration_seconds" for episode N.
-# Reads the parquet data to get exact per-episode frame counts —
-# this is the ground truth, not an estimate.
+# lerobot v3.0 layout:
+#   meta/episodes/chunk-{C:03d}/file-{F:03d}.parquet  — per-episode metadata (has 'length')
+#   data/chunk-{C:03d}/file-{F:03d}.parquet           — per-frame data (fallback)
 get_episode_timing() {
     local ep=$1
     python3 - "$DATASET_ROOT" "$ep" <<'PYEOF'
 import sys, json, pathlib
+import pandas as pd
 
-root = pathlib.Path(sys.argv[1])
+root      = pathlib.Path(sys.argv[1])
 ep_target = int(sys.argv[2])
+fps       = float(json.loads((root / "meta" / "info.json").read_text()).get("fps", 15))
 
-info = json.loads((root / "meta" / "info.json").read_text())
-fps  = float(info.get("fps", 15))
-
-# ── Try parquet data (most reliable — one row per frame) ──────────────────────
-data_dir = root / "data"
-parquet_files = sorted(data_dir.glob("*.parquet"))
-if parquet_files:
-    import pandas as pd
-    dfs = []
-    for f in parquet_files:
-        try:
-            dfs.append(pd.read_parquet(f, columns=["episode_index"]))
-        except Exception:
-            pass
-    if dfs:
-        df = pd.concat(dfs, ignore_index=True)
-        counts = df.groupby("episode_index").size()
-        start_frame = int(sum(counts.get(i, 0) for i in range(ep_target)))
-        ep_length   = int(counts.get(ep_target, 0))
-        if ep_length > 0:
+# ── Primary: meta/episodes parquet (compact, pre-computed lengths) ────────────
+for f in sorted((root / "meta" / "episodes").glob("chunk-*/*.parquet")):
+    df = pd.read_parquet(f)
+    if "length" in df.columns and "episode_index" in df.columns:
+        df = df.sort_values("episode_index").reset_index(drop=True)
+        if ep_target < len(df):
+            lengths     = df["length"].tolist()
+            start_frame = sum(lengths[:ep_target])
+            ep_length   = lengths[ep_target]
             print(f"{start_frame/fps:.3f} {ep_length/fps:.3f}")
             sys.exit(0)
 
-# ── Fallback: episodes.jsonl ──────────────────────────────────────────────────
-eps_file = root / "meta" / "episodes.jsonl"
-if eps_file.exists():
-    episodes = [json.loads(l) for l in eps_file.read_text().strip().split("\n") if l]
-    if ep_target < len(episodes):
-        lengths     = [e.get("length", 0) for e in episodes]
-        start_frame = sum(lengths[:ep_target])
-        ep_length   = lengths[ep_target]
-        if ep_length > 0:
-            print(f"{start_frame/fps:.3f} {ep_length/fps:.3f}")
-            sys.exit(0)
+# ── Fallback: data parquet (one row per frame) ────────────────────────────────
+for f in sorted((root / "data").glob("chunk-*/*.parquet")):
+    df = pd.read_parquet(f, columns=["episode_index"])
+    # lerobot sometimes stores scalar fields as length-1 arrays
+    ep_col = df["episode_index"]
+    if ep_col.dtype == object:
+        ep_col = ep_col.apply(lambda x: int(x[0]) if hasattr(x, "__len__") else int(x))
+        df["episode_index"] = ep_col
+    counts      = df.groupby("episode_index").size()
+    start_frame = int(sum(counts.get(i, 0) for i in range(ep_target)))
+    ep_length   = int(counts.get(ep_target, 0))
+    if ep_length > 0:
+        print(f"{start_frame/fps:.3f} {ep_length/fps:.3f}")
+        sys.exit(0)
 
 print("ERROR: could not determine episode timing", file=sys.stderr)
 sys.exit(1)
