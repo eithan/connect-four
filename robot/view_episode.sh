@@ -154,19 +154,21 @@ PY
 
     TEXT="Episode ${ep} | Col ${COL}"
 
-    # FRONT (left)
+    # FRONT camera (correct seek)
     ffplay -hide_banner -loglevel warning \
-        -ss "$start" -t "$dur" \
+        -ss "$start" \
+        -t "$dur" \
         -vf "drawtext=text='${TEXT}':x=10:y=10:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5" \
-        -window_title "Front Cam | Ep ${ep}" \
+        -window_title "Front | Ep ${ep}" \
         "$FRONT" &
 
     PID1=$!
 
-    # HAND (right)
+    # HAND camera (same timeline, same seek)
     ffplay -hide_banner -loglevel warning \
-        -ss "$start" -t "$dur" \
-        -window_title "Hand Cam | Ep ${ep}" \
+        -ss "$start" \
+        -t "$dur" \
+        -window_title "Hand | Ep ${ep}" \
         "$HAND" &
 
     PID2=$!
