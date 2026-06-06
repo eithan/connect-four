@@ -67,48 +67,73 @@ count_episodes() {
 }
 
 # Return "start_seconds duration_seconds" for episode N.
-# lerobot v3.0 layout:
-#   meta/episodes/chunk-{C:03d}/file-{F:03d}.parquet  — per-episode metadata (has 'length')
-#   data/chunk-{C:03d}/file-{F:03d}.parquet           — per-frame data (fallback)
+#
+# lerobot v3.0 stores ~1.24s of reset-phase frames after each episode in the
+# video (camera runs during the reset countdown) that are NOT in the parquet.
+# This means raw parquet frame counts underestimate seek positions by
+# N * lead_in for episode N. We derive lead_in from the actual video duration.
+#
+# Formula:
+#   lead_in   = (video_duration - parquet_total_seconds) / num_episodes
+#   seek[N]   = N * lead_in + sum(lengths[:N]) / fps
+#   duration  = lengths[N] / fps
 get_episode_timing() {
     local ep=$1
     python3 - "$DATASET_ROOT" "$ep" <<'PYEOF'
-import sys, json, pathlib
+import sys, json, pathlib, subprocess
 import pandas as pd
 
 root      = pathlib.Path(sys.argv[1])
 ep_target = int(sys.argv[2])
 fps       = float(json.loads((root / "meta" / "info.json").read_text()).get("fps", 15))
 
-# ── Primary: meta/episodes parquet (compact, pre-computed lengths) ────────────
+# ── Get per-episode lengths from meta/episodes parquet ────────────────────────
+lengths = None
 for f in sorted((root / "meta" / "episodes").glob("chunk-*/*.parquet")):
     df = pd.read_parquet(f)
     if "length" in df.columns and "episode_index" in df.columns:
         df = df.sort_values("episode_index").reset_index(drop=True)
-        if ep_target < len(df):
-            lengths     = df["length"].tolist()
-            start_frame = sum(lengths[:ep_target])
-            ep_length   = lengths[ep_target]
-            print(f"{start_frame/fps:.3f} {ep_length/fps:.3f}")
-            sys.exit(0)
+        lengths = df["length"].tolist()
+        break
 
-# ── Fallback: data parquet (one row per frame) ────────────────────────────────
-for f in sorted((root / "data").glob("chunk-*/*.parquet")):
-    df = pd.read_parquet(f, columns=["episode_index"])
-    # lerobot sometimes stores scalar fields as length-1 arrays
-    ep_col = df["episode_index"]
-    if ep_col.dtype == object:
-        ep_col = ep_col.apply(lambda x: int(x[0]) if hasattr(x, "__len__") else int(x))
-        df["episode_index"] = ep_col
-    counts      = df.groupby("episode_index").size()
-    start_frame = int(sum(counts.get(i, 0) for i in range(ep_target)))
-    ep_length   = int(counts.get(ep_target, 0))
-    if ep_length > 0:
-        print(f"{start_frame/fps:.3f} {ep_length/fps:.3f}")
-        sys.exit(0)
+if lengths is None:
+    for f in sorted((root / "data").glob("chunk-*/*.parquet")):
+        df = pd.read_parquet(f, columns=["episode_index"])
+        ep_col = df["episode_index"]
+        if ep_col.dtype == object:
+            ep_col = ep_col.apply(lambda x: int(x[0]) if hasattr(x, "__len__") else int(x))
+            df["episode_index"] = ep_col
+        counts  = df.groupby("episode_index").size()
+        lengths = [int(counts.get(i, 0)) for i in range(max(counts.index) + 1)]
+        break
 
-print("ERROR: could not determine episode timing", file=sys.stderr)
-sys.exit(1)
+if lengths is None or ep_target >= len(lengths):
+    print("ERROR: could not get episode lengths", file=sys.stderr)
+    sys.exit(1)
+
+# ── Get actual video duration via ffprobe ─────────────────────────────────────
+video_path = root / "videos" / "observation.images.front" / "chunk-000" / "file-000.mp4"
+lead_in = 0.0
+try:
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1", str(video_path)],
+        capture_output=True, text=True, timeout=10
+    )
+    video_duration    = float(r.stdout.split("=")[1].strip())
+    total_parquet_s   = sum(lengths) / fps
+    num_episodes      = len(lengths)
+    excess            = video_duration - total_parquet_s
+    if excess > 0:
+        lead_in = excess / num_episodes   # reset-phase frames per episode
+except Exception:
+    pass   # lead_in stays 0, seek will be approximate
+
+# ── Compute seek position ─────────────────────────────────────────────────────
+seek_time  = ep_target * lead_in + sum(lengths[:ep_target]) / fps
+duration_s = lengths[ep_target] / fps
+
+print(f"{seek_time:.3f} {duration_s:.3f}")
 PYEOF
 }
 
