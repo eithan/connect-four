@@ -8,16 +8,50 @@
 #    sudo apt install ffmpeg      # provides ffplay
 #
 #  USAGE:
-#    ./view_episode.sh            # play the most recent episode
-#    ./view_episode.sh 3          # play episode 3 (zero-indexed)
-#    ./view_episode.sh --list     # list all available episodes
+#    ./view_episode.sh                  # col 3 (default), most recent episode
+#    ./view_episode.sh --col 0          # col 0, most recent episode
+#    ./view_episode.sh --col 0 5        # col 0, episode 5 (zero-indexed)
+#    ./view_episode.sh --list           # col 3, list all episodes
+#    ./view_episode.sh --col 0 --list   # col 0, list all episodes
+#    ./view_episode.sh 5                # col 3, episode 5
 # =============================================================
 
 set -euo pipefail
 
+# ── Args ──────────────────────────────────────────────────────────────────────
+COL=3           # default column — change with --col N
+EPISODE_ARG=""
+LIST_MODE=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --col|-c)
+            shift
+            COL="$1"
+            shift
+            ;;
+        --list|-l)
+            LIST_MODE=true
+            shift
+            ;;
+        --latest)
+            EPISODE_ARG="--latest"
+            shift
+            ;;
+        ''|*[0-9]*)
+            EPISODE_ARG="$1"
+            shift
+            ;;
+        *)
+            echo "Usage: $0 [--col N] [EPISODE_NUMBER | --list | --latest]"
+            exit 1
+            ;;
+    esac
+done
+
 # ── Config ────────────────────────────────────────────────────────────────────
 HF_USER="eithanz"
-DATASET="connect_four_chute5_pick_col0"
+DATASET="connect_four_chute5_pick_col${COL}"
 REPO_ID="${HF_USER}/${DATASET}"
 DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
 
@@ -126,22 +160,12 @@ get_latest_episode() {
 # ── Main ──────────────────────────────────────────────────────────────────────
 check_dataset
 
-ARG="${1:---latest}"
-
-case "$ARG" in
-    --list|-l)
-        list_episodes
-        ;;
-    --latest)
-        ep=$(get_latest_episode)
-        [[ $ep -ge 0 ]] || die "No episodes found in dataset."
-        play_episode "$ep"
-        ;;
-    ''|*[!0-9]*)
-        echo "Usage: $0 [EPISODE_NUMBER | --list | --latest]"
-        exit 1
-        ;;
-    *)
-        play_episode "$ARG"
-        ;;
-esac
+if $LIST_MODE; then
+    list_episodes
+elif [[ -z "$EPISODE_ARG" || "$EPISODE_ARG" == "--latest" ]]; then
+    ep=$(get_latest_episode)
+    [[ $ep -ge 0 ]] || die "No episodes found in dataset."
+    play_episode "$ep"
+else
+    play_episode "$EPISODE_ARG"
+fi

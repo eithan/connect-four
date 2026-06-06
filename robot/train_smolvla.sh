@@ -46,14 +46,14 @@ set -euo pipefail
 
 # ── Match these to record_first_dataset.sh ───────────────────────────────────
 HF_USER="eithanz"
-REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
+REPO_ID="${HF_USER}/connect_four_chute5_pick_col3"
 # Full path to the dataset — lerobot uses root as-is (no repo_id appended).
 # Update this if your Mac dataset path differs.
 DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
 
 # ── Run config ────────────────────────────────────────────────────────────────
 DEVICE="mps"                          # "mps" on Mac | "cuda" on Linux GPU
-JOB_NAME="smolvla_c4_col0"
+JOB_NAME="smolvla_c4_col3"
 OUTPUT_DIR="outputs/train/${JOB_NAME}"
 
 lerobot-train \
@@ -104,7 +104,7 @@ lerobot-train \
 #    --policy.path="${CKPT}" \
 #    --dataset.repo_id="${HF_USER}/eval_${JOB_NAME}" \
 #    --dataset.root="${HOME}/lerobot_datasets/${HF_USER}/eval_${JOB_NAME}" \
-#    --dataset.single_task="Pick a yellow piece from the chute and drop it into column 0" \
+#    --dataset.single_task="Pick a yellow piece from the chute and drop it into column 3" \
 #    --dataset.num_episodes=10 \
 #    --dataset.episode_time_s=30 \
 #    --dataset.reset_time_s=10 \

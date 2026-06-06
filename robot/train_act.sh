@@ -29,14 +29,14 @@ set -euo pipefail
 
 # ---- Match these to record_first_dataset.sh ----
 HF_USER="eithanz"
-REPO_ID="${HF_USER}/connect_four_chute5_pick_col0"
+REPO_ID="${HF_USER}/connect_four_chute5_pick_col3"
 # Full path to the dataset — lerobot uses root as-is (no repo_id appended).
 # If running on Mac after copying from Ubuntu, update this path accordingly.
 DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
 
 # ---- Run config ----
-DEVICE="cuda"                         # "cuda" | "cpu" | "mps"
-JOB_NAME="act_c4_pick_place_col0"
+DEVICE="mps"                          # "mps" on Mac | "cuda" on Linux GPU
+JOB_NAME="act_c4_col3"
 OUTPUT_DIR="outputs/train/${JOB_NAME}"
 
 lerobot-train \
@@ -79,12 +79,12 @@ lerobot-train \
 #    --robot.port=/dev/so101_follower \
 #    --robot.id=my_follower_arm \
 #    --robot.cameras='{
-#      front: {type: opencv, index_or_path: "/dev/video0", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"},
-#      hand:  {type: opencv, index_or_path: "/dev/video2", width: 640, height: 480, fps: 30, fourcc: "YUYV", backend: "V4L2"}
+#      front: {type: opencv, index_or_path: "/dev/video2", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"},
+#      hand:  {type: opencv, index_or_path: "/dev/video0", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"}
 #    }' \
 #    --policy.path="${CKPT}" \
 #    --dataset.repo_id="${HF_USER}/eval_${JOB_NAME}" \
-#    --dataset.single_task="Pick a yellow piece from the tray and drop it into column 0" \
+#    --dataset.single_task="Pick a yellow piece from the chute and drop it into column 3" \
 #    --dataset.num_episodes=10 \
 #    --dataset.episode_time_s=20 \
 #    --dataset.reset_time_s=10 \

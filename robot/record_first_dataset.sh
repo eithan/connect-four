@@ -64,14 +64,14 @@
 set -euo pipefail
 
 # ── Args ──────────────────────────────────────────────────────────────────────
-COL="${1:-0}"
+COL="${1:-3}"
 if ! [[ "${COL}" =~ ^[0-6]$ ]]; then
     echo "Usage: $0 [COLUMN (0-6)] [NUM_EPISODES]" >&2
     exit 1
 fi
 
-# Column 0 gets 20 episodes (pipeline validation); all others get 10.
-DEFAULT_EPISODES=$([ "${COL}" -eq 0 ] && echo 20 || echo 10)
+# Column 3 gets 20 episodes (pipeline validation); all others get 10.
+DEFAULT_EPISODES=$([ "${COL}" -eq 3 ] && echo 20 || echo 10)
 NUM_EPISODES="${2:-${DEFAULT_EPISODES}}"
 
 # ── Config ────────────────────────────────────────────────────────────────────

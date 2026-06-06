@@ -13,9 +13,10 @@ Starting here validates the full pipeline before tackling harder columns.
 ### Step 1: Clean up any partial data from earlier sessions
 
 ```bash
-rm -rf ~/lerobot_datasets/eithanz/connect_four_chute5_pick_col0/
 rm -rf ~/lerobot_datasets/eithanz/connect_four_chute5_pick_col3/
 ```
+
+> If you have stale col0 data from earlier experimentation, also: `rm -rf ~/lerobot_datasets/eithanz/connect_four_chute5_pick_col0/`
 
 ### Step 2: Physical setup checklist (before every session)
 - Arms plugged in, calibrated, teleop verified
@@ -267,17 +268,18 @@ Run 10 eval episodes with the game loop driving column selection.
 
 | Phase | Where | Time est. | Milestone |
 |---|---|---|---|
-| Record col 3 (20 demos) | Ubuntu | 1–2 sessions | First clean dataset |
-| Train ACT on col 3 | Mac | 1–3 hrs | Full pipeline proven |
-| Eval ACT | Ubuntu | 20 min | Policy running on real arm |
-| Train SmolVLA on col 3 | Mac | 2–5 hrs | Foundation model working |
-| Eval SmolVLA | Ubuntu | 20 min | Pipeline validated, visible improvement over ACT |
+| Record col 3 (20 demos) | Ubuntu | 1–2 sessions | First clean dataset — easiest reach, validates full pipeline |
+| Train ACT on col 3 | Mac | 1–3 hrs | Policy running on real arm |
+| Eval ACT → target ≥40% | Ubuntu | 20 min | Arm does something recognizable |
+| Train SmolVLA on col 3 | Mac | 2–5 hrs | Foundation model on same data |
+| Eval SmolVLA → target ≥50% | Ubuntu | 20 min | **Pipeline validated — proceed to other columns** |
 | Record cols 1, 2, 4, 5 | Ubuntu | 2 sessions | Middle columns covered |
 | Train combined (5 cols) | Mac | 3–5 hrs | 5-column policy |
-| Design + print funnels | Mac/Printer | 1–2 hrs | Hardware assist for edge columns |
-| Record cols 0 and 6 | Ubuntu | 1 session | All columns covered |
+| Eval 5-col policy | Ubuntu | 20 min | Middle columns working |
+| Design + print funnels for cols 0 and 6 | Mac/Printer | 1–2 hrs | Hardware assist for edge columns |
+| Record cols 0 and 6 (with funnels) | Ubuntu | 1 session | All 7 columns covered |
 | Train combined (7 cols) | Mac | 3–6 hrs | Full 7-column policy |
-| Eval combined | Ubuntu | 30 min | Robot plays Connect Four |
+| Eval combined | Ubuntu | 30 min | **Robot plays Connect Four** |
 
 ---
 
