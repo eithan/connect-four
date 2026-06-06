@@ -53,11 +53,11 @@ lerobot-train \
   --policy.push_to_hub=false \
   --output_dir="${OUTPUT_DIR}" \
   --job_name="${JOB_NAME}" \
-  --batch_size=8 \
+  --batch_size=16 \
   --steps="${TOTAL_STEPS}" \
   --save_freq=5000 \
   --log_freq=100 \
-  --num_workers=0 \
+  --num_workers=4 \
   --wandb.enable=false \
 2>&1 | python3 -u -c "
 import sys, re, time, datetime
