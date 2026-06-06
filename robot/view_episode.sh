@@ -56,6 +56,7 @@ print(d.get('total_episodes', 0))
 # ep start end duration
 build_timeline() {
 python3 - "$DATASET_ROOT" <<'PY'
+import sys
 import pandas as pd
 import pathlib
 
