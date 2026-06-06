@@ -154,26 +154,24 @@ PY
 
     TEXT="Episode ${ep} | Col ${COL}"
 
-    if [[ -f "$HAND" ]]; then
-        ffmpeg -hide_banner -loglevel warning \
-            -ss "$start" -t "$dur" -i "$FRONT" \
-            -ss "$start" -t "$dur" -i "$HAND" \
-            -filter_complex "
-            [0:v]scale=640:480,setpts=PTS-STARTPTS,
-                 drawtext=text='${TEXT}':x=10:y=10:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5[v0];
-            [1:v]scale=640:480,setpts=PTS-STARTPTS[v1];
-            [v0][v1]hstack[out]
-            " \
-            -map "[out]" \
-            -f nut pipe:1 2>/dev/null \
-        | ffplay -hide_banner -loglevel warning \
-            -window_title "Episode ${ep} | Col ${COL}" \
-            -
-    else
-        ffplay -hide_banner -loglevel warning \
-            -ss "$start" -t "$dur" \
-            "$FRONT"
-    fi
+    # FRONT (left)
+    ffplay -hide_banner -loglevel warning \
+        -ss "$start" -t "$dur" \
+        -vf "drawtext=text='${TEXT}':x=10:y=10:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5" \
+        -window_title "Front Cam | Ep ${ep}" \
+        "$FRONT" &
+
+    PID1=$!
+
+    # HAND (right)
+    ffplay -hide_banner -loglevel warning \
+        -ss "$start" -t "$dur" \
+        -window_title "Hand Cam | Ep ${ep}" \
+        "$HAND" &
+
+    PID2=$!
+
+    wait $PID1 $PID2
 }
 
 # ─────────────────────────────────────────────────────────────
