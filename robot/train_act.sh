@@ -75,10 +75,10 @@ for raw in sys.stdin:
     sys.stdout.write(raw)
     sys.stdout.flush()
 
-    m = re.search(r'\bstep[:\s=]+(\d+)', raw, re.IGNORECASE)
+    m = re.search(r'\bstep[:\s=]+([\d]+)(K?)', raw, re.IGNORECASE)
     if not m:
         continue
-    step = int(m.group(1))
+    step = int(m.group(1)) * (1000 if m.group(2).upper() == 'K' else 1)
     if step == 0 or step <= last_shown:
         continue
 
