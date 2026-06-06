@@ -58,7 +58,6 @@ lerobot-train \
   --save_freq=5000 \
   --log_freq=100 \
   --num_workers=0 \
-  --dataset.video_backend=pyav \
   --wandb.enable=false \
 2>&1 | python3 -u -c "
 import sys, re, time, datetime
