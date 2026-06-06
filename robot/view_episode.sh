@@ -1,29 +1,16 @@
 #!/usr/bin/env bash
 # =============================================================
-#  view_episode.sh
-#  Play back a recorded episode from the local LeRobot dataset.
-#  Shows front and hand camera feeds side by side.
+#  view_episode.sh — GLOBAL SCRUB + EPISODE OVERLAY VERSION
 #
-#  NOTE: lerobot v0.5 concatenates all episodes in a chunk into
-#  a single video file (chunk-000/file-000.mp4). This script reads
-#  the parquet data to find exact frame boundaries, then pipes
-#  ffmpeg → ffplay to seek accurately.
-#
-#  PREREQS (one-time):
-#    sudo apt install ffmpeg
-#
-#  USAGE:
-#    ./view_episode.sh                  # col 3 (default), most recent episode
-#    ./view_episode.sh --col 0          # col 0, most recent episode
-#    ./view_episode.sh --col 0 5        # col 0, episode 5 (zero-indexed)
-#    ./view_episode.sh --list           # col 3, list all episodes
-#    ./view_episode.sh --col 0 --list   # col 0, list all episodes
-#    ./view_episode.sh 5                # col 3, episode 5
+#  FEATURES:
+#  - Continuous timeline across ALL episodes
+#  - No drift (timestamp-based)
+#  - Episode index overlay on video
 # =============================================================
 
 set -euo pipefail
 
-# ── Args ──────────────────────────────────────────────────────────────────────
+# ── Args ─────────────────────────────────────────────────────
 COL=3
 EPISODE_ARG=""
 LIST_MODE=false
@@ -35,195 +22,148 @@ while [[ $# -gt 0 ]]; do
         --latest)  EPISODE_ARG="--latest"; shift ;;
         [0-9]*)    EPISODE_ARG="$1"; shift ;;
         *)
-            echo "Usage: $0 [--col N] [EPISODE_NUMBER | --list | --latest]"
+            echo "Usage: $0 [--col N] [EPISODE | --list | --latest]"
             exit 1
             ;;
     esac
 done
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────
 HF_USER="eithanz"
 REPO_ID="${HF_USER}/connect_four_chute5_pick_col${COL}"
 DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
+
 VIDEO_ROOT="${DATASET_ROOT}/videos"
 FRONT="${VIDEO_ROOT}/observation.images.front/chunk-000/file-000.mp4"
 HAND="${VIDEO_ROOT}/observation.images.hand/chunk-000/file-000.mp4"
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 check_dataset() {
-    [[ -d "${DATASET_ROOT}" ]] || die "Dataset not found: ${DATASET_ROOT}
-  Run: ./record_first_dataset.sh ${COL}"
-    [[ -f "${FRONT}" ]] || die "No video at: ${FRONT}
-  Record at least one episode first."
+    [[ -d "${DATASET_ROOT}" ]] || die "Dataset not found: ${DATASET_ROOT}"
 }
 
-# Read episode count from metadata.
 count_episodes() {
-    local info="${DATASET_ROOT}/meta/info.json"
-    [[ -f "$info" ]] || { echo 0; return; }
-    python3 -c "import json; d=json.load(open('$info')); print(d.get('total_episodes', d.get('num_episodes', 0)))"
+    python3 -c "
+import json
+d=json.load(open('${DATASET_ROOT}/meta/info.json'))
+print(d.get('total_episodes', 0))
+"
 }
 
-# Return "start_seconds duration_seconds" for episode N.
-#
-# lerobot v3.0 stores ~1.24s of reset-phase frames after each episode in the
-# video (camera runs during the reset countdown) that are NOT in the parquet.
-# This means raw parquet frame counts underestimate seek positions by
-# N * lead_in for episode N. We derive lead_in from the actual video duration.
-#
-# Formula:
-#   lead_in   = (video_duration - parquet_total_seconds) / num_episodes
-#   seek[N]   = N * lead_in + sum(lengths[:N]) / fps
-#   duration  = lengths[N] / fps
-get_episode_timing() {
-    local ep=$1
-    python3 - "$DATASET_ROOT" "$ep" <<'PYEOF'
-import sys, json, pathlib, subprocess
+# ── BUILD GLOBAL TIMELINE ────────────────────────────────────
+# Returns:
+# ep start end duration
+build_timeline() {
+python3 - "$DATASET_ROOT" <<'PY'
 import pandas as pd
+import pathlib
 
-root      = pathlib.Path(sys.argv[1])
-ep_target = int(sys.argv[2])
-fps       = float(json.loads((root / "meta" / "info.json").read_text()).get("fps", 15))
+root = pathlib.Path(sys.argv[1])
+df = pd.read_parquet(root / "data/chunk-000/file-000.parquet")
 
-# ── Get per-episode lengths from meta/episodes parquet ────────────────────────
-lengths = None
-for f in sorted((root / "meta" / "episodes").glob("chunk-*/*.parquet")):
-    df = pd.read_parquet(f)
-    if "length" in df.columns and "episode_index" in df.columns:
-        df = df.sort_values("episode_index").reset_index(drop=True)
-        lengths = df["length"].tolist()
-        break
+episodes = []
+for ep in sorted(df["episode_index"].unique()):
+    ep_df = df[df["episode_index"] == ep]
 
-if lengths is None:
-    for f in sorted((root / "data").glob("chunk-*/*.parquet")):
-        df = pd.read_parquet(f, columns=["episode_index"])
-        ep_col = df["episode_index"]
-        if ep_col.dtype == object:
-            ep_col = ep_col.apply(lambda x: int(x[0]) if hasattr(x, "__len__") else int(x))
-            df["episode_index"] = ep_col
-        counts  = df.groupby("episode_index").size()
-        lengths = [int(counts.get(i, 0)) for i in range(max(counts.index) + 1)]
-        break
+    start = float(ep_df["timestamp"].iloc[0])
+    end   = float(ep_df["timestamp"].iloc[-1])
 
-if lengths is None or ep_target >= len(lengths):
-    print("ERROR: could not get episode lengths", file=sys.stderr)
-    sys.exit(1)
+    episodes.append((ep, start, end, end - start))
 
-# ── Get actual video duration via ffprobe ─────────────────────────────────────
-video_path = root / "videos" / "observation.images.front" / "chunk-000" / "file-000.mp4"
-lead_in = 0.0
-try:
-    r = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1", str(video_path)],
-        capture_output=True, text=True, timeout=10
-    )
-    video_duration    = float(r.stdout.split("=")[1].strip())
-    total_parquet_s   = sum(lengths) / fps
-    num_episodes      = len(lengths)
-    excess            = video_duration - total_parquet_s
-    if excess > 0:
-        lead_in = excess / num_episodes   # reset-phase frames per episode
-except Exception:
-    pass   # lead_in stays 0, seek will be approximate
+# normalize to GLOBAL timeline (fix offsets)
+global_start = episodes[0][1]
+episodes = [(e, s-global_start, t-global_start, d) for (e,s,t,d) in episodes]
 
-# ── Compute seek position ─────────────────────────────────────────────────────
-seek_time  = ep_target * lead_in + sum(lengths[:ep_target]) / fps
-duration_s = lengths[ep_target] / fps
-
-print(f"{seek_time:.3f} {duration_s:.3f}")
-PYEOF
+for e,s,t,d in episodes:
+    print(e, s, t, d)
+PY
 }
 
+# ── GET EPISODE RANGE ────────────────────────────────────────
+get_episode_range() {
+    local ep=$1
+
+    python3 - "$DATASET_ROOT" "$ep" <<'PY'
+import pandas as pd
+import pathlib
+
+root = pathlib.Path(sys.argv[1])
+ep = int(sys.argv[2])
+
+df = pd.read_parquet(root / "data/chunk-000/file-000.parquet")
+ep_df = df[df["episode_index"] == ep]
+
+start = float(ep_df["timestamp"].iloc[0])
+end   = float(ep_df["timestamp"].iloc[-1])
+
+print(start, end)
+PY
+}
+
+# ── LIST (GLOBAL TIMELINE SCRUB VIEW) ───────────────────────
 list_episodes() {
     check_dataset
-    local total; total=$(count_episodes)
-    echo "Dataset:  ${REPO_ID}"
-    echo "Root:     ${DATASET_ROOT}"
-    echo "Episodes: ${total}"
-    echo ""
-    [[ $total -gt 0 ]] || { echo "  (no episodes recorded yet)"; return; }
 
-    local front_size; front_size=$(du -h "$FRONT" | cut -f1)
-    echo "  Video: ${FRONT}"
-    echo "  Size:  ${front_size}  (all ${total} episodes concatenated)"
+    echo "=== GLOBAL TIMELINE (SCRUB BAR VIEW) ==="
     echo ""
-    printf "  %7s  %10s  %12s\n" "Episode" "Start (s)" "Duration (s)"
-    printf "  %7s  %10s  %12s\n" "-------" "---------" "------------"
 
-    local i=0
-    while [[ $i -lt $total ]]; do
-        local timing
-        if timing=$(get_episode_timing "$i" 2>/dev/null); then
-            local start dur
-            read -r start dur <<< "$timing"
-            printf "  %7d  %10.1f  %12.1f\n" "$i" "$start" "$dur"
-        else
-            printf "  %7d  %10s  %12s\n" "$i" "?" "?"
-        fi
-        (( i++ )) || true
-    done
+    build_timeline | awk '
+    {
+        printf "Episode %-2s | start: %8.3fs | end: %8.3fs | dur: %6.3fs\n",
+               $1, $2, $3, $4
+    }'
 }
 
+# ── PLAY WITH OVERLAY ───────────────────────────────────────
 play_episode() {
-    local ep_num=$1
-    local total; total=$(count_episodes)
-    [[ $ep_num -lt $total ]] || die "Episode ${ep_num} doesn't exist (dataset has ${total} episodes, 0-indexed)."
+    local ep=$1
 
-    local timing
-    timing=$(get_episode_timing "$ep_num") || die "Could not read timing for episode ${ep_num}."
-    local start_s dur_s
-    read -r start_s dur_s <<< "$timing"
+    read start end < <(get_episode_range "$ep")
 
-    local end_s
-    end_s=$(python3 -c "print(${start_s}+${dur_s})")
+    dur=$(python3 -c "print($end - $start)")
 
-    echo "Playing col ${COL} episode ${ep_num}/${total}..."
-    printf "  Seek: %.1fs   Duration: %.1fs\n" "$start_s" "$dur_s"
-    echo ""
-    echo "Controls: space=pause/play  q=quit  left/right=seek within this clip"
-    echo ""
+    echo "Playing Episode $ep"
+    echo "Start: $start  End: $end  Duration: $dur"
 
-    if [[ -f "$HAND" ]]; then
-        # Use ffmpeg to decode both cameras to the right window, pipe to ffplay.
-        # -ss before -i = fast keyframe seek; -t = duration.
-        # Pipe through NUT container to ffplay (no temp files).
-        ffmpeg -hide_banner -loglevel warning \
-            -ss "$start_s" -t "$dur_s" -i "$FRONT" \
-            -ss "$start_s" -t "$dur_s" -i "$HAND" \
-            -filter_complex \
-              "[0:v]scale=640:480,setpts=PTS-STARTPTS[v0]; \
-               [1:v]scale=640:480,setpts=PTS-STARTPTS[v1]; \
-               [v0][v1]hstack[out]" \
-            -map "[out]" \
-            -f nut pipe:1 2>/dev/null \
-        | ffplay -hide_banner -loglevel warning \
-            -window_title "Col ${COL} | Ep ${ep_num}/${total} — front | hand" \
-            -
-    else
-        ffplay -hide_banner -loglevel warning \
-            -window_title "Col ${COL} | Ep ${ep_num}/${total} — front" \
-            -ss "$start_s" -t "$dur_s" \
-            "$FRONT"
-    fi
+    # overlay text
+    TEXT="Episode ${ep} | Col ${COL}"
+
+    ffmpeg -hide_banner -loglevel warning \
+        -ss "$start" -t "$dur" -i "$FRONT" \
+        -ss "$start" -t "$dur" -i "$HAND" \
+        -filter_complex "
+        [0:v]scale=640:480,setpts=PTS-STARTPTS,
+             drawtext=text='${TEXT}':x=10:y=10:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5[v0];
+        [1:v]scale=640:480,setpts=PTS-STARTPTS[v1];
+        [v0][v1]hstack[out]
+        " \
+        -map "[out]" \
+        -f nut pipe:1 2>/dev/null \
+    | ffplay -hide_banner -loglevel warning \
+        -window_title "Episode ${ep} | Col ${COL}" \
+        -
 }
 
+# ── LATEST ───────────────────────────────────────────────────
 get_latest_episode() {
-    local total; total=$(count_episodes)
-    [[ $total -gt 0 ]] && echo $(( total - 1 )) || echo -1
+    python3 -c "
+import json
+d=json.load(open('${DATASET_ROOT}/meta/info.json'))
+print(d.get('total_episodes',0)-1)
+"
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── MAIN ─────────────────────────────────────────────────────
 check_dataset
 
 if $LIST_MODE; then
     list_episodes
+
 elif [[ -z "$EPISODE_ARG" || "$EPISODE_ARG" == "--latest" ]]; then
     ep=$(get_latest_episode)
-    [[ $ep -ge 0 ]] || die "No episodes found."
     play_episode "$ep"
+
 else
     play_episode "$EPISODE_ARG"
 fi
