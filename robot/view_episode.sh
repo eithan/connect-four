@@ -174,7 +174,7 @@ play_episode() {
 
     printf "Encoding clip... "
     if [[ -f "$HAND" ]]; then
-        ffmpeg -hide_banner -loglevel warning \
+        ffmpeg -y -hide_banner -loglevel warning \
             -ss "$seek_s" -t "$dur_s" -i "$FRONT" \
             -ss "$seek_s" -t "$dur_s" -i "$HAND" \
             -filter_complex "
@@ -191,7 +191,7 @@ play_episode() {
             -window_title "Col ${COL} | Ep ${ep_num}/${total} — front | hand" \
             "$TMPFILE"
     else
-        ffmpeg -hide_banner -loglevel warning \
+        ffmpeg -y -hide_banner -loglevel warning \
             -ss "$seek_s" -t "$dur_s" -i "$FRONT" \
             -vf "scale=640:480,setpts=PTS-STARTPTS,
                  drawtext=text='${LABEL}':x=10:y=10:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.5" \
