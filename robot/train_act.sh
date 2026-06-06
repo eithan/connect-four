@@ -95,13 +95,13 @@ for raw in sys.stdin:
 
     rate       = steps_done / elapsed
     remaining  = (total - step) / rate if rate > 0 else 0
-    eta        = datetime.timedelta(seconds=int(remaining))
+    finish     = datetime.datetime.now() + datetime.timedelta(seconds=int(remaining))
     pct        = step / total
     filled     = int(BAR * pct)
     bar        = '█' * filled + '░' * (BAR - filled)
     last_shown = step
 
-    print(f'  [{bar}] {100*pct:.1f}%  |  ETA {eta}  |  {rate:.1f} steps/s', flush=True)
+    print(f'  [{bar}] {100*pct:.1f}%  |  Done ~{finish.strftime("%-I:%M %p")}  |  {rate:.1f} steps/s', flush=True)
 "
 
 echo ""
