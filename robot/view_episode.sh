@@ -166,6 +166,13 @@ play_episode() {
 
     local LABEL="Ep ${ep_num} / $((total-1)) | Col ${COL}"
 
+    # NUT pipes don't support random-access seeking. Write to a temp file so
+    # arrow-key seeking works in ffplay. ultrafast encode is ~1-2s for a 30s clip.
+    local TMPFILE
+    TMPFILE=$(mktemp /tmp/c4_ep_XXXXXX.mkv)
+    trap "rm -f '$TMPFILE'" EXIT
+
+    printf "Encoding clip... "
     if [[ -f "$HAND" ]]; then
         ffmpeg -hide_banner -loglevel warning \
             -ss "$seek_s" -t "$dur_s" -i "$FRONT" \
@@ -177,19 +184,23 @@ play_episode() {
                 [v0][v1]hstack[out]
             " \
             -map "[out]" \
-            -f nut pipe:1 2>/dev/null \
-        | ffplay -hide_banner -loglevel warning \
+            -c:v libx264 -crf 18 -preset ultrafast \
+            "$TMPFILE"
+        echo "done."
+        ffplay -hide_banner -loglevel warning \
             -window_title "Col ${COL} | Ep ${ep_num}/${total} — front | hand" \
-            -
+            "$TMPFILE"
     else
         ffmpeg -hide_banner -loglevel warning \
             -ss "$seek_s" -t "$dur_s" -i "$FRONT" \
             -vf "scale=640:480,setpts=PTS-STARTPTS,
                  drawtext=text='${LABEL}':x=10:y=10:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.5" \
-            -f nut pipe:1 2>/dev/null \
-        | ffplay -hide_banner -loglevel warning \
+            -c:v libx264 -crf 18 -preset ultrafast \
+            "$TMPFILE"
+        echo "done."
+        ffplay -hide_banner -loglevel warning \
             -window_title "Col ${COL} | Ep ${ep_num}/${total} — front only" \
-            -
+            "$TMPFILE"
     fi
 }
 
