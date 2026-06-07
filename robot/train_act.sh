@@ -119,9 +119,9 @@ echo "Training complete. Checkpoints in: ${OUTPUT_DIR}/checkpoints/"
 #
 #  2. On Ubuntu, run:
 #
-#  CKPT="outputs/train/act_c4_col3/checkpoints/last/pretrained_model"
+#  CKPT="$HOME/development/connect-four/robot/outputs/train/act_c4_col3/checkpoints/last/pretrained_model"
 #
-#  lerobot-record \
+#  lerobot-rollout \
 #    --robot.type=so101_follower \
 #    --robot.port=/dev/so101_follower \
 #    --robot.id=my_follower_arm \
@@ -129,15 +129,18 @@ echo "Training complete. Checkpoints in: ${OUTPUT_DIR}/checkpoints/"
 #      front: {type: opencv, index_or_path: "/dev/video2", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"},
 #      hand:  {type: opencv, index_or_path: "/dev/video0", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"}
 #    }' \
-#    --policy.path="${CKPT}" \
-#    --dataset.repo_id="${HF_USER}/eval_${JOB_NAME}" \
-#    --dataset.root="${HOME}/lerobot_datasets/${HF_USER}/eval_${JOB_NAME}" \
-#    --dataset.single_task="Pick a yellow piece from the chute and drop it into column 3" \
-#    --dataset.num_episodes=10 \
-#    --dataset.episode_time_s=30 \
-#    --dataset.reset_time_s=10 \
-#    --dataset.push_to_hub=false \
-#    --display_data=false
+#    --policy.type=act \
+#    --policy.pretrained_path="${CKPT}" \
+#    --device=cuda \
+#    --fps=15 \
+#    --task="Pick a yellow piece from the chute and drop it into column 3" \
+#    --display_data=false \
+#    --strategy.type=base
 #
-#  SAFETY: keep a hand near the power switch on the first policy rollout.
+#  NOTES:
+#  - --strategy.type=base: run policy only, no episode recording.
+#  - --duration=0 (default): runs until Ctrl-C.
+#  - On Ctrl-C, arm automatically returns to its start position.
+#  - --fps=15 matches training data rate (critical for correct chunk timing).
+#  - SAFETY: keep a hand near the power switch on the first policy rollout.
 # =============================================================

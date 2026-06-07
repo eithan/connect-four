@@ -4,3 +4,4 @@ runs
 logs/
 .claude/worktrees/
 training_export/
+outputs/
