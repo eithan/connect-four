@@ -2,7 +2,7 @@
 
 **Read this first.** A concise dashboard of the project's current state, hardware logistics, and immediate next steps. The full master plan lives in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
 
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-07
 
 ---
 
@@ -14,7 +14,7 @@
 | Phase 2 — Live camera + cooperative game loop | ✅ Mostly complete (sub-tasks 2.6 / 2.7 deprioritized to Phase 5) |
 | Phase 3 — ROS2 simulation core (UR5e + Gazebo + MoveIt2) | ✅ Complete |
 | Phase 3B — VLA-ready sim (Robotiq 2F-85 + pick-and-place) | ✅ Algorithm-complete (grasp contact physics deferred to real hardware) |
-| Phase 3C — SO-101 hardware setup | 🔄 Recording pipeline fully debugged (2026-06-03). Ready to collect the 50-episode v1 dataset. |
+| Phase 3C — SO-101 hardware setup | 🔄 Dataset collected (10 eps, col3), ACT trained to 50k steps on Mac M4 Max (MPS). Policy rollout tested on Ubuntu — loads correctly but runs at **2.3–2.5 Hz** (CPU only). Need Mac for 15 Hz inference. |
 | Phase 4 — Full game integration on real arm | 🔲 Pending |
 
 ## Decisions Locked
@@ -58,8 +58,13 @@ Reasoning: LeRobot's canonical workflow connects the SO-101 leader + follower ov
 ## Current Focus
 
 1. ✅ **SO-101 arrived, assembled, calibrated, teleop verified** (~2026-05-22).
-2. ✅ **Recording pipeline fully debugged** (2026-06-03). All major issues resolved — see Recording Setup section below.
-3. 🔄 **Next: collect 50-episode v1 dataset.** Run `record_first_dataset.sh`, do the full pick-from-chute → drop-column-0 task. Once 50 episodes are done, run `train_act.sh`.
+2. ✅ **Recording pipeline fully debugged** (2026-06-03).
+3. ✅ **10-episode col3 dataset collected and trained** (50k steps, ACT, on Mac M4 Max MPS). Checkpoint at `outputs/train/act_c4_col3/checkpoints/050000/`.
+4. ✅ **Ubuntu rollout pipeline unblocked** (2026-06-07): fixed `context.py` `from_pretrained` config-override bug; fixed `config.json` device mismatch (mps→cpu). Policy loads correctly.
+5. 🔄 **Inference speed bottleneck:** Ubuntu has no viable GPU (AMD RX 460D not supported by ROCm 6.x). CPU inference runs at 2.3–2.5 Hz vs 15 Hz training rate — arm misses target. **Next: connect arm to Mac M4 Max and run rollout there with `--device=mps`.**
+6. 🔲 **Pending cleanup (run in Mac terminal):**
+   - `rsync -av --progress eithan@192.168.1.45:~/development/connect-four/robot/outputs/train/act_c4_col3/checkpoints/050000/pretrained_model/model.safetensors ~/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/050000/pretrained_model/`
+   - `rm -rf ~/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/_to_delete/`
 
 ## Recording Setup (as of 2026-06-03)
 
@@ -180,7 +185,50 @@ LeRobot supports a SO-100 in MuJoCo. Walking through the LeRobot record-train-de
 | `ros2_ws/src/connect_four_arm/launch/connect_four.launch.py` | Single-command full stack launch |
 | `ai/src/connect_four_ai/models/alphazero-network-model.onnx` | Trained AlphaZero model (also at `robot/alphazero-network-model.onnx`) |
 
+## Rollout on Mac (next step)
+
+Once the arm is connected to the Mac, install lerobot there if not present (`pip install -e ".[feetech]"` from the lerobot clone), then:
+
+```bash
+CKPT="$HOME/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/last/pretrained_model"
+
+PYTORCH_ENABLE_MPS_FALLBACK=1 lerobot-rollout \
+  --robot.type=so101_follower \
+  --robot.port=/dev/cu.usbmodem* \
+  --robot.id=my_follower_arm \
+  --robot.cameras='{
+    front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30},
+    hand:  {type: opencv, index_or_path: 2, width: 640, height: 480, fps: 30}
+  }' \
+  --policy.type=act \
+  --policy.pretrained_path="${CKPT}" \
+  --device=mps \
+  --fps=15 \
+  --task="Pick a yellow piece from the chute and drop it into column 3" \
+  --display_data=false \
+  --strategy.type=base
+```
+
+**Before running:** update `config.json`'s `"device"` back to `"mps"` on Mac (it's already mps in the Mac checkpoint; the Ubuntu copy was patched to cpu). Also confirm `last` symlink points to `050000`:
+```bash
+ls -la ~/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/last
+# Should show: last -> 050000
+```
+If the symlink is missing (it may not have survived the restore), create it:
+```bash
+cd ~/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints
+ln -sfn 050000 last
+```
+
+**Known Ubuntu rollout patches** (already applied on Ubuntu, NOT needed on Mac):
+- `context.py` line 200: `from_pretrained` called without `config=` arg
+- `config.json` device: changed `mps` → `cpu` (Mac version should keep `mps`)
+
+**Known Ctrl-C disconnect error** (motor id=3 on teardown): non-dangerous, arm already returned to home. Workaround: `--return_to_initial_position=false` skips the interpolation that triggers it.
+
 ## Changelog
+
+- **2026-06-07** — ACT rollout pipeline fully debugged on Ubuntu. Fixed `context.py` `from_pretrained` config-override bug (empty `input_features` from CLI overrode checkpoint's `config.json`); fixed checkpoint `config.json` device mismatch (mps→cpu for Ubuntu). Policy loads and runs. CPU-only inference at 2.3–2.5 Hz vs 15 Hz required — arm misses. AMD RX 460D not supported by ROCm 6.x. `torch.compile` fails silently on this build. Next path: run rollout on Mac M4 Max with MPS. Mac checkpoint restored from accidentally-deleted outputs folder (all checkpoints 010k–050k sorted, timestamp suffixes stripped); 050000/pretrained_model/model.safetensors still needs rsync from Ubuntu.
 
 - **2026-06-03** — Recording pipeline fully debugged. Resolved: lerobot resume root-path inconsistency (create vs resume use different root values), HF Hub API call on resume with push_to_hub=false, camera labels swapped (video0↔video2), FPS warnings fixed by dropping to 15fps + streaming encoding + display_data=false, AV1 playback requires mpv/ffplay not VLC, arrow key injection via xdotool (pynput uses X11 backend on RDP, not evdev), Ctrl-C timing for safe episode saves. Camera view finalized: overhead rear behind board.
 
