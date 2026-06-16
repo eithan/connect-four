@@ -4,12 +4,13 @@
 #
 #  RUN:
 #    cd ~/development/cursor/connect-four/robot
-#    ./train_act.sh
+#    ./train_act.sh           # fresh run
+#    ./train_act.sh --resume  # resume from last checkpoint
 #
 #  OUTPUT:
 #    Checkpoints → outputs/train/act_c4_col3/checkpoints/
 #    Progress bar + ETA printed every 100 steps.
-#    Expected duration on M4 Max: ~2–4 hours for 50k steps.
+#    Expected duration on M4 Max: ~21 hours for 50k steps.
 #
 #  NOTES:
 #  - PYTORCH_ENABLE_MPS_FALLBACK=1 lets ops unsupported by MPS fall
@@ -22,6 +23,12 @@
 # =============================================================
 
 set -euo pipefail
+
+# ── Parse args ────────────────────────────────────────────────────────────────
+RESUME=false
+for arg in "$@"; do
+  [[ "$arg" == "--resume" ]] && RESUME=true
+done
 
 # ── Prevent Mac from sleeping during training ──────────────────────────────────
 caffeinate -i &
@@ -49,7 +56,11 @@ echo "Training ACT on ${REPO_ID}"
 echo "  Device:  ${DEVICE}"
 echo "  Steps:   ${TOTAL_STEPS}"
 echo "  Output:  ${OUTPUT_DIR}"
+echo "  Resume:  ${RESUME}"
 echo ""
+
+RESUME_FLAG=""
+$RESUME && RESUME_FLAG="--resume=true"
 
 lerobot-train \
   --dataset.repo_id="${REPO_ID}" \
@@ -65,6 +76,7 @@ lerobot-train \
   --log_freq=100 \
   --num_workers=0 \
   --wandb.enable=false \
+  ${RESUME_FLAG} \
 2>&1 | python3 -u -c "
 import sys, re, time, datetime
 
