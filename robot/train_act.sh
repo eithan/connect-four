@@ -2,9 +2,6 @@
 # =============================================================
 #  train_act.sh — ACT training on M4 Max (MPS)
 #
-#  BEFORE RUNNING (one-time on Mac):
-#    rsync -av --progress eithan@<ubuntu-ip>:~/lerobot_datasets/ ~/lerobot_datasets/
-#
 #  RUN:
 #    cd ~/development/cursor/connect-four/robot
 #    ./train_act.sh
@@ -12,23 +9,29 @@
 #  OUTPUT:
 #    Checkpoints → outputs/train/act_c4_col3/checkpoints/
 #    Progress bar + ETA printed every 100 steps.
-#    Expected duration on M4 Max: 3–6 hours for 50k steps.
+#    Expected duration on M4 Max: ~2–4 hours for 50k steps.
 #
 #  NOTES:
 #  - PYTORCH_ENABLE_MPS_FALLBACK=1 lets ops unsupported by MPS fall
-#    back to CPU silently instead of crashing.
-#  - num_workers=0 avoids MPS multiprocessing hangs.
-#  - 50k steps is appropriate for 10 episodes; 100k risks overfitting.
-#    If loss plateaus early (watch the ETA bar), Ctrl-C is safe —
-#    the last checkpoint is always saved before the next one starts.
+#    back to CPU silently instead of crashing. Do not remove.
+#  - PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 lets MPS use all GPU memory
+#    instead of the default 50% cap.
+#  - num_workers=0 avoids MPS multiprocessing hangs on Mac.
+#  - 50k steps is appropriate for 25 episodes. If loss plateaus early,
+#    Ctrl-C is safe — checkpoint is always saved before the next one.
 # =============================================================
 
 set -euo pipefail
 
+# ── Prevent Mac from sleeping during training ──────────────────────────────────
+caffeinate -i &
+CAFFEINATE_PID=$!
+trap "kill $CAFFEINATE_PID 2>/dev/null" EXIT
+
 # ── Config ────────────────────────────────────────────────────────────────────
 HF_USER="eithanz"
-REPO_ID="${HF_USER}/connect_four_chute5_pick_col3"
-DATASET_ROOT="${HOME}/lerobot_datasets/${REPO_ID}"
+REPO_ID="${HF_USER}/c4_col3_25"
+DATASET_ROOT="${HOME}/.cache/huggingface/lerobot/${REPO_ID}"
 
 DEVICE="mps"
 JOB_NAME="act_c4_col3"
@@ -56,7 +59,7 @@ lerobot-train \
   --policy.push_to_hub=false \
   --output_dir="${OUTPUT_DIR}" \
   --job_name="${JOB_NAME}" \
-  --batch_size=16 \
+  --batch_size=32 \
   --steps="${TOTAL_STEPS}" \
   --save_freq=5000 \
   --log_freq=100 \
