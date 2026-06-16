@@ -98,10 +98,15 @@ for raw in sys.stdin:
     sys.stdout.write(raw)
     sys.stdout.flush()
 
-    m = re.search(r'\bstep[:\s=]+([\d]+)(K?)', raw, re.IGNORECASE)
-    if not m:
+    # Prefer exact tqdm count (| 1100/50000) over lerobot's abbreviated step:1K
+    m_tqdm = re.search(r'\|\s*(\d+)/' + str(total), raw)
+    m_info = re.search(r'\bstep[:\s=]+([\d]+)(K?)', raw, re.IGNORECASE)
+    if m_tqdm:
+        step = int(m_tqdm.group(1))
+    elif m_info:
+        step = int(m_info.group(1)) * (1000 if m_info.group(2).upper() == 'K' else 1)
+    else:
         continue
-    step = int(m.group(1)) * (1000 if m.group(2).upper() == 'K' else 1)
     if step == 0 or step <= last_shown:
         continue
 
