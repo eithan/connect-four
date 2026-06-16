@@ -79,12 +79,20 @@ lerobot-train \
   ${RESUME_FLAG} \
 2>&1 | python3 -u -c "
 import sys, re, time, datetime
+from collections import deque
 
-total       = ${TOTAL_STEPS}
-start_time  = None
-first_step  = None
-last_shown  = -1
-BAR         = 30
+total            = ${TOTAL_STEPS}
+start_time       = None
+first_step       = None
+last_shown       = -1
+BAR              = 30
+
+# Convergence detection: warn if loss improves < 2% over a 5k-step window
+WINDOW_STEPS     = 5000
+CHECK_INTERVAL   = 5000
+MIN_IMPROVEMENT  = 0.02   # 2% — below this we consider it converged
+loss_history     = deque()
+last_check_step  = 0
 
 for raw in sys.stdin:
     sys.stdout.write(raw)
@@ -97,10 +105,18 @@ for raw in sys.stdin:
     if step == 0 or step <= last_shown:
         continue
 
+    # Track loss history for convergence detection
+    lm = re.search(r'\bloss[:\s=]+([\d.]+)', raw, re.IGNORECASE)
+    if lm:
+        loss_history.append((step, float(lm.group(1))))
+        while loss_history and loss_history[0][0] < step - WINDOW_STEPS:
+            loss_history.popleft()
+
     now = time.time()
     if start_time is None:
         start_time = now
         first_step = step
+        last_shown = step
         continue
 
     elapsed    = now - start_time
@@ -118,6 +134,21 @@ for raw in sys.stdin:
     last_shown = step
 
     print(f'  [{bar}] {100*pct:.1f}%  |  Done ~{finish_str}  |  {rate:.1f} steps/s', flush=True)
+
+    # Convergence check every CHECK_INTERVAL steps (only after first full window)
+    if step >= last_check_step + CHECK_INTERVAL and len(loss_history) >= 10 and step >= WINDOW_STEPS:
+        last_check_step = step
+        losses = [l for _, l in loss_history]
+        half   = len(losses) // 2
+        early  = sum(losses[:half]) / half
+        late   = sum(losses[half:]) / (len(losses) - half)
+        improvement = (early - late) / early if early > 0 else 0
+        if improvement < MIN_IMPROVEMENT:
+            print(f'  ⚠️  CONVERGED: loss improved only {100*improvement:.1f}% over last {WINDOW_STEPS} steps '
+                  f'({early:.3f} → {late:.3f}). Safe to Ctrl-C and test on the arm.', flush=True)
+        else:
+            print(f'  ✓  Still learning: {100*improvement:.1f}% improvement over last {WINDOW_STEPS} steps '
+                  f'({early:.3f} → {late:.3f}).', flush=True)
 "
 
 echo ""
