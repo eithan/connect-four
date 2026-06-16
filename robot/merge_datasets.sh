@@ -19,6 +19,32 @@ get_episode_count() {
     fi
 }
 
+# Workaround for lerobot bug #2679: merge strips fps from scalar features in
+# info.json, which causes feature-mismatch errors on subsequent merges.
+patch_scalar_fps() {
+    local info_json="$1"
+    python3 - "$info_json" <<'EOF'
+import json, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+info = json.loads(p.read_text())
+fps = info.get("fps")
+if fps is None:
+    print("   ⚠️  fps not found in info.json — skipping scalar fps patch")
+    sys.exit(0)
+scalar_dtypes = {"float32", "int64", "int32", "bool"}
+patched = 0
+for k, v in info.get("features", {}).items():
+    if v.get("dtype") in scalar_dtypes and "fps" not in v:
+        v["fps"] = fps
+        patched += 1
+p.write_text(json.dumps(info, indent=2))
+if patched:
+    print(f"   ✅ Patched fps={fps} back into {patched} scalar feature(s) (lerobot bug #2679)")
+else:
+    print("   ℹ️  All scalar features already have fps — no patch needed")
+EOF
+}
+
 # CREATE ARCHIVE DIRECTORY FIRST
 mkdir -p "$CACHE_DIR/archived_chunks"
 
@@ -64,6 +90,9 @@ if [ ! -d "$CACHE_DIR/$MASTER_NAME" ]; then
     mv "$CACHE_DIR/$CHUNK1" "$CACHE_DIR/archived_chunks/"
     mv "$CACHE_DIR/$CHUNK2" "$CACHE_DIR/archived_chunks/"
     
+    echo "🔧 Step 3: Patching scalar fps (lerobot bug #2679 workaround)..."
+    patch_scalar_fps "$MASTER_JSON"
+
     ACTUAL_TOTAL=$(get_episode_count "$MASTER_JSON")
     echo "------------------------------------------------------"
     echo "✅ Success! Master setup initialized."
@@ -129,7 +158,10 @@ if [ -d "$CACHE_DIR/$ROLLING_NAME" ] && [ -f "$ROLLING_JSON" ]; then
     
     echo "   Archiving raw component chunk folder..."
     mv "$CACHE_DIR/$NEW_CHUNK" "$CACHE_DIR/archived_chunks/"
-    
+
+    echo "🔧 Step 3: Patching scalar fps (lerobot bug #2679 workaround)..."
+    patch_scalar_fps "$CACHE_DIR/$MASTER_NAME/meta/info.json"
+
     echo "------------------------------------------------------"
     echo "✅ Success! Master dataset updated."
     echo "🎉 Verified Final Count: $ACTUAL_TOTAL total episodes now in '$MASTER_NAME'."
