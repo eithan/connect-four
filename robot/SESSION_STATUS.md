@@ -2,7 +2,7 @@
 
 **Read this first.** A concise dashboard of the project's current state, hardware logistics, and immediate next steps. The full master plan lives in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
 
-**Last updated:** 2026-06-07
+**Last updated:** 2026-06-17
 
 ---
 
@@ -14,7 +14,7 @@
 | Phase 2 — Live camera + cooperative game loop | ✅ Mostly complete (sub-tasks 2.6 / 2.7 deprioritized to Phase 5) |
 | Phase 3 — ROS2 simulation core (UR5e + Gazebo + MoveIt2) | ✅ Complete |
 | Phase 3B — VLA-ready sim (Robotiq 2F-85 + pick-and-place) | ✅ Algorithm-complete (grasp contact physics deferred to real hardware) |
-| Phase 3C — SO-101 hardware setup | 🔄 Dataset collected (10 eps, col3), ACT trained to 50k steps on Mac M4 Max (MPS). Policy rollout tested on Ubuntu — loads correctly but runs at **2.3–2.5 Hz** (CPU only). Need Mac for 15 Hz inference. |
+| Phase 3C — SO-101 hardware setup | 🔄 25-episode col3 dataset merged. ACT training on Mac M4 Max (MPS) — 50k steps, ~loss 0.052 at step 14k, finishing ~1pm 2026-06-17. Ubuntu dropped; all recording, training, and inference now on Mac. |
 | Phase 4 — Full game integration on real arm | 🔲 Pending |
 
 ## Decisions Locked
@@ -22,12 +22,11 @@
 | Decision | Choice | Detail |
 |---|---|---|
 | Robot arm | **Hiwonder LeRobot SO-ARM101 Advanced Kit (assembled)** — leader + follower + both cameras | [`ARM_DECISION_LOG.md`](./ARM_DECISION_LOG.md) |
-| Initial compute | **Existing Ubuntu 24.04 machine** controls the arm directly via USB | LeRobot canonical workflow; no Jetson needed for Phase 3C/4 |
+| Compute | **Mac M4 Max 64GB** for all recording, training, and inference | Ubuntu dropped — AMD GPU not ROCm-compatible, CPU inference too slow (2.3 Hz). Mac MPS runs inference at usable speed. |
 | Jetson Orin Nano | **Deferred to Phase 5** (untethered/edge inference) | Saves ~$340 now; buy when actually needed |
 | Sim arm | **UR5e + Robotiq 2F-85** (parallel research vehicle, validates algorithms) | Existing `connect_four_arm` ROS2 package |
-| OS / ROS | **Ubuntu 24.04 + ROS2 Jazzy** | Existing Ubuntu runtime machine |
 | Gripper standard | **Robotiq 2F-85** (sim) → SO-101 stock parallel-jaw (real) | — |
-| Software approach | Hybrid: scripted arm motion + learned vision/AI for v1; ACT then SmolVLA for v2 | — |
+| Software approach | ACT for single-column baseline → SmolVLA for multi-column generalization | See Training Roadmap below |
 | Long-term direction | LeRobot ecosystem; openpi-compatible LeRobot dataset format from day one | [`VLA_FINETUNING_PLAN.md`](./VLA_FINETUNING_PLAN.md) |
 
 ## Hardware Logistics
@@ -59,12 +58,10 @@ Reasoning: LeRobot's canonical workflow connects the SO-101 leader + follower ov
 
 1. ✅ **SO-101 arrived, assembled, calibrated, teleop verified** (~2026-05-22).
 2. ✅ **Recording pipeline fully debugged** (2026-06-03).
-3. ✅ **10-episode col3 dataset collected and trained** (50k steps, ACT, on Mac M4 Max MPS). Checkpoint at `outputs/train/act_c4_col3/checkpoints/050000/`.
-4. ✅ **Ubuntu rollout pipeline unblocked** (2026-06-07): fixed `context.py` `from_pretrained` config-override bug; fixed `config.json` device mismatch (mps→cpu). Policy loads correctly.
-5. 🔄 **Inference speed bottleneck:** Ubuntu has no viable GPU (AMD RX 460D not supported by ROCm 6.x). CPU inference runs at 2.3–2.5 Hz vs 15 Hz training rate — arm misses target. **Next: connect arm to Mac M4 Max and run rollout there with `--device=mps`.**
-6. 🔲 **Pending cleanup (run in Mac terminal):**
-   - `rsync -av --progress eithan@192.168.1.45:~/development/connect-four/robot/outputs/train/act_c4_col3/checkpoints/050000/pretrained_model/model.safetensors ~/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/050000/pretrained_model/`
-   - `rm -rf ~/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/_to_delete/`
+3. ✅ **25-episode col3 dataset recorded and merged** (`eithanz/c4_col3_25`). 5 batches of 5 episodes merged with `lerobot-edit-dataset`.
+4. ✅ **Ubuntu dropped as compute platform** (2026-06-17). AMD GPU not ROCm-compatible. All work now on Mac M4 Max.
+5. 🔄 **ACT training in progress on Mac** (2026-06-17): 50k steps, loss ~0.052 at step 14k, finishing ~1pm today. Checkpoint will be at `outputs/train/act_c4_col3/checkpoints/last/`.
+6. 🔲 **Next: deploy and test on arm** — see Rollout on Mac section below.
 
 ## Recording Setup (as of 2026-06-03)
 
@@ -185,48 +182,60 @@ LeRobot supports a SO-100 in MuJoCo. Walking through the LeRobot record-train-de
 | `ros2_ws/src/connect_four_arm/launch/connect_four.launch.py` | Single-command full stack launch |
 | `ai/src/connect_four_ai/models/alphazero-network-model.onnx` | Trained AlphaZero model (also at `robot/alphazero-network-model.onnx`) |
 
-## Rollout on Mac (next step)
+## Training & Deployment Roadmap
 
-Once the arm is connected to the Mac, install lerobot there if not present (`pip install -e ".[feetech]"` from the lerobot clone), then:
+### Phase 1 — Validate current model (today, ~1–2 hours active)
+Training finishes ~1pm 2026-06-17. Find serial port (`ls /dev/tty.usb*`) and camera indices (`lerobot-find-cameras` or use LeLab values: workspace_cam=0, wrist_cam=1). Run 10–20 attempts on the arm. Establish real-world baseline on col3, yellow pieces.
+
+Decision point: below 40% = diagnose setup (calibration, camera pose). Above 40% = proceed.
+
+### Phase 2 — Strengthen single-column baseline (~3–4 days)
+Record 25 more yellow col3 episodes (~2 hours across a couple of sessions). Merge into 50-episode dataset (one-shot merge command, 10 mins). Retrain ACT overnight (~21 hours). Test again. Expected: 75–85% success rate.
+
+### Phase 3 — Build multi-column VLA dataset (~2–3 weeks of recording)
+Record 15 episodes per column, all 7 columns, yellow first (105 episodes). At 5 per session (~20–30 mins each) = ~21 sessions over 2 weeks. Then 10 episodes per column in red (70 more episodes, ~1 week). Roll each batch of 5 into master with `merge_datasets.sh` as you go. Total: ~175 episodes, ~15–20 hours active recording.
+
+### Phase 4 — Fine-tune SmolVLA (~1 day, mostly automated)
+SmolVLA (~450M params) is too slow for MPS — use a cloud GPU (Lambda Labs / RunPod A100: 2–4 hours, ~$5–10). Result: one model handling all 7 columns and both colors from natural language prompts.
+
+### Phase 5 — Game integration (scope TBD)
+Connect vision system (board state) to VLA policy. Game logic picks target column, passes to VLA as natural language instruction, arm executes. Software integration more than robotics — plan in detail once Phase 4 is solid.
+
+---
+
+## Rollout on Mac
 
 ```bash
 CKPT="$HOME/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/last/pretrained_model"
 
 PYTORCH_ENABLE_MPS_FALLBACK=1 lerobot-rollout \
   --robot.type=so101_follower \
-  --robot.port=/dev/cu.usbmodem* \
+  --robot.port=/dev/tty.usbmodem5C4C1287431 \
   --robot.id=my_follower_arm \
   --robot.cameras='{
-    front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30},
-    hand:  {type: opencv, index_or_path: 2, width: 640, height: 480, fps: 30}
+    workspace_cam: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30},
+    wrist_cam:     {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}
   }' \
   --policy.type=act \
   --policy.pretrained_path="${CKPT}" \
   --device=mps \
-  --fps=15 \
-  --task="Pick a yellow piece from the chute and drop it into column 3" \
+  --fps=30 \
+  --task="Pick a yellow piece from the tray and drop it into column 0" \
   --display_data=false \
   --strategy.type=base
 ```
 
-**Before running:** update `config.json`'s `"device"` back to `"mps"` on Mac (it's already mps in the Mac checkpoint; the Ubuntu copy was patched to cpu). Also confirm `last` symlink points to `050000`:
-```bash
-ls -la ~/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/last
-# Should show: last -> 050000
-```
-If the symlink is missing (it may not have survived the restore), create it:
-```bash
-cd ~/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints
-ln -sfn 050000 last
-```
-
-**Known Ubuntu rollout patches** (already applied on Ubuntu, NOT needed on Mac):
-- `context.py` line 200: `from_pretrained` called without `config=` arg
-- `config.json` device: changed `mps` → `cpu` (Mac version should keep `mps`)
-
-**Known Ctrl-C disconnect error** (motor id=3 on teardown): non-dangerous, arm already returned to home. Workaround: `--return_to_initial_position=false` skips the interpolation that triggers it.
+**Notes:**
+- SO101_LEADER: `/dev/tty.usbmodem5C4C1276591`
+- SO101_FOLLOWER: `/dev/tty.usbmodem5C4C1287431`
+- CAM_WORKSPACE: 0, CAM_WRIST: 1
+- `--fps=30` must match dataset recording fps
+- `PYTORCH_ENABLE_MPS_FALLBACK=1` required — some ops not natively supported on MPS
+- Known Ctrl-C disconnect error (motor id=3 on teardown): non-dangerous. Workaround: `--return_to_initial_position=false`
 
 ## Changelog
+
+- **2026-06-17** — Ubuntu dropped as compute platform. All recording, training, and inference now on Mac M4 Max 64GB. Recorded 25 episodes across 5 batches (col3, yellow), merged into `eithanz/c4_col3_25` with `lerobot-edit-dataset`. ACT training in progress: 50k steps, loss ~0.052 at step 14k, finishing ~1pm. Added Training & Deployment Roadmap (5 phases: validate → strengthen baseline → multi-column VLA dataset → SmolVLA fine-tune → game integration). Fixed rollout command: camera keys updated to `workspace_cam`/`wrist_cam`, fps corrected to 30, device to mps. Port and camera indices confirmed: SO101_LEADER=`/dev/tty.usbmodem5C4C1276591`, SO101_FOLLOWER=`/dev/tty.usbmodem5C4C1287431`, CAM_WORKSPACE=0, CAM_WRIST=1.
 
 - **2026-06-07** — ACT rollout pipeline fully debugged on Ubuntu. Fixed `context.py` `from_pretrained` config-override bug (empty `input_features` from CLI overrode checkpoint's `config.json`); fixed checkpoint `config.json` device mismatch (mps→cpu for Ubuntu). Policy loads and runs. CPU-only inference at 2.3–2.5 Hz vs 15 Hz required — arm misses. AMD RX 460D not supported by ROCm 6.x. `torch.compile` fails silently on this build. Next path: run rollout on Mac M4 Max with MPS. Mac checkpoint restored from accidentally-deleted outputs folder (all checkpoints 010k–050k sorted, timestamp suffixes stripped); 050000/pretrained_model/model.safetensors still needs rsync from Ubuntu.
 

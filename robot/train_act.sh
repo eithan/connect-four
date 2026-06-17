@@ -161,37 +161,33 @@ echo "Training complete. Checkpoints in: ${OUTPUT_DIR}/checkpoints/"
 
 
 # =============================================================
-#  DEPLOY / EVAL ON THE REAL ARM  (run on Ubuntu after copying checkpoint)
+#  DEPLOY / EVAL ON THE REAL ARM  (run on Mac)
 # -------------------------------------------------------------
 #
-#  1. Copy checkpoint from Mac to Ubuntu:
-#       rsync -av outputs/train/act_c4_col3/ \
-#         eithan@<ubuntu-ip>:~/development/connect-four/robot/outputs/train/act_c4_col3/
-#
-#  2. On Ubuntu, run:
-#
-#  CKPT="$HOME/development/connect-four/robot/outputs/train/act_c4_col3/checkpoints/last/pretrained_model"
+#  CKPT="$HOME/development/cursor/connect-four/robot/outputs/train/act_c4_col3/checkpoints/last/pretrained_model"
 #
 #  lerobot-rollout \
 #    --robot.type=so101_follower \
-#    --robot.port=/dev/so101_follower \
+#    --robot.port=/dev/tty.usbmodem5C4C1287431 \
 #    --robot.id=my_follower_arm \
 #    --robot.cameras='{
-#      front: {type: opencv, index_or_path: "/dev/video2", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"},
-#      hand:  {type: opencv, index_or_path: "/dev/video0", width: 640, height: 480, fps: 30, fourcc: "MJPG", backend: "V4L2"}
+#      workspace_cam: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30},
+#      wrist_cam:     {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}
 #    }' \
 #    --policy.type=act \
 #    --policy.pretrained_path="${CKPT}" \
-#    --device=cuda \
-#    --fps=15 \
-#    --task="Pick a yellow piece from the chute and drop it into column 3" \
+#    --device=mps \
+#    --fps=30 \
+#    --task="Pick a yellow piece from the tray and drop it into column 0" \
 #    --display_data=false \
 #    --strategy.type=base
 #
 #  NOTES:
+#  - SO101_FOLLOWER: /dev/tty.usbmodem5C4C1287431
+#  - SO101_LEADER:   /dev/tty.usbmodem5C4C1276591 (not needed for rollout)
+#  - CAM_WORKSPACE=0, CAM_WRIST=1 (confirmed from LeLab)
+#  - --fps=30 must match the fps your dataset was recorded at.
 #  - --strategy.type=base: run policy only, no episode recording.
 #  - --duration=0 (default): runs until Ctrl-C.
-#  - On Ctrl-C, arm automatically returns to its start position.
-#  - --fps=15 matches training data rate (critical for correct chunk timing).
 #  - SAFETY: keep a hand near the power switch on the first policy rollout.
 # =============================================================
